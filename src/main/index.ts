@@ -98,6 +98,9 @@ function createWindow(): void {
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,
+      // Chromium's built-in PDF viewer (used by PdfViewer's iframe) -- native
+      // scrolling/zoom performance, no JS-side page rendering
+      plugins: true,
     },
   })
 

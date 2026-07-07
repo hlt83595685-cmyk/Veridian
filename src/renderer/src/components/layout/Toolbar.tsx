@@ -73,12 +73,6 @@ export function Toolbar(): JSX.Element {
 
       {/* Search */}
       <div style={{ position: 'relative', flex: 1, maxWidth: 370 }}>
-        <span style={{
-          position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
-          color: 'var(--muted-2)', fontSize: 13, pointerEvents: 'none',
-        }}>
-          🔍
-        </span>
         <input
           ref={searchRef}
           type="search"
@@ -88,7 +82,7 @@ export function Toolbar(): JSX.Element {
           style={{
             width: '100%',
             height: 38,
-            paddingLeft: 36,
+            paddingLeft: 14,
             paddingRight: 12,
             borderRadius: 'var(--radius-lg)',
             border: '1px solid var(--border)',

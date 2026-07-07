@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
-import { PdfAnnotationViewer } from './PdfAnnotationViewer'
+import { PdfViewer } from './PdfViewer'
 
 export function PdfReaderPane(): JSX.Element {
   const { t } = useTranslation('common')
@@ -68,9 +68,9 @@ export function PdfReaderPane(): JSX.Element {
         </button>
       </div>
 
-      {/* PDF viewer with annotation layer */}
+      {/* Native Chromium PDF viewer -- read + zoom (Ctrl+wheel) only */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        <PdfAnnotationViewer filePath={viewerPath} />
+        <PdfViewer filePath={viewerPath} />
       </div>
     </div>
   )
