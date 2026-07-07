@@ -1,0 +1,616 @@
+下面按当前生成界面来拆解，参数以桌面端 1586 × 992 画布为参考。实际开发时可以按比例缩放。
+
+整体设计参数：
+
+窗口尺寸：1586 × 992 px
+整体背景色：#F8F9FC / #FAFAFD
+主内容背景：#FFFFFF
+品牌主色：#6F4EF6
+品牌辅助紫：#8B6EF9
+浅紫高亮：#EEE9FF
+文字主色：#1F2430
+文字次色：#6B7280
+弱文字色：#9CA3AF
+边框色：#E5E7EB
+分割线色：#EEF0F4
+圆角体系：8 / 12 / 16 / 20 px
+阴影：轻阴影为主，避免厚重
+推荐字体：Inter / SF Pro / Microsoft YaHei UI / 思源黑体
+中文字号：12–18 px 为主
+整体风格：低饱和、浅色、圆角、轻阴影、大留白。
+
+---
+
+窗口标题栏：
+
+高度约 48 px。
+背景色为 #FFFFFF 到 #FAFAFD 的极浅渐变。
+左侧图标尺寸约 18 × 18 px，紫色渐变。
+标题 “Veridian” 字号约 16 px，字重 500，颜色 #20242C。
+右侧窗口控制按钮尺寸约 32 × 32 px，图标颜色 #2F3542。
+
+参数示例：
+
+```css
+.title-bar {
+  height: 48px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FAFAFD 100%);
+  border-bottom: 1px solid #EEF0F4;
+}
+
+.window-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #20242C;
+}
+```
+
+---
+
+菜单栏：
+
+高度约 44 px。
+位置在标题栏下方。
+包含“工具”“设置”。
+文字字号 14 px，颜色 #1F2937。
+菜单项左右 padding 约 20 px。
+背景为纯白或极浅灰白。
+
+```css
+.menu-bar {
+  height: 44px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #EEF0F4;
+}
+
+.menu-item {
+  font-size: 14px;
+  color: #1F2937;
+  padding: 0 20px;
+}
+```
+
+---
+
+顶部主操作区：
+
+高度约 84 px。
+左侧为品牌区，中间为搜索框，右侧为操作按钮。
+底部分割线颜色 #EAECEF。
+整体 padding：左右 24–32 px。
+
+```css
+.toolbar {
+  height: 84px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #EAECEF;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+}
+```
+
+---
+
+品牌 Logo 区：
+
+Logo 尺寸约 44 × 44 px。
+文字 “Veridian” 字号约 24 px，字重 700。
+Logo 与文字间距约 14 px。
+Logo 使用紫色渐变，建议从 #6D5DFB 到 #A78BFA。
+
+```css
+.brand-logo {
+  width: 44px;
+  height: 44px;
+}
+
+.brand-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+```
+
+---
+
+搜索框：
+
+宽度约 370 px。
+高度约 50 px。
+圆角约 16 px。
+背景色 #FFFFFF。
+边框 #E1E4EA。
+阴影很轻，模拟浮起感。
+左侧图标尺寸 20 px。
+输入文字字号 15 px。
+placeholder 颜色 #8A90A0。
+快捷键标签 “Ctrl + K” 尺寸约 68 × 28 px，圆角 8 px，背景 #F1F2F6。
+
+```css
+.search-box {
+  width: 370px;
+  height: 50px;
+  border-radius: 16px;
+  background: #FFFFFF;
+  border: 1px solid #E1E4EA;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.04);
+  padding: 0 14px;
+}
+
+.search-placeholder {
+  font-size: 15px;
+  color: #8A90A0;
+}
+
+.shortcut {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #F1F2F6;
+  color: #7B8190;
+  font-size: 13px;
+}
+```
+
+---
+
+“导入”按钮：
+
+尺寸约 118 × 50 px。
+背景色 #FFFFFF。
+边框 #E1E4EA。
+圆角 14 px。
+文字字号 16 px，字重 500。
+图标为向下箭头，尺寸 18 px。
+阴影较轻。
+
+```css
+.secondary-button {
+  height: 50px;
+  padding: 0 24px;
+  border-radius: 14px;
+  background: #FFFFFF;
+  border: 1px solid #E1E4EA;
+  box-shadow: 0 4px 10px rgba(17, 24, 39, 0.04);
+  color: #1F2937;
+  font-size: 16px;
+  font-weight: 500;
+}
+```
+
+---
+
+“添加条目”主按钮：
+
+尺寸约 190 × 50 px。
+背景为紫色渐变。
+左侧为加号图标，右侧有下拉箭头。
+圆角 14 px。
+文字颜色 #FFFFFF。
+字号 16 px，字重 600。
+右侧下拉区域有一条半透明竖线分隔。
+阴影为淡紫色投影。
+
+```css
+.primary-button {
+  height: 50px;
+  padding: 0 22px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #6D5DFB 0%, #7C3AED 100%);
+  color: #FFFFFF;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  box-shadow: 0 8px 18px rgba(109, 93, 251, 0.24);
+}
+
+.primary-button-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.28);
+}
+```
+
+---
+
+左侧侧边栏：
+
+宽度约 256 px。
+背景色 #FBFBFE。
+右侧分割线 #E7E9EF。
+内边距：上 24 px，左右 16 px。
+整体风格轻量，不使用深色块。
+
+```css
+.sidebar {
+  width: 256px;
+  background: #FBFBFE;
+  border-right: 1px solid #E7E9EF;
+  padding: 24px 16px;
+}
+```
+
+---
+
+侧边栏分组标题：
+
+如“文库”“我的分类”。
+字号约 14 px。
+字重 600。
+颜色 #6B7280。
+上边距约 26 px。
+下边距约 10 px。
+
+```css
+.sidebar-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6B7280;
+  margin-bottom: 10px;
+}
+```
+
+---
+
+侧边栏导航项：
+
+高度约 44 px。
+圆角 12 px。
+图标尺寸约 18 px。
+文字字号 15 px。
+默认文字颜色 #4B5563。
+左右 padding 14 px。
+图标和文字间距 12 px。
+
+```css
+.nav-item {
+  height: 44px;
+  border-radius: 12px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #4B5563;
+  font-size: 15px;
+  font-weight: 500;
+}
+```
+
+---
+
+选中状态“全部文献”：
+
+背景色 #EEE9FF。
+文字颜色 #6D5DFB。
+图标颜色 #6D5DFB。
+无明显边框。
+可加极轻内阴影或透明边框。
+
+```css
+.nav-item.active {
+  background: #EEE9FF;
+  color: #6D5DFB;
+  font-weight: 600;
+}
+```
+
+---
+
+侧边栏分隔线：
+
+宽度约 200 px。
+高度 1 px。
+颜色 #E8EAF0。
+上下 margin 约 24 px。
+
+```css
+.sidebar-divider {
+  height: 1px;
+  background: #E8EAF0;
+  margin: 24px 12px;
+}
+```
+
+---
+
+“我的分类”右侧加号按钮：
+
+尺寸约 26 × 26 px。
+圆形或 10 px 圆角。
+背景 #EEE9FF。
+图标颜色 #7C3AED。
+字号 18 px。
+
+```css
+.add-category-button {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #EEE9FF;
+  color: #7C3AED;
+  font-size: 18px;
+}
+```
+
+---
+
+底部“云端未同步”卡片：
+
+尺寸约 224 × 76 px。
+距离底部约 24 px。
+背景 #FFFFFF。
+边框 #E5E7EB。
+圆角 16 px。
+阴影轻微。
+图标尺寸 24 px，颜色 #7C6FF6。
+主文字字号 14 px，字重 600。
+副文字字号 12 px，颜色 #8A90A0。
+右侧箭头尺寸 16 px。
+
+```css
+.sync-card {
+  width: 224px;
+  height: 76px;
+  border-radius: 16px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 8px 20px rgba(17, 24, 39, 0.06);
+  padding: 14px 16px;
+}
+
+.sync-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6B7280;
+}
+
+.sync-desc {
+  font-size: 12px;
+  color: #9CA3AF;
+}
+```
+
+---
+
+主内容容器：
+
+左边从 x≈256 px 开始。
+右侧和底部留出约 18–24 px。
+背景为 #FFFFFF。
+圆角约 16 px。
+边框 #E1E4EA。
+内部表头高度约 68 px。
+整体像一个轻量卡片容器。
+
+```css
+.content-panel {
+  flex: 1;
+  margin: 0 18px 18px 0;
+  background: #FFFFFF;
+  border: 1px solid #E1E4EA;
+  border-radius: 16px;
+  overflow: hidden;
+}
+```
+
+---
+
+表格头部：
+
+高度约 68 px。
+背景色 #FFFFFF / #FCFCFE。
+底部分割线 #E7E9EF。
+字段文字颜色 #6B7280。
+字号 14 px。
+字重 600。
+列结构大致为：
+
+选择框：56 px
+题录：约 600 px
+作者：约 220 px
+期刊：约 200 px
+年份：约 140 px
+更多按钮：48 px
+
+```css
+.table-header {
+  height: 68px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E7E9EF;
+  display: grid;
+  grid-template-columns: 56px minmax(420px, 1fr) 220px 200px 140px 48px;
+  align-items: center;
+}
+
+.table-header-cell {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6B7280;
+}
+```
+
+---
+
+复选框：
+
+尺寸约 20 × 20 px。
+圆角 5 px。
+边框 #CDD2DD。
+未选中背景 #FFFFFF。
+选中时建议使用 #6D5DFB。
+
+```css
+.checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1.5px solid #CDD2DD;
+  background: #FFFFFF;
+}
+```
+
+---
+
+更多按钮：
+
+尺寸约 32 × 32 px。
+图标为竖向三个点。
+颜色 #8A90A0。
+hover 背景可用 #F3F4F8。
+圆角 8 px。
+
+```css
+.more-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #8A90A0;
+}
+
+.more-button:hover {
+  background: #F3F4F8;
+}
+```
+
+---
+
+空状态区域：
+
+位于主内容区域中央。
+整体中心点大约在内容区 x 50%、y 52%。
+插画宽度约 280–320 px。
+插画高度约 220 px。
+主标题“暂无文献”：字号 24 px，字重 700，颜色 #111827。
+说明文字：字号 15 px，颜色 #7B8190。
+标题与说明间距约 14 px。
+插画与标题间距约 28 px。
+
+```css
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: calc(100% - 68px);
+  text-align: center;
+}
+
+.empty-illustration {
+  width: 300px;
+  height: 220px;
+  opacity: 0.95;
+}
+
+.empty-title {
+  margin-top: 28px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.empty-desc {
+  margin-top: 14px;
+  font-size: 15px;
+  color: #7B8190;
+}
+```
+
+---
+
+空状态插画风格参数：
+
+主色：#7C6FF6
+辅助紫：#B8A7FF
+阴影紫灰：#D8D5F2
+纸张色：#FFFFFF
+线条色：#DADDF0
+透明度：60%–95%
+插画风格：低对比、软阴影、轻 3D / 伪等距
+不要使用强描边，不要使用复杂背景。
+
+```css
+.illustration {
+  --primary-purple: #7C6FF6;
+  --light-purple: #B8A7FF;
+  --soft-shadow: rgba(124, 111, 246, 0.16);
+  --paper: #FFFFFF;
+  --line: #DADDF0;
+}
+```
+
+---
+
+推荐交互状态：
+
+鼠标悬停导航项：
+
+```css
+.nav-item:hover {
+  background: #F3F1FF;
+  color: #6D5DFB;
+}
+```
+
+搜索框聚焦：
+
+```css
+.search-box:focus-within {
+  border-color: #8B6EF9;
+  box-shadow: 0 0 0 4px rgba(139, 110, 249, 0.12);
+}
+```
+
+主按钮悬停：
+
+```css
+.primary-button:hover {
+  background: linear-gradient(135deg, #5F4FEA 0%, #6D28D9 100%);
+  box-shadow: 0 10px 22px rgba(109, 93, 251, 0.30);
+}
+```
+
+次按钮悬停：
+
+```css
+.secondary-button:hover {
+  background: #FAFAFD;
+  border-color: #D7DAE2;
+}
+```
+
+---
+
+整体 CSS 变量可以这样定义：
+
+```css
+:root {
+  --color-bg: #F8F9FC;
+  --color-surface: #FFFFFF;
+  --color-sidebar: #FBFBFE;
+
+  --color-primary: #6D5DFB;
+  --color-primary-dark: #5F4FEA;
+  --color-primary-light: #EEE9FF;
+  --color-primary-soft: #F3F1FF;
+
+  --color-text-main: #111827;
+  --color-text-normal: #374151;
+  --color-text-secondary: #6B7280;
+  --color-text-muted: #9CA3AF;
+
+  --color-border: #E1E4EA;
+  --color-divider: #EEF0F4;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --shadow-soft: 0 4px 12px rgba(17, 24, 39, 0.04);
+  --shadow-card: 0 8px 20px rgba(17, 24, 39, 0.06);
+  --shadow-primary: 0 8px 18px rgba(109, 93, 251, 0.24);
+}
+```
+
+这套界面的核心不是复杂动画，而是四点：浅背景、紫色低饱和强调、圆角组件、统一间距。只要这四点统一，界面就会显得轻量但有质感。

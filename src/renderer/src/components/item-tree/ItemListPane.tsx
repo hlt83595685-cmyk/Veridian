@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useCollectionStore } from '../../stores/collectionStore'
 import type { Item } from '../../../../shared/types'
+import emptyRefsUrl from '../../assets/empty-refs.png'
 
 interface ContextMenu { x: number; y: number; itemId: number | null; showMove?: boolean }
 
@@ -297,14 +298,37 @@ export function ItemListPane(): JSX.Element {
         onContextMenu={isTrash ? (e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, itemId: null }) } : undefined}
       >
         {filtered.length === 0 ? (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', height: '100%', gap: 10,
-            color: 'var(--muted)',
-          }}>
-            <span style={{ fontSize: 36 }}>{isTrash ? '🗑' : '📚'}</span>
-            <p style={{ fontSize: 13 }}>{isTrash ? t('item.trashEmpty') : t('item.empty')}</p>
-          </div>
+          isTrash ? (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', height: '100%', gap: 10,
+              color: 'var(--muted)',
+            }}>
+              <span style={{ fontSize: 36 }}>🗑</span>
+              <p style={{ fontSize: 13 }}>{t('item.trashEmpty')}</p>
+            </div>
+          ) : (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', height: '100%', textAlign: 'center',
+            }}>
+              <img
+                src={emptyRefsUrl}
+                alt=""
+                draggable={false}
+                style={{ width: 300, maxWidth: '70%', opacity: 0.95, userSelect: 'none' }}
+              />
+              <p style={{
+                marginTop: 28, fontSize: 24, fontWeight: 700,
+                color: 'var(--foreground)', letterSpacing: '-0.01em',
+              }}>
+                {t('item.emptyTitle')}
+              </p>
+              <p style={{ marginTop: 14, fontSize: 15, color: 'var(--muted-2)' }}>
+                {t('item.empty')}
+              </p>
+            </div>
+          )
         ) : (
           filtered.map((item) => (
             <ItemRow

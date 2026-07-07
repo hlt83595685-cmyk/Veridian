@@ -14,6 +14,7 @@
   },
   "item": {
     "untitled": "(Untitled)",
+    "emptyTitle": "No References",
     "empty": "No items yet. Click \"Add Item\" to get started.",
     "listHeader": "{{count}} item(s)"
   },

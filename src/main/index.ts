@@ -80,6 +80,10 @@ function buildMenu(locale: string): void {
   Menu.setApplicationMenu(menu)
 }
 
+// Dev runs from out/main, so resources/ sits two levels up; packaged Windows
+// builds take the icon from the exe itself and ignore a missing path here.
+const appIcon = join(__dirname, '../../resources/icon.ico')
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -88,6 +92,7 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     autoHideMenuBar: false,
+    icon: appIcon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

@@ -1,73 +1,89 @@
 @import "tailwindcss";
 
+/* Veridian design system -- light, low-saturation purple brand.
+   Reference: 界面优化指导.txt (soft shadows, 8/12/16/20 radii, generous
+   whitespace). Components consume these variables via inline styles. */
 :root {
-  /* iOS-inspired color system */
-  --bg:             #f2f2f7;
+  /* Backgrounds */
+  --bg:             #f8f9fc;
   --bg-elevated:    #ffffff;
-  --bg-grouped:     #f2f2f7;
+  --bg-grouped:     #f8f9fc;
+  --bg-sidebar:     #fbfbfe;
   --surface:        #ffffff;
-  --surface-2:      #f2f2f7;
-  --surface-hover:  rgba(0, 0, 0, 0.04);
-  --border:         rgba(60, 60, 67, 0.12);
-  --border-strong:  rgba(60, 60, 67, 0.20);
-  --separator:      rgba(60, 60, 67, 0.08);
+  --surface-2:      #f3f4f8;
+  --surface-hover:  #f3f1ff;
+  --border:         #e1e4ea;
+  --border-strong:  #d7dae2;
+  --separator:      #eef0f4;
 
-  /* Semantic colors */
-  --foreground:     #1c1c1e;
-  --foreground-2:   #3a3a3c;
-  --muted:          #8e8e93;
-  --muted-2:        #aeaeb2;
-  --muted-bg:       rgba(120,120,128,0.08);
+  /* Text */
+  --foreground:     #111827;
+  --foreground-2:   #374151;
+  --foreground-3:   #4b5563;
+  --muted:          #6b7280;
+  --muted-2:        #9ca3af;
+  --muted-bg:       #f1f2f6;
 
-  /* iOS Blue */
-  --primary:        #007aff;
-  --primary-light:  rgba(0, 122, 255, 0.10);
-  --primary-hover:  #0062cc;
+  /* Brand purple */
+  --primary:          #6d5dfb;
+  --primary-hover:    #5f4fea;
+  --primary-light:    #eee9ff;
+  --primary-soft:     #f3f1ff;
+  --primary-gradient: linear-gradient(135deg, #6d5dfb 0%, #7c3aed 100%);
+  --primary-gradient-hover: linear-gradient(135deg, #5f4fea 0%, #6d28d9 100%);
 
   /* Accent */
   --accent:         #ff3b30;
   --accent-green:   #34c759;
   --accent-orange:  #ff9500;
 
-  /* Shadows */
-  --shadow-xs:  0 1px 2px rgba(0,0,0,0.06);
-  --shadow-sm:  0 2px 8px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.04);
-  --shadow-md:  0 4px 16px rgba(0,0,0,0.10), 0 0 1px rgba(0,0,0,0.06);
-  --shadow-lg:  0 8px 32px rgba(0,0,0,0.12), 0 0 1px rgba(0,0,0,0.06);
+  /* Shadows (soft, never heavy) */
+  --shadow-xs:      0 1px 2px rgba(17, 24, 39, 0.04);
+  --shadow-sm:      0 4px 12px rgba(17, 24, 39, 0.04);
+  --shadow-md:      0 8px 20px rgba(17, 24, 39, 0.06);
+  --shadow-lg:      0 12px 32px rgba(17, 24, 39, 0.10);
+  --shadow-primary: 0 8px 18px rgba(109, 93, 251, 0.24);
+  --shadow-primary-hover: 0 10px 22px rgba(109, 93, 251, 0.30);
 
-  /* Radii */
-  --radius-sm:  6px;
-  --radius-md:  10px;
-  --radius-lg:  14px;
-  --radius-xl:  18px;
+  /* Radii: 8 / 12 / 16 / 20 */
+  --radius-sm:  8px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --radius-xl:  20px;
 
   /* Transitions */
   --ease:       cubic-bezier(0.25, 0.46, 0.45, 0.94);
   --duration:   160ms;
 }
 
-/* Dark mode */
-.dark, @media (prefers-color-scheme: dark) {
-  --bg:             #1c1c1e;
-  --bg-elevated:    #2c2c2e;
-  --bg-grouped:     #1c1c1e;
-  --surface:        #2c2c2e;
-  --surface-2:      #3a3a3c;
-  --surface-hover:  rgba(255,255,255,0.06);
-  --border:         rgba(255,255,255,0.10);
-  --border-strong:  rgba(255,255,255,0.18);
-  --separator:      rgba(255,255,255,0.06);
-  --foreground:     #f2f2f7;
-  --foreground-2:   #ebebf5;
-  --muted:          #8e8e93;
-  --muted-2:        #636366;
-  --muted-bg:       rgba(255,255,255,0.06);
-  --primary:        #0a84ff;
-  --primary-light:  rgba(10,132,255,0.15);
-  --shadow-xs:  0 1px 2px rgba(0,0,0,0.30);
-  --shadow-sm:  0 2px 8px rgba(0,0,0,0.35);
-  --shadow-md:  0 4px 16px rgba(0,0,0,0.40);
-  --shadow-lg:  0 8px 32px rgba(0,0,0,0.45);
+/* Dark mode -- same brand hue, lifted for contrast */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:             #17181d;
+    --bg-elevated:    #202127;
+    --bg-grouped:     #17181d;
+    --bg-sidebar:     #1b1c22;
+    --surface:        #202127;
+    --surface-2:      #2a2b33;
+    --surface-hover:  rgba(139, 110, 249, 0.10);
+    --border:         rgba(255, 255, 255, 0.10);
+    --border-strong:  rgba(255, 255, 255, 0.18);
+    --separator:      rgba(255, 255, 255, 0.06);
+    --foreground:     #f2f2f7;
+    --foreground-2:   #d1d5db;
+    --foreground-3:   #b8bcc4;
+    --muted:          #9ca3af;
+    --muted-2:        #6b7280;
+    --muted-bg:       rgba(255, 255, 255, 0.06);
+    --primary:        #8b6ef9;
+    --primary-hover:  #9d85fa;
+    --primary-light:  rgba(139, 110, 249, 0.18);
+    --primary-soft:   rgba(139, 110, 249, 0.10);
+    --shadow-xs:      0 1px 2px rgba(0, 0, 0, 0.30);
+    --shadow-sm:      0 2px 8px rgba(0, 0, 0, 0.35);
+    --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.40);
+    --shadow-lg:      0 8px 32px rgba(0, 0, 0, 0.45);
+  }
 }
 
 *, *::before, *::after {
@@ -83,8 +99,9 @@ html, body, #root {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
-               'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text',
+               'Microsoft YaHei UI', 'Source Han Sans SC', 'PingFang SC',
+               'Hiragino Sans GB', sans-serif;
   font-size: 14px;
   line-height: 1.5;
   background: var(--bg);
@@ -112,8 +129,8 @@ input, select, textarea {
               box-shadow var(--duration) var(--ease);
 }
 input:focus, select:focus, textarea:focus {
-  border-color: var(--primary) !important;
-  box-shadow: 0 0 0 3px var(--primary-light) !important;
+  border-color: #8b6ef9 !important;
+  box-shadow: 0 0 0 4px rgba(139, 110, 249, 0.12) !important;
 }
 
 /* Button base */
@@ -122,9 +139,38 @@ button {
   font-family: inherit;
   transition: opacity var(--duration) var(--ease),
               transform var(--duration) var(--ease),
-              background var(--duration) var(--ease);
+              background var(--duration) var(--ease),
+              box-shadow var(--duration) var(--ease),
+              border-color var(--duration) var(--ease);
 }
 button:active { opacity: 0.75; transform: scale(0.97); }
+
+/* Primary gradient button (toolbar Add, dialog confirm) */
+.btn-primary {
+  background: var(--primary-gradient);
+  box-shadow: var(--shadow-primary);
+}
+.btn-primary:hover {
+  background: var(--primary-gradient-hover);
+  box-shadow: var(--shadow-primary-hover);
+}
+
+/* Secondary outline button */
+.btn-secondary:hover {
+  background: var(--bg);
+  border-color: var(--border-strong) !important;
+}
+
+/* Sidebar nav rows */
+.sidebar-row:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+/* List rows */
+.list-row:hover {
+  background: var(--surface-hover);
+}
 
 /* Selection highlight */
 ::selection { background: var(--primary-light); }
@@ -134,6 +180,6 @@ button:active { opacity: 0.75; transform: scale(0.97); }
 }
 
 @keyframes led-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 5px 1px rgba(0,122,255,0.6); }
-  50%       { opacity: 0.5; box-shadow: 0 0 2px 0px rgba(0,122,255,0.2); }
+  0%, 100% { opacity: 1; box-shadow: 0 0 5px 1px rgba(109, 93, 251, 0.6); }
+  50%       { opacity: 0.5; box-shadow: 0 0 2px 0px rgba(109, 93, 251, 0.2); }
 }

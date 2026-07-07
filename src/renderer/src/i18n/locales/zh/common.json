@@ -14,7 +14,8 @@
   },
   "item": {
     "untitled": "（无标题）",
-    "empty": "暂无文献，点击"添加条目"开始",
+    "emptyTitle": "暂无文献",
+    "empty": "暂无文献，点击「添加条目」开始",
     "listHeader": "共 {{count}} 篇文献"
   },
   "detail": {

@@ -27,8 +27,8 @@ export function grantAccess(fileOrDir: string): void {
   }
 }
 
-function allowedRoots(): string[] {
-  const roots = [app.getPath('userData')]
+function allowedRoots(extra: string[] = []): string[] {
+  const roots = [app.getPath('userData'), ...extra]
   const storage = getStoragePath()
   if (storage) roots.push(storage)
   const out: string[] = []
@@ -39,33 +39,36 @@ function allowedRoots(): string[] {
   return out
 }
 
-function assertInside(p: string): string {
+function assertInside(p: string, roots: string[]): string {
   let real: string
   try {
     real = realpathSync(resolve(p))
   } catch {
     throw new AccessDeniedError(p)
   }
-  const ok = allowedRoots().some(
-    (dir) => real === dir || real.startsWith(dir + sep)
-  )
+  const ok = roots.some((dir) => real === dir || real.startsWith(dir + sep))
   if (!ok) throw new AccessDeniedError(p)
   return real
 }
 
+// Bundled app files (e.g. the pdfjs worker under node_modules / inside the
+// asar) are read-only, ship with the app itself, and are safe to expose for
+// reading -- they are never a location a user's own data lives in.
 export function assertReadable(p: string): string {
-  return assertInside(p)
+  return assertInside(p, allowedRoots([app.getAppPath()]))
 }
 
 export function assertWritable(p: string): string {
   // For writes the file itself may not exist yet -- validate its directory,
-  // then return the intended absolute path.
+  // then return the intended absolute path. Writes never get the appPath
+  // exemption -- the app bundle itself must stay read-only.
   const abs = resolve(p)
+  const roots = allowedRoots()
   try {
-    return assertInside(abs)
+    return assertInside(abs, roots)
   } catch (err) {
     if (err instanceof AccessDeniedError) {
-      assertInside(dirname(abs))
+      assertInside(dirname(abs), roots)
       return abs
     }
     throw err

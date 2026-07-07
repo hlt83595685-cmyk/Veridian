@@ -96,17 +96,17 @@ function NavRow({
         display: 'flex',
         alignItems: 'center',
         gap: 4,
-        padding: '5px 8px',
-        paddingLeft: 8 + depth * 18,
+        padding: '6px 10px',
+        paddingLeft: 10 + depth * 18,
         borderRadius: 'var(--radius-md)',
         background: active ? 'var(--primary-light)' : 'transparent',
-        color: active ? 'var(--primary)' : 'var(--foreground-2)',
-        fontWeight: active ? 600 : 400,
-        fontSize: 13,
+        color: active ? 'var(--primary)' : 'var(--foreground-3)',
+        fontWeight: active ? 600 : 500,
+        fontSize: 14,
         cursor: 'pointer',
         userSelect: 'none',
-        transition: 'background var(--duration) var(--ease)',
-        minHeight: 28,
+        transition: 'background var(--duration) var(--ease), color var(--duration) var(--ease)',
+        minHeight: 36,
       }}
       className="sidebar-row"
     >
@@ -251,7 +251,7 @@ export function CollectionPane(): JSX.Element {
 
   return (
     <div
-      style={{ padding: '8px 6px', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}
+      style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}
       onClick={() => setContextMenu(null)}
     >
       {/* ── My Library header ── */}

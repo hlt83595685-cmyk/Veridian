@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
+import logoUrl from '../../assets/logo.png'
 
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation('common')
@@ -46,36 +47,35 @@ export function Toolbar(): JSX.Element {
   return (
     <header
       style={{
-        height: 52,
+        height: 64,
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
-        padding: '0 16px',
-        background: 'rgba(242,242,247,0.85)',
-        backdropFilter: 'blur(20px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+        gap: 12,
+        padding: '0 24px',
+        background: 'var(--bg-elevated)',
         borderBottom: '1px solid var(--separator)',
         flexShrink: 0,
         zIndex: 10,
       }}
     >
-      {/* App name */}
-      <span style={{
-        fontSize: 15,
-        fontWeight: 700,
-        color: 'var(--primary)',
-        letterSpacing: '-0.02em',
-        marginRight: 4,
-        userSelect: 'none',
-      }}>
-        Veridian
-      </span>
+      {/* Brand */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 8, userSelect: 'none' }}>
+        <img src={logoUrl} alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} draggable={false} />
+        <span style={{
+          fontSize: 20,
+          fontWeight: 700,
+          color: 'var(--foreground)',
+          letterSpacing: '-0.02em',
+        }}>
+          Veridian
+        </span>
+      </div>
 
       {/* Search */}
-      <div style={{ position: 'relative', flex: 1, maxWidth: 280 }}>
+      <div style={{ position: 'relative', flex: 1, maxWidth: 370 }}>
         <span style={{
-          position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)',
-          color: 'var(--muted)', fontSize: 13, pointerEvents: 'none',
+          position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
+          color: 'var(--muted-2)', fontSize: 13, pointerEvents: 'none',
         }}>
           🔍
         </span>
@@ -87,63 +87,63 @@ export function Toolbar(): JSX.Element {
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{
             width: '100%',
-            height: 32,
-            paddingLeft: 30,
-            paddingRight: 10,
-            borderRadius: 10,
+            height: 38,
+            paddingLeft: 36,
+            paddingRight: 12,
+            borderRadius: 'var(--radius-lg)',
             border: '1px solid var(--border)',
             background: 'var(--surface)',
-            fontSize: 13,
+            fontSize: 14,
             color: 'var(--foreground)',
-            boxShadow: 'var(--shadow-xs)',
+            boxShadow: 'var(--shadow-sm)',
           }}
         />
       </div>
 
       <div style={{ flex: 1 }} />
 
-      {/* Import */}
+      {/* Import (secondary) */}
       <button
         onClick={handleImport}
+        className="btn-secondary"
         style={{
-          height: 32,
-          padding: '0 14px',
+          height: 38,
+          padding: '0 18px',
           borderRadius: 'var(--radius-md)',
           border: '1px solid var(--border)',
           background: 'var(--surface)',
           color: 'var(--foreground-2)',
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: 500,
-          boxShadow: 'var(--shadow-xs)',
+          boxShadow: 'var(--shadow-sm)',
           display: 'flex',
           alignItems: 'center',
-          gap: 5,
+          gap: 6,
         }}
       >
         <span style={{ fontSize: 14 }}>↓</span>
         {t('toolbar.import')}
       </button>
 
-      {/* Add */}
+      {/* Add (primary gradient) */}
       <button
         onClick={handleAdd}
         title="Ctrl+N"
+        className="btn-primary"
         style={{
-          height: 32,
-          padding: '0 14px',
+          height: 38,
+          padding: '0 18px',
           borderRadius: 'var(--radius-md)',
           border: 'none',
-          background: 'var(--primary)',
           color: '#fff',
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: 600,
-          boxShadow: '0 2px 6px rgba(0,122,255,0.30)',
           display: 'flex',
           alignItems: 'center',
-          gap: 5,
+          gap: 6,
         }}
       >
-        <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
+        <span style={{ fontSize: 17, lineHeight: 1 }}>+</span>
         {t('toolbar.addItem')}
       </button>
 
