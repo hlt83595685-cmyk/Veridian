@@ -1,0 +1,32 @@
+{
+  "toolbar": {
+    "search": "Search references...",
+    "addItem": "Add Item",
+    "switchLang": "Switch Language",
+    "sync": "Sync",
+    "settings": "Settings"
+  },
+  "collections": {
+    "title": "Library",
+    "all": "All Items",
+    "recent": "Recently Added",
+    "trash": "Trash"
+  },
+  "item": {
+    "untitled": "(Untitled)",
+    "empty": "No items yet. Click \"Add Item\" to get started.",
+    "listHeader": "{{count}} item(s)"
+  },
+  "detail": {
+    "title": "Title",
+    "type": "Type",
+    "year": "Year",
+    "tab": {
+      "metadata": "Metadata",
+      "attachments": "Attachments",
+      "notes": "Notes"
+    },
+    "attachmentsPlaceholder": "No attachments",
+    "notesPlaceholder": "No notes"
+  }
+}

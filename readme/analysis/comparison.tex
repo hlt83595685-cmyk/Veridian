@@ -1,0 +1,671 @@
+% RefNest vs Zotero -- Architecture Comparison & Stability Analysis
+% Compiled with: xelatex comparison.tex
+% ----------------------------------------------------------------------------
+
+\documentclass[12pt, a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{listingsutf8}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{tikz}
+\usepackage{amssymb}
+\usepackage{pgfplots}
+\usepackage{tcolorbox}
+\usepackage{multirow}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, calc}
+\usepgfplotslibrary{polar}
+\pgfplotsset{compat=1.18}
+\tcbuselibrary{skins, breakable}
+
+% ── Fonts ─────────────────────────────────────────────────────────────────────
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+\setmonofont{Consolas}
+\setCJKmainfont[BoldFont=SimHei, ItalicFont=KaiTi]{SimSun}
+\setCJKsansfont{Microsoft YaHei}
+\setCJKmonofont{FangSong}
+
+% ── Page geometry ─────────────────────────────────────────────────────────────
+\geometry{
+  a4paper,
+  top=25mm, bottom=25mm,
+  left=28mm, right=28mm,
+  headheight=24.5pt
+}
+
+% ── Colors ────────────────────────────────────────────────────────────────────
+\definecolor{tsinghuapurple}{HTML}{660874}
+\definecolor{zoterored}{HTML}{CC2936}
+\definecolor{electronblue}{HTML}{2B7ECC}
+\definecolor{codebg}{HTML}{F7F7F9}
+\definecolor{codeframe}{HTML}{CCCCCC}
+\definecolor{linkblue}{HTML}{0066CC}
+\definecolor{sectionblue}{HTML}{003366}
+\definecolor{warnbg}{HTML}{FFF8E1}
+\definecolor{warnframe}{HTML}{F59E0B}
+\definecolor{goodbg}{HTML}{F0FDF4}
+\definecolor{goodframe}{HTML}{16A34A}
+\definecolor{badbg}{HTML}{FEF2F2}
+\definecolor{badframe}{HTML}{DC2626}
+
+% ── Hyperref ──────────────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  linkcolor=tsinghuapurple,
+  urlcolor=linkblue,
+  citecolor=tsinghuapurple,
+  pdftitle={RefNest vs Zotero -- Architecture Comparison},
+  pdfauthor={RefAI Development Team},
+}
+
+% ── Section formatting ────────────────────────────────────────────────────────
+\titleformat{\section}
+  {\large\bfseries\color{sectionblue}}
+  {\thesection}{1em}{}[{\color{tsinghuapurple}\titlerule[0.5pt]}]
+
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{sectionblue}}
+  {\thesubsection}{1em}{}
+
+\titleformat{\subsubsection}
+  {\normalsize\bfseries}
+  {\thesubsubsection}{1em}{}
+
+% ── tcolorbox styles ──────────────────────────────────────────────────────────
+\tcbset{
+  goodbox/.style={
+    colback=goodbg, colframe=goodframe,
+    fonttitle=\bfseries\small, title={\checkmark\ 优势},
+    left=6pt, right=6pt, top=4pt, bottom=4pt,
+    breakable,
+  },
+  badbox/.style={
+    colback=badbg, colframe=badframe,
+    fonttitle=\bfseries\small, title={$\times$\ 不足},
+    left=6pt, right=6pt, top=4pt, bottom=4pt,
+    breakable,
+  },
+  warnbox/.style={
+    colback=warnbg, colframe=warnframe,
+    fonttitle=\bfseries\small,
+    left=6pt, right=6pt, top=4pt, bottom=4pt,
+    breakable,
+  },
+}
+
+% ── Code listings ─────────────────────────────────────────────────────────────
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  tabsize=2,
+  xleftmargin=6pt, xrightmargin=6pt,
+  aboveskip=4pt, belowskip=4pt,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=5pt,
+  keywordstyle=\color{tsinghuapurple}\bfseries,
+  commentstyle=\color{gray}\itshape,
+  stringstyle=\color{linkblue},
+}
+
+% ── Header / Footer ───────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{gray} RefNest vs Zotero -- Architecture Comparison}
+\fancyhead[R]{\small\color{gray} 2026-07-07}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{tsinghuapurple}\leaders\hrule height \headrulewidth\hfill}}
+
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{document}
+
+% ── Title page ────────────────────────────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{2.5cm}
+
+  \begin{tikzpicture}
+    \node[fill=tsinghuapurple!10, rounded corners=8pt,
+          minimum width=10cm, minimum height=1.4cm,
+          font=\Large\bfseries\color{tsinghuapurple}]
+      {RefNest \quad vs \quad Zotero};
+  \end{tikzpicture}
+
+  \vspace{1em}
+  {\Large\color{sectionblue} 框架对比与稳健性分析}\par
+  \vspace{0.4em}
+  {\large Architecture Comparison \& Stability Analysis}\par
+  \vspace{2em}
+  \hrule height 1.5pt \relax
+  \vspace{2em}
+
+  {\normalsize
+  \begin{tabular}{ll}
+    \textbf{RefNest} & Electron 36 + React 18 + TypeScript 5.8 \\
+    \textbf{Zotero}  & Mozilla XUL 平台（Firefox 引擎定制版）\\
+  \end{tabular}
+  }\par
+
+  \vspace{3cm}
+  {\small
+  本文档从平台成熟度、数据模型、进程安全、状态管理、\\
+  数据库、测试覆盖等维度对两个框架进行系统性对比，\\
+  并给出 RefNest 当前架构的稳健性评级与改进建议。
+  }\par
+  \vfill
+  {\small\color{gray} Last updated: 2026-07-07}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{背景：两个项目的出发点}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\textbf{Zotero} 创始于 2006 年，最初作为 Firefox 插件，后演变为基于 Mozilla 平台的独立桌面应用。
+经过近 20 年的迭代，积累了完整的数据一致性保障机制、插件体系和官方同步服务，
+全球用户数量级在百万以上。其技术栈（XUL + XPCOM）虽已显老态，
+但稳定性经过充分验证。
+
+\textbf{RefNest} 是基于 Electron + React 的新建项目（v0.1.0），
+以 Zotero 为参照，引入 AI 驱动的 PDF 解析能力（MinerU API）作为核心差异化功能。
+技术栈选型现代，但开发历史短，许多机制尚处于能跑但未加固的阶段。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{平台基础对比}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{center}
+\begin{tabular}{p{3.5cm} p{5cm} p{5cm}}
+  \toprule
+  \textbf{维度} & \textbf{Zotero} & \textbf{RefNest} \\
+  \midrule
+  运行时     & Mozilla XUL 平台（Firefox 引擎） & Electron 36（Chromium + Node.js） \\
+  UI 技术    & XUL / XHTML + Web Components + React（混合） & React 18 SPA \\
+  构建系统   & 自定义 Node.js 构建（非 Webpack） & electron-vite + Vite 6 \\
+  包管理     & npm + Git submodules & npm \\
+  发布历史   & 2006 年至今，~20 年 & 2025 年，v0.1.0 \\
+  用户规模   & 百万级 & 内测阶段 \\
+  插件生态   & 完整（Zotero Plugin API） & 无 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{平台选择评价}
+
+Zotero 选择 XUL 平台是历史遗留，现在看属于技术债——
+XUL 已被 Mozilla 废弃，维护者不得不自行维护一个裁剪版 Firefox 运行时。
+Electron 是更主流、招人更容易的选择，Chromium 渲染引擎的 CSS/JS 兼容性也更好。
+
+\begin{tcolorbox}[warnbox, title={平台层结论}]
+  平台选型上 RefNest 没有劣势，Electron 生态更活跃。
+  但 Electron 固有缺点（内存占用约 150--300 MB 基线、安全攻击面更大）
+  是 Zotero 用自定义运行时的理由之一，需要注意。
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{数据模型对比（核心差距）}
+% ─────────────────────────────────────────────────────────────────────────────
+
+这是两个项目差距最大的地方。
+
+\subsection{Zotero 的 ORM 体系}
+
+Zotero 构建了完整的类 ORM 数据层，所有数据对象继承自 \texttt{Zotero.DataObject}：
+
+\begin{lstlisting}[language={}]
+// Zotero 数据对象模式
+const item = new Zotero.Item('journalArticle')
+item.setField('title', 'Some Paper')
+item.setCreators([{ firstName: 'A', lastName: 'B', creatorType: 'author' }])
+await item.saveTx()   // 事务保存，版本号自增，触发 Notifier
+\end{lstlisting}
+
+核心机制：
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item \textbf{Dirty tracking}：对象字段变更自动标记，\texttt{saveTx()} 只写脏字段
+  \item \textbf{版本号}：每次写入递增 \texttt{version}，供同步系统做冲突检测
+  \item \textbf{对象缓存}：\texttt{Zotero.Items}（复数类）维护内存缓存，避免重复查询
+  \item \textbf{变更通知}：\texttt{Zotero.Notifier} 发布-订阅系统，任何写入自动广播给所有订阅者（UI、同步层、插件等），彻底解耦
+\end{itemize}
+
+\subsection{RefNest 的直接 SQL 模式}
+
+\begin{lstlisting}[language={}]
+// RefNest 当前模式
+export function createItem(data: Partial<Item>): Item {
+  const stmt = db.prepare('INSERT INTO items (...) VALUES (...)')
+  stmt.run(data)
+  return getItemById(db.prepare('SELECT last_insert_rowid()').pluck().get())
+  // 无版本号递增、无 dirty tracking、无缓存层、无变更通知
+}
+\end{lstlisting}
+
+UI 更新依赖前端主动调用 \texttt{loadItems()}，不是响应式：
+
+\begin{lstlisting}[language={}]
+// AttachmentsTab.tsx -- 每个 Tab 独立管理自己的数据
+const reload = useCallback(async () => {
+  const list = await window.refnest.attachments.getByItem(itemId)
+  setAttachments(list)
+}, [itemId])
+// TagsTab.tsx -- 同样模式，各自 reload，无统一事件驱动
+\end{lstlisting}
+
+\begin{tcolorbox}[badbox]
+  缺乏变更通知机制意味着：多个 IPC 调用同时写入时无协调；
+  各组件各自 reload，容易遗漏；
+  未来引入后台同步时必须大规模重构。
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{进程架构与安全模型}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Zotero：单进程模型}
+
+Zotero 运行在定制 Firefox 进程中，所有代码（UI、业务逻辑、数据库）在同一进程，
+没有进程间通信开销，也没有 Electron 的 IPC 边界问题。
+但没有进程隔离：UI 代码可以直接调用 XPCOM 模块，存在耦合风险。
+
+\subsection{RefNest：主/渲染进程分离}
+
+Electron 的三层架构（主进程 / 预加载 / 渲染进程）提供了更清晰的权限边界：
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=1.5cm,
+  proc/.style={rectangle, rounded corners=6pt, draw=sectionblue,
+               fill=codebg, minimum width=3.5cm, minimum height=1.2cm,
+               font=\small, align=center},
+  arr/.style={-Stealth, thick},
+]
+  \node[proc, fill=electronblue!15] (main) {主进程\\(Node.js)\\数据库 / 文件系统};
+  \node[proc, fill=tsinghuapurple!10, right=2.5cm of main] (pre) {预加载脚本\\contextBridge};
+  \node[proc, fill=goodbg, right=2.5cm of pre] (ren) {渲染进程\\(Chromium)\\React UI};
+
+  \draw[arr, color=electronblue] (main) -- node[above, font=\footnotesize]{IPC invoke} (pre);
+  \draw[arr, color=tsinghuapurple] (pre) -- node[above, font=\footnotesize]{window.refnest} (ren);
+  \draw[arr, color=gray, dashed] (ren) to[bend right=30] node[below, font=\footnotesize]{invoke(channel)} (main);
+\end{tikzpicture}
+\end{center}
+
+\textbf{安全配置正确项}：
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item \texttt{contextIsolation: true} ✓
+  \item \texttt{nodeIntegration: false} ✓
+  \item 外部 URL 拦截转 \texttt{shell.openExternal} ✓
+  \item 自定义协议 \texttt{refnest-file://} 注册为 privileged scheme ✓
+\end{itemize}
+
+\textbf{安全待改进项}：
+
+\begin{tcolorbox}[badbox]
+\begin{enumerate}[leftmargin=1em, itemsep=2pt]
+  \item \texttt{fs:readFile} IPC 通道接受任意路径，渲染进程可读取系统上任意文件（如 \texttt{/etc/passwd}、\texttt{\%APPDATA\%/Chrome/Default/Login Data}）。
+        应加路径白名单，仅允许 \texttt{userData} 和用户指定 \texttt{storage.path} 之下的路径。
+  \item IPC 参数无 schema 校验（无 zod/joi），恶意渲染进程可传任意类型数据。
+  \item 推送事件订阅（\texttt{onPdf2mdStatus} 等）无清理机制，长期运行或多次注册可能堆积监听器。
+\end{enumerate}
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{数据库层对比}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{center}
+\begin{tabular}{p{3.5cm} p{5cm} p{5cm}}
+  \toprule
+  \textbf{维度} & \textbf{Zotero} & \textbf{RefNest} \\
+  \midrule
+  SQLite 驱动   & mozStorage（异步） & better-sqlite3（同步） \\
+  API 模式      & 异步回调 / Promise & 同步（阻塞主进程） \\
+  迁移系统      & 版本化迁移 100+ 次 & 手写 2 次迁移 \\
+  事务封装      & 显式事务，批量操作安全 & 无事务封装（单语句） \\
+  对象缓存      & 内存缓存层（复数类） & 无 \\
+  FTS           & FTS5 ✓ & FTS5 ✓ \\
+  备份          & WAL + 官方云同步 & WAL ✓，无备份 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{同步 API 的主进程阻塞风险}
+
+\texttt{better-sqlite3} 使用同步 API，在主进程（Electron 的 GUI 事件循环所在进程）
+执行大查询时会阻塞整个应用：
+
+\begin{lstlisting}[language={}]
+// 主进程中执行，若 items 表有 10 万条记录：
+ipcMain.handle('items:getAll', () => {
+  return db.prepare('SELECT * FROM items WHERE deleted=0').all()
+  // 同步阻塞，期间 IPC、窗口事件全部挂起
+})
+\end{lstlisting}
+
+\begin{tcolorbox}[warnbox, title={数据量警戒线}]
+  单次全量查询超过约 5000 条时，\texttt{better-sqlite3} 同步 API 的阻塞时间
+  在低端设备上可能超过 100ms，用户感知到卡顿。
+  Zotero 的异步 mozStorage 不存在此问题。
+  改进方向：分页查询 + 虚拟化列表，或将查询移入 \texttt{worker\_threads}。
+\end{tcolorbox}
+
+\subsection{迁移系统薄弱}
+
+Zotero 经历了 100+ 次数据库迁移，有完整的版本检测和回滚机制。
+RefNest 目前只有 2 次迁移，且采用简单的 \texttt{IF NOT EXISTS} 模式：
+
+\begin{lstlisting}[language={}]
+// RefNest 迁移 2：向已有表添加列
+db.exec(`ALTER TABLE items ADD COLUMN journal TEXT`)
+// 问题：若列已存在（开发环境反复安装），ALTER TABLE 会报错
+// Zotero 会先检测列是否存在再执行
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{状态管理对比}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Zotero：Notifier 驱动的响应式模型}
+
+\begin{lstlisting}[language={}]
+// Zotero：任何数据变更自动广播
+await item.saveTx()
+// → Zotero.Notifier.trigger('modify', 'item', [item.id])
+// → 所有订阅者（ItemTree、CollectionTree、同步层、插件...）
+//   自动收到通知并刷新，无需手动调用 reload
+\end{lstlisting}
+
+\subsection{RefNest：手动 reload 模式}
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=1cm,
+  comp/.style={rectangle, rounded corners=4pt, draw=sectionblue,
+               fill=codebg, minimum width=2.8cm, minimum height=0.8cm,
+               font=\footnotesize, align=center},
+  arr/.style={-Stealth, thick, color=tsinghuapurple},
+]
+  \node[comp] (att) {AttachmentsTab\\自己 reload()};
+  \node[comp, right=1.5cm of att] (tags) {TagsTab\\自己 reload()};
+  \node[comp, right=1.5cm of tags] (meta) {MetadataTab\\自己 reload()};
+  \node[comp, below=1.2cm of tags] (store) {itemStore\\loadItems()};
+
+  \draw[arr] (att.south) -- ++(0,-0.5) -| (store.north);
+  \draw[arr] (tags.south) -- (store.north);
+  \draw[arr] (meta.south) -- ++(0,-0.5) -| (store.north);
+
+  \node[font=\footnotesize\color{red}, below=0.2cm of store]
+    {数据流分散，无统一事件总线};
+\end{tikzpicture}
+\end{center}
+
+\begin{tcolorbox}[badbox]
+  状态管理是目前\textbf{逻辑最混乱的地方}：
+  \begin{itemize}[leftmargin=1em, itemsep=1pt]
+    \item 部分数据用 Zustand store 全局管理，部分用组件本地 \texttt{useState}
+    \item 各 Tab 独立维护本地数据并各自 reload，容易遗漏更新
+    \item 没有乐观更新，每次操作都有明显的异步等待感
+    \item 未来引入后台同步时，必须大规模重构此部分
+  \end{itemize}
+\end{tcolorbox}
+
+\textbf{推荐改进}：在 \texttt{itemStore} 中引入事件失效机制——任何写操作完成后，
+主动使相关 store 的缓存版本号递增，各 Tab 通过订阅版本号变化自动触发 reload，
+类似 React Query 的 \texttt{invalidateQueries} 模式。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{同步系统对比}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{center}
+\begin{tabular}{p{3.5cm} p{5cm} p{5cm}}
+  \toprule
+  \textbf{维度} & \textbf{Zotero} & \textbf{RefNest} \\
+  \midrule
+  云同步        & 官方 Zotero 同步服务（免费 300 MB） & 尚不存在 \\
+  同步协议      & 完整版本化对象同步 + 冲突解决 & \texttt{sync\_state} 表预留，未实现 \\
+  文件同步      & Zotero Storage + WebDAV & 无 \\
+  离线支持      & 完整（本地优先） & 完整（本地优先） \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+RefNest 数据库中有 \texttt{items.version} 字段和 \texttt{sync\_state} 表，
+显示设计时预留了同步能力，但尚未实现。这是与 Zotero 最大的功能差距。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{测试覆盖对比}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{center}
+\begin{tabular}{p{3.5cm} p{5cm} p{5cm}}
+  \toprule
+  \textbf{维度} & \textbf{Zotero} & \textbf{RefNest} \\
+  \midrule
+  测试框架      & Mocha + Chai + Sinon（集成测试） & vitest（配置存在，用例近零） \\
+  测试运行      & \texttt{test/runtests.sh}，在真实 Zotero 实例中运行 & \texttt{npm run test} \\
+  数据库测试    & 真实 SQLite，非 mock & 无测试 \\
+  UI 测试       & 无 & 无 \\
+  覆盖率        & 核心模块有较全面覆盖 & 接近零 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tcolorbox}[badbox]
+  RefNest 几乎没有测试覆盖。数据库迁移、IPC 处理器、关键词提取逻辑等核心路径均未测试。
+  这意味着重构时缺乏安全网，回归问题难以发现。
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{构建系统对比}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{center}
+\begin{tabular}{p{3.5cm} p{5cm} p{5cm}}
+  \toprule
+  \textbf{维度} & \textbf{Zotero} & \textbf{RefNest} \\
+  \midrule
+  构建工具      & 自定义 Node.js 脚本 & electron-vite（基于 Vite 6） \\
+  JS 转换       & Babel（JSX、CommonJS） & Vite + esbuild（极快） \\
+  CSS 编译      & Dart Sass & Vite CSS + Tailwind 4 \\
+  热重载        & 需要重启 & HMR（渲染进程即时热更新） \\
+  打包          & 自定义 browserify & electron-builder \\
+  类型检查      & 无（纯 JS） & TypeScript 5.8 严格模式 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tcolorbox}[goodbox]
+  构建系统是 RefNest 的明显优势。electron-vite 的 HMR、TypeScript 严格类型检查、
+  Vite 的极快构建速度，都是 Zotero 不具备的开发体验。
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{差异化功能：MinerU AI 解析}
+% ─────────────────────────────────────────────────────────────────────────────
+
+这是 RefNest 相对于 Zotero 的核心创新，Zotero 无对应功能。
+
+\begin{center}
+\begin{tabular}{p{3.5cm} p{5cm} p{5cm}}
+  \toprule
+  \textbf{能力} & \textbf{Zotero} & \textbf{RefNest} \\
+  \midrule
+  PDF 文本提取  & pdf.js（基础） & pdf-parse-new + MinerU（多模态） \\
+  公式识别      & 无 & KaTeX 渲染（MinerU 输出） \\
+  图片提取      & 无 & 精准模式自动提取，图片画廊 \\
+  表格识别      & 无 & MinerU 表格转 Markdown \\
+  Markdown 输出 & 无 & 完整多模态 Markdown \\
+  关键词提取    & 无自动提取 & 从 Markdown / CrossRef / PDF 三级提取 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+MinerU API 的两种模式（Agent 免费 / Precision 精准）的串行队列设计是整个项目
+\textbf{逻辑最清晰的部分}：单一职责、状态推送、错误隔离，设计得当。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{稳健性综合评分}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{评分雷达图}
+
+\begin{center}
+\begin{tikzpicture}
+\begin{polaraxis}[
+  width=9cm, height=9cm,
+  xtick={0,51.43,...,360},
+  xticklabels={数据模型, 进程安全, 数据库层, 状态管理, 测试覆盖, 构建系统, 同步能力},
+  xticklabel style={font=\footnotesize},
+  ymin=0, ymax=10,
+  ytick={0,2,4,6,8,10},
+  yticklabel style={font=\tiny\color{gray}},
+  grid=both,
+  grid style={gray!30},
+]
+  % Zotero
+  \addplot[thick, color=zoterored, fill=zoterored, fill opacity=0.15,
+           mark=*, mark size=2pt]
+    coordinates {
+      (0,9) (51.43,7) (102.86,8) (154.29,9) (205.71,8) (257.14,5) (308.57,9) (360,9)
+    };
+  \addlegendentry{Zotero}
+
+  % RefNest
+  \addplot[thick, color=electronblue, fill=electronblue, fill opacity=0.15,
+           mark=square*, mark size=2pt]
+    coordinates {
+      (0,4) (51.43,6) (102.86,5) (154.29,3) (205.71,1) (257.14,9) (308.57,2) (360,4)
+    };
+  \addlegendentry{RefNest}
+\end{polaraxis}
+\end{tikzpicture}
+\end{center}
+
+\subsection{逐项评分表}
+
+\begin{center}
+\begin{tabular}{lccp{5.5cm}}
+  \toprule
+  \textbf{维度} & \textbf{Zotero} & \textbf{RefNest} & \textbf{RefNest 主要问题} \\
+  \midrule
+  数据模型    & 9/10 & 4/10 & 无 dirty tracking、无变更通知、无对象缓存 \\
+  进程安全    & 7/10 & 6/10 & \texttt{fs:readFile} 无路径限权，IPC 无参数校验 \\
+  数据库层    & 8/10 & 5/10 & 同步 API 阻塞主进程，迁移系统薄弱，无事务封装 \\
+  状态管理    & 9/10 & 3/10 & 各组件手动 reload，无统一事件驱动，逻辑分散 \\
+  测试覆盖    & 8/10 & 1/10 & 几乎零覆盖，核心路径无安全网 \\
+  构建系统    & 5/10 & 9/10 & 无问题，优势明显 \\
+  同步能力    & 9/10 & 2/10 & 尚未实现，仅有表结构预留 \\
+  \midrule
+  \textbf{综合} & \textbf{7.9/10} & \textbf{4.3/10} & \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{改进优先级建议}
+% ─────────────────────────────────────────────────────────────────────────────
+
+按影响面和实现成本排序，以下三项优先级最高：
+
+\subsection{P1：统一数据流（状态管理重构）}
+
+\textbf{问题}：各组件各自 reload，无事件驱动，数据流分散。
+
+\textbf{方案}：在 \texttt{itemStore} 引入 \texttt{invalidate} 版本号机制：
+
+\begin{lstlisting}[language={}]
+// itemStore 中增加
+attachmentsVersion: 0,
+invalidateAttachments: () =>
+  set(s => ({ attachmentsVersion: s.attachmentsVersion + 1 })),
+
+// AttachmentsTab 中订阅版本号，版本号变化时自动 reload
+const ver = useItemStore(s => s.attachmentsVersion)
+useEffect(() => { reload() }, [itemId, ver])
+
+// 所有写附件的 IPC 调用完成后调用 invalidateAttachments()
+// → 所有订阅该版本号的组件自动重新加载，无需手动协调
+\end{lstlisting}
+
+\textbf{成本}：中等（3--5 天）。\textbf{收益}：彻底解决数据不一致问题，为同步系统奠基。
+
+\subsection{P2：\texttt{fs:readFile} IPC 路径白名单}
+
+\textbf{问题}：渲染进程可读取系统任意文件，存在安全漏洞。
+
+\textbf{方案}：
+
+\begin{lstlisting}[language={}]
+ipcMain.handle('fs:readFile', (_e, filePath: string) => {
+  const allowed = [
+    app.getPath('userData'),
+    getStoragePath() ?? '',
+  ].filter(Boolean)
+  const normalized = resolve(filePath)
+  if (!allowed.some(dir => normalized.startsWith(dir))) {
+    throw new Error(`Access denied: ${filePath}`)
+  }
+  return Array.from(readFileSync(normalized))
+})
+\end{lstlisting}
+
+\textbf{成本}：低（0.5 天）。\textbf{收益}：修复安全漏洞。
+
+\subsection{P3：核心模块单元测试}
+
+\textbf{问题}：关键词提取、数据库迁移、IPC 处理器零测试覆盖。
+
+\textbf{方案}：用 vitest 覆盖以下路径：
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item \texttt{pdfImporter.ts}：\texttt{extractKeywordsFromMarkdown} / \texttt{extractKeywordsFromText}（纯函数，易测）
+  \item \texttt{db/index.ts}：迁移幂等性（对空库 / 已迁移库各跑一次）
+  \item \texttt{splitKeywords}：各种分隔符场景
+\end{itemize}
+
+\textbf{成本}：中等（2--3 天）。\textbf{收益}：重构时有安全网。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{总体结论}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{tcolorbox}[warnbox, title={综合判断}]
+RefNest 的\textbf{架构方向是正确的}，Electron + React + TypeScript + SQLite 的组合
+是当前桌面文献管理应用的合理技术栈，比 Zotero 的 XUL 遗产更现代化。
+
+但 RefNest 目前处于\textbf{「能跑但未加固」}的阶段：
+\begin{itemize}[leftmargin=1em, itemsep=1pt]
+  \item 单人小规模使用：完全没有问题
+  \item 超过 5000 条文献：数据库同步 API 可能出现卡顿
+  \item 多设备协同：同步系统尚不存在
+  \item 复杂批量操作：无事务封装，存在数据不一致风险
+  \item 长期维护：无测试覆盖，重构成本高
+\end{itemize}
+
+Zotero 的成熟在于 20 年打磨出的\textbf{防御性编程}和\textbf{完整数据一致性保障}，
+这不是几个月能追上的。
+但 RefNest 的 MinerU AI 解析能力是 Zotero 完全不具备的，
+这一差异化优势足以支撑其独立存在的价值。
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\end{document}

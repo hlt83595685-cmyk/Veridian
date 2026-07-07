@@ -1,0 +1,32 @@
+{
+  "toolbar": {
+    "search": "搜索文献...",
+    "addItem": "添加条目",
+    "switchLang": "切换语言",
+    "sync": "同步",
+    "settings": "设置"
+  },
+  "collections": {
+    "title": "文库",
+    "all": "全部文献",
+    "recent": "最近添加",
+    "trash": "废纸篓"
+  },
+  "item": {
+    "untitled": "（无标题）",
+    "empty": "暂无文献，点击"添加条目"开始",
+    "listHeader": "共 {{count}} 篇文献"
+  },
+  "detail": {
+    "title": "标题",
+    "type": "类型",
+    "year": "年份",
+    "tab": {
+      "metadata": "元数据",
+      "attachments": "附件",
+      "notes": "笔记"
+    },
+    "attachmentsPlaceholder": "暂无附件",
+    "notesPlaceholder": "暂无笔记"
+  }
+}

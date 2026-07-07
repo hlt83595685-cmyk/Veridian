@@ -1,0 +1,769 @@
+% RefNest -- Software Architecture & Developer Reference
+% Compiled with: xelatex architecture.tex (requires xeCJK for Chinese characters)
+% ----------------------------------------------------------------------------
+
+\documentclass[12pt, a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{listingsutf8}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds}
+
+% ── Fonts ────────────────────────────────────────────────────────────────────
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+\setmonofont{Consolas}
+\setCJKmainfont[BoldFont=SimHei, ItalicFont=KaiTi]{SimSun}
+\setCJKsansfont{Microsoft YaHei}
+\setCJKmonofont{FangSong}
+
+% ── Page geometry ────────────────────────────────────────────────────────────
+\geometry{
+  a4paper,
+  top=25mm, bottom=25mm,
+  left=28mm, right=28mm,
+  headheight=24.5pt
+}
+
+% ── Colors ───────────────────────────────────────────────────────────────────
+\definecolor{tsinghuapurple}{HTML}{660874}
+\definecolor{codebg}{HTML}{F7F7F9}
+\definecolor{codeframe}{HTML}{CCCCCC}
+\definecolor{linkblue}{HTML}{0066CC}
+\definecolor{sectionblue}{HTML}{003366}
+
+% ── Hyperref ─────────────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  linkcolor=tsinghuapurple,
+  urlcolor=linkblue,
+  citecolor=tsinghuapurple,
+  pdftitle={RefNest -- Software Architecture \& Developer Reference},
+  pdfauthor={RefAI Development Team},
+}
+
+% ── Section formatting ────────────────────────────────────────────────────────
+\titleformat{\section}
+  {\large\bfseries\color{sectionblue}}
+  {\thesection}{1em}{}[{\color{tsinghuapurple}\titlerule[0.5pt]}]
+
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{sectionblue}}
+  {\thesubsection}{1em}{}
+
+\titleformat{\subsubsection}
+  {\normalsize\bfseries}
+  {\thesubsubsection}{1em}{}
+
+% ── Code listings ─────────────────────────────────────────────────────────────
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  breakatwhitespace=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  tabsize=2,
+  xleftmargin=6pt,
+  xrightmargin=6pt,
+  aboveskip=6pt,
+  belowskip=6pt,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=5pt,
+  keywordstyle=\color{tsinghuapurple}\bfseries,
+  commentstyle=\color{gray}\itshape,
+  stringstyle=\color{linkblue},
+}
+
+% ── Header / Footer ───────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{gray} RefNest -- Architecture Reference}
+\fancyhead[R]{\small\color{gray} v0.1.0}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{tsinghuapurple}\leaders\hrule height \headrulewidth\hfill}}
+
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{document}
+
+% ── Title page ────────────────────────────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{3cm}
+  {\Huge\bfseries\color{tsinghuapurple} RefNest}\par
+  \vspace{0.6em}
+  {\Large\color{sectionblue} 软件架构与开发说明文档}\par
+  \vspace{0.4em}
+  {\large Software Architecture \& Developer Reference}\par
+  \vspace{2em}
+  \hrule height 1.5pt \relax
+  \vspace{2em}
+  {\large Version 0.1.0}\par
+  \vspace{0.5em}
+  {\normalsize Electron 36 \,·\, React 18 \,·\, TypeScript 5.8 \,·\, better-sqlite3}\par
+  \vspace{4cm}
+  {\small 本文档描述 RefNest 桌面端文献管理应用的技术架构、目录结构、\\
+  核心模块设计、IPC 通信协议以及开发工作流，供开发者参考。}\par
+  \vfill
+  {\small\color{gray} Last updated: 2026-07-07}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{项目概述 (Project Overview)}
+% ─────────────────────────────────────────────────────────────────────────────
+
+RefNest（包名 \texttt{refnest}）是一款基于 Electron 36 的跨平台桌面端文献管理应用，
+面向科研人员设计，核心功能包括：
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item PDF 导入、元数据自动抓取（CrossRef API）
+  \item AI 驱动的 PDF $\to$ Markdown 转换（MinerU API，支持免费/精准两种模式）
+  \item 多模态 Markdown 查看（含图片、公式、表格渲染）
+  \item 图片画廊（精准解析后自动提取）
+  \item 文献标签管理与关键词自动提取
+  \item BibTeX / CSL-JSON 导入导出
+  \item 层级文件夹（集合）管理
+  \item 本地 HTTP 服务器（端口 23120），供浏览器扩展使用
+\end{itemize}
+
+\subsection{技术栈}
+
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  \textbf{层次} & \textbf{技术} & \textbf{版本} \\
+  \midrule
+  桌面壳       & Electron          & 36.3.x \\
+  构建工具     & electron-vite     & 3.1.x  \\
+  前端框架     & React             & 18.3.x \\
+  状态管理     & Zustand           & 5.0.x  \\
+  类型系统     & TypeScript        & 5.8.x  \\
+  数据库       & better-sqlite3    & 11.9.x \\
+  打包工具     & electron-builder  & 26.x   \\
+  样式         & Tailwind CSS      & 4.x    \\
+  国际化       & i18next           & 24.x   \\
+  Markdown     & react-markdown + remark/rehype & 10.x \\
+  数学公式     & KaTeX             & 0.17.x \\
+  PDF 渲染     & pdf.js            & 4.9.x  \\
+  PDF 操作     & pdf-lib           & 1.17.x \\
+  ZIP 处理     & adm-zip           & 0.5.x  \\
+  引文格式化   & citeproc          & 2.4.x  \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{目录结构 (Directory Layout)}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{lstlisting}[language={},numbers=none]
+RefAI/
+├── src/
+│   ├── main/                  # Electron 主进程 (Node.js)
+│   │   ├── index.ts           # 入口：窗口创建、协议注册、菜单
+│   │   ├── ipc.ts             # 所有 IPC 处理器注册
+│   │   ├── db/                # SQLite 数据层
+│   │   │   ├── index.ts       # 初始化、迁移运行器
+│   │   │   ├── items.ts       # 文献 CRUD + FTS5 搜索
+│   │   │   ├── attachments.ts # 附件 CRUD（含 imagedir 类型）
+│   │   │   ├── collections.ts # 集合 CRUD
+│   │   │   ├── creators.ts    # 作者/编者 CRUD
+│   │   │   └── tags.ts        # 标签 CRUD + 孤儿清理
+│   │   ├── mineruApi.ts       # MinerU API 客户端（Agent + Precision）
+│   │   ├── pdf2mdService.ts   # 串行转换队列 + 设置管理
+│   │   ├── pdfImporter.ts     # PDF 导入 + 关键词提取
+│   │   ├── crossref.ts        # CrossRef DOI 查询
+│   │   ├── importer.ts        # BibTeX / CSL-JSON 导入
+│   │   └── server.ts          # 本地 HTTP 服务器（端口 23120）
+│   ├── preload/
+│   │   └── index.ts           # contextBridge -- window.refnest API 桥接
+│   ├── renderer/
+│   │   ├── index.html
+│   │   └── src/
+│   │       ├── App.tsx        # 根组件：Dialog 路由
+│   │       ├── main.tsx       # React 挂载点
+│   │       ├── components/
+│   │       │   ├── layout/    # MainLayout, Toolbar, StatusBar
+│   │       │   ├── item-tree/ # CollectionPane, ItemListPane
+│   │       │   ├── detail-panel/ # DetailPane, MetadataTab,
+│   │       │   │                 # AttachmentsTab, TagsTab
+│   │       │   ├── pdf-viewer/   # PdfViewer, MarkdownViewer,
+│   │       │   │                 # ImageGalleryPane, PdfAnnotationViewer
+│   │       │   └── tools/     # Pdf2mdDialog, SettingsDialog, ToolsDialog
+│   │       ├── stores/        # Zustand 状态仓库
+│   │       ├── i18n/          # 国际化资源 (zh/en)
+│   │       └── stubs/         # Node built-in 的浏览器端桩
+│   └── shared/
+│       └── types.ts           # 主/渲染进程共享类型
+├── browser-extension/         # Chrome 浏览器扩展（与本地服务器通信）
+├── resources/                 # 应用图标
+├── electron.vite.config.ts    # Vite 构建配置
+├── package.json               # 依赖声明
+└── readme/
+    ├── architecture/          # 本文档所在目录
+    └── analysis/              # 架构对比分析文档
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{进程架构 (Process Architecture)}
+% ─────────────────────────────────────────────────────────────────────────────
+
+Electron 应用由三个相互隔离的进程组成，通过严格定义的通道通信。
+
+\subsection{主进程 (Main Process)}
+
+运行在 Node.js 环境，拥有完整文件系统和操作系统访问权限。
+\texttt{src/main/index.ts} 在 \texttt{app.whenReady()} 中顺序完成：
+
+\begin{enumerate}[leftmargin=2em, itemsep=2pt]
+  \item 注册 \texttt{refnest-file://} 自定义协议（见 \S\ref{sec:protocol}）
+  \item \texttt{initDatabase()} -- 初始化 SQLite，执行迁移
+  \item \texttt{startLocalServer()} -- 启动本地 HTTP 服务器（端口 23120）
+  \item \texttt{registerIpcHandlers(ipcMain)} -- 挂载全部 IPC 通道
+  \item \texttt{buildMenu(locale)} -- 构建本地化原生菜单
+  \item \texttt{createWindow()} -- 创建 BrowserWindow
+\end{enumerate}
+
+\subsection{预加载脚本 (Preload)}
+
+\texttt{src/preload/index.ts} 在渲染进程加载前注入。
+通过 \texttt{contextBridge.exposeInMainWorld} 将两个全局对象暴露给渲染进程：
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item \texttt{window.electron} -- 标准 \texttt{@electron-toolkit/preload} API
+  \item \texttt{window.refnest} -- 完整的 RefNest 业务 API（见 \S\ref{sec:ipc}）
+\end{itemize}
+
+安全约束：\texttt{contextIsolation: true}，\texttt{nodeIntegration: false}，
+\texttt{sandbox: false}（需要 \texttt{sandbox:false} 以允许 preload 访问 \texttt{ipcRenderer}）。
+
+\subsection{渲染进程 (Renderer)}
+
+标准 React 18 SPA，通过 Vite 构建，运行于 Chromium 渲染器中。
+状态管理使用 Zustand，无 Redux；路由内嵌于组件逻辑，无 React Router。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{自定义协议 (refnest-file://)}
+\label{sec:protocol}
+% ─────────────────────────────────────────────────────────────────────────────
+
+Electron 渲染器中 \texttt{file://} 协议受 CSP 限制，无法直接访问本地文件。
+RefNest 注册了 \texttt{refnest-file://} 作为特权协议：
+
+\begin{lstlisting}[language={}]
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'refnest-file',
+    privileges: { secure: true, supportFetchAPI: true, stream: true } }
+])
+
+// Handler (Windows path fix):
+protocol.handle('refnest-file', (request) => {
+  let filePath = decodeURIComponent(
+    request.url.replace('refnest-file://', ''))
+  // refnest-file:///C:/path -> strip leading /
+  if (/^\/[A-Za-z]:/.test(filePath)) filePath = filePath.slice(1)
+  return net.fetch(pathToFileURL(filePath).toString())
+})
+\end{lstlisting}
+
+\textbf{注意}：Markdown 图片的实际显示通过 IPC blob URL 路径实现（见 \S\ref{sec:markdownviewer}），
+不依赖此协议，从而规避了所有 CSP 限制。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{数据库层 (Database Layer)}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{引擎与配置}
+
+使用 \texttt{better-sqlite3}（原生 Node 模块，同步 API）。
+\texttt{src/main/db/index.ts} 初始化时设置：
+
+\begin{lstlisting}[language=SQL]
+PRAGMA journal_mode = WAL;   -- 写前日志，提升并发读性能
+PRAGMA foreign_keys = ON;    -- 强制外键约束
+\end{lstlisting}
+
+数据库文件位于 Electron \texttt{userData} 目录（Windows: \texttt{\%APPDATA\%/refnest}）。
+
+\subsection{表结构}
+
+\begin{longtable}{p{3.2cm} p{9cm}}
+  \toprule
+  \textbf{表名} & \textbf{说明} \\
+  \midrule
+  \texttt{libraries}      & 单行种子表，id=1 "My Library" \\
+  \texttt{items}          & 文献主表（key, type, title, abstract, year, doi, url, journal, publisher, volume, issue, pages, isbn, language, extra, deleted, library\_id, timestamps, version） \\
+  \texttt{creators}       & 作者实体表（first\_name, last\_name, orcid） \\
+  \texttt{item\_creators} & 文献-作者关联（role: author/editor/translator, position） \\
+  \texttt{tags}           & 标签实体（name UNIQUE） \\
+  \texttt{item\_tags}     & 文献-标签关联（复合主键） \\
+  \texttt{attachments}    & 附件表（type: pdf/link/other/\textbf{imagedir}, filename, path, url, mime\_type, size, md5） \\
+  \texttt{notes}          & 笔记（content, timestamps） \\
+  \texttt{collections}    & 层级集合（parent\_id 自引用外键） \\
+  \texttt{collection\_items} & 集合-文献关联 \\
+  \texttt{items\_fts}     & FTS5 全文搜索虚拟表（索引 title + abstract） \\
+  \texttt{sync\_state}    & 键值同步状态存储 \\
+  \bottomrule
+\end{longtable}
+
+\subsection{imagedir 附件类型}
+
+精准解析（Precision API）产生的图片目录以 \texttt{type='imagedir'} 存入 \texttt{attachments}，
+字段 \texttt{path} 存储目录绝对路径。删除时跳过 \texttt{unlinkSync}（目录由用户管理）。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{IPC 通信协议}
+\label{sec:ipc}
+% ─────────────────────────────────────────────────────────────────────────────
+
+所有渲染进程-主进程通信通过 \texttt{ipcRenderer.invoke(channel, ...args)} /
+\texttt{ipcMain.handle(channel, handler)} 模式实现，返回 Promise。
+推送事件使用 \texttt{ipcMain.send} + \texttt{ipcRenderer.on}。
+
+\subsection{业务通道清单}
+
+\begin{longtable}{p{4.8cm} p{7.8cm}}
+  \toprule
+  \textbf{通道} & \textbf{功能} \\
+  \midrule
+  \multicolumn{2}{l}{\textbf{文献 (items)}} \\
+  \texttt{items:getAll}          & 获取全部文献（含标签） \\
+  \texttt{items:getTrashed}      & 获取回收站文献 \\
+  \texttt{items:getByCollection} & 按集合筛选 \\
+  \texttt{items:getById}         & 按 id 获取单条 \\
+  \texttt{items:create}          & 新建文献 \\
+  \texttt{items:update}          & 更新字段 \\
+  \texttt{items:trash}           & 软删除（moved to trash） \\
+  \texttt{items:restore}         & 从回收站恢复 \\
+  \texttt{items:delete}          & 永久删除 \\
+  \texttt{items:emptyTrash}      & 清空回收站 \\
+  \texttt{items:search}          & FTS5 全文搜索 \\
+  \texttt{items:extractKeywords} & 从 MD/PDF 提取关键词并写入标签 \\
+  \midrule
+  \multicolumn{2}{l}{\textbf{作者 (creators)}} \\
+  \texttt{creators:getByItem}    & 获取文献作者列表 \\
+  \texttt{creators:setForItem}   & 批量替换文献作者 \\
+  \midrule
+  \multicolumn{2}{l}{\textbf{标签 (tags)}} \\
+  \texttt{tags:getByItem}        & 获取文献标签 \\
+  \texttt{tags:getAll}           & 获取全部标签 \\
+  \texttt{tags:setForItem}       & 批量设置文献标签（自动清理孤儿） \\
+  \midrule
+  \multicolumn{2}{l}{\textbf{集合 (collections)}} \\
+  \texttt{collections:getAll}    & 获取集合树 \\
+  \texttt{collections:create}    & 新建集合 \\
+  \texttt{collections:rename}    & 重命名 \\
+  \texttt{collections:delete}    & 删除集合 \\
+  \texttt{collections:addItem}   & 添加文献到集合 \\
+  \texttt{collections:removeItem}& 从集合移除文献 \\
+  \texttt{collections:getItems}  & 获取集合内文献 id 列表 \\
+  \midrule
+  \multicolumn{2}{l}{\textbf{附件 (attachments)}} \\
+  \texttt{attachments:getByItem} & 获取文献附件列表 \\
+  \texttt{attachments:add}       & 文件选择对话框 + 注册附件 \\
+  \texttt{attachments:remove}    & 删除附件记录（imagedir 不删文件） \\
+  \texttt{attachments:getPath}   & 获取附件绝对路径 \\
+  \texttt{attachments:openExternal} & 用系统默认程序打开 \\
+  \texttt{attachments:openPath}  & 用 shell 打开（资源管理器定位） \\
+  \midrule
+  \multicolumn{2}{l}{\textbf{导入 (import)}} \\
+  \texttt{import:openDialog}     & 多文件选择，分发到 PDF/BibTeX/CSL-JSON 导入器 \\
+  \midrule
+  \multicolumn{2}{l}{\textbf{文件系统 (fs)}} \\
+  \texttt{fs:readFile}           & 读取文件为 \texttt{number[]}（绕过 contextBridge 限制） \\
+  \texttt{fs:readTextFile}       & 读取文本文件（UTF-8） \\
+  \texttt{fs:writeFile}          & 写入文件 \\
+  \texttt{fs:listDir}            & 递归列出目录内所有图片文件路径 \\
+  \texttt{pdfjs:workerPath}      & 返回 pdf.js worker 绝对路径 \\
+  \midrule
+  \multicolumn{2}{l}{\textbf{工具 (tools)}} \\
+  \texttt{tool:pick-pdf}         & 选择 PDF 文件路径 \\
+  \texttt{tool:pick-dir}         & 选择输出目录 \\
+  \texttt{tool:pdf2md}           & 手动触发 PDF 转换（流式进度回调） \\
+  \midrule
+  \multicolumn{2}{l}{\textbf{设置 (settings)}} \\
+  \texttt{settings:get}          & 读取键值设置 \\
+  \texttt{settings:set}          & 写入键值设置 \\
+  \texttt{settings:pickStoragePath} & 选择文件存储根目录 \\
+  \midrule
+  \multicolumn{2}{l}{\textbf{推送事件（主进程 → 渲染进程）}} \\
+  \texttt{pdf2md:status}         & 转换队列状态更新（filename, state, message, pending） \\
+  \texttt{tools:open}            & 原生菜单触发打开工具面板 \\
+  \texttt{settings:open}         & 原生菜单触发打开设置面板 \\
+  \texttt{settings:setLocale}    & 原生菜单切换语言 \\
+  \bottomrule
+\end{longtable}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{PDF 转 Markdown 系统}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{整体流程}
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=1.2cm,
+  box/.style={rectangle, rounded corners=4pt, draw=sectionblue,
+              fill=codebg, minimum width=3.2cm, minimum height=0.8cm,
+              font=\footnotesize, align=center},
+  arr/.style={-Stealth, thick, color=tsinghuapurple},
+]
+  \node[box] (import) {PDF 导入};
+  \node[box, right=of import] (queue) {串行队列\\pdf2mdService};
+  \node[box, right=of queue] (mode) {模式选择};
+  \node[box, above right=0.6cm and 0.4cm of mode] (agent) {Agent API\\（免费）};
+  \node[box, below right=0.6cm and 0.4cm of mode] (prec) {Precision API\\（需 Token）};
+  \node[box, right=3.8cm of mode] (output) {输出注册\\到 attachments};
+
+  \draw[arr] (import) -- (queue);
+  \draw[arr] (queue) -- (mode);
+  \draw[arr] (mode) -- (agent);
+  \draw[arr] (mode) -- (prec);
+  \draw[arr] (agent) -- (output);
+  \draw[arr] (prec) -- (output);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Agent API（免费模式）}
+
+端点：\texttt{https://mineru.net/api/v1/agent/parse}
+
+\begin{enumerate}[leftmargin=2em, itemsep=2pt]
+  \item 读取 PDF 页数（\texttt{pdf-lib}）
+  \item 若页数 $>$ 20，用 \texttt{pdf-lib} 拆分为 $\leq20$ 页的分块
+  \item 逐块：POST 获取上传地址 $\to$ PUT 上传 $\to$ 轮询结果（每 3 秒，最多 6 分钟）
+  \item 合并所有分块 Markdown，以 \texttt{---} 分隔，写入 \texttt{<stem>.md}
+  \item 注册为文献附件（\texttt{registerAttachment}）
+\end{enumerate}
+
+\textbf{输出}：单一 \texttt{.md} 文件，\textbf{无图片}。
+
+\subsection{Precision API（精准模式）}
+
+端点：\texttt{https://mineru.net/api/v4}，需要 Bearer Token。
+
+\begin{enumerate}[leftmargin=2em, itemsep=2pt]
+  \item POST \texttt{/file-urls/batch}：获取 OSS 预签名上传 URL + \texttt{batch\_id}
+  \item PUT 上传整个 PDF（不分块）
+  \item 轮询 \texttt{/extract-results/batch/\{batch\_id\}}（每 5 秒，最多 20 分钟）
+  \item 下载结果 ZIP，用 \texttt{adm-zip} 解压到 \texttt{<stem>\_mineru/}
+  \item 递归查找 \texttt{full.md}（\texttt{findFile}）
+  \item 查找 \texttt{full.md} 同级目录下的图片子目录
+  \item 注册 \texttt{full.md} 为 Markdown 附件，图片目录为 \texttt{imagedir} 附件
+\end{enumerate}
+
+\textbf{关键设计}：\texttt{zip.extractAllTo(extractDir, true)} 保留 ZIP 内部原始目录结构，
+使 \texttt{full.md} 中的相对图片路径自然有效，无需路径重写。
+
+\subsection{串行队列}
+
+\texttt{pdf2mdService.ts} 维护一个 \texttt{QueueItem[]} 数组，
+\texttt{drainQueue()} 通过 \texttt{\_running} 标志确保同一时刻只有一个转换任务运行。
+每个任务完成/失败后通过 \texttt{pdf2md:status} 推送事件通知渲染进程。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Markdown 查看器}
+\label{sec:markdownviewer}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\textbf{文件}：\texttt{src/renderer/src/components/pdf-viewer/MarkdownViewer.tsx}
+
+\subsection{渲染管线}
+
+\begin{lstlisting}[language={}]
+<ReactMarkdown
+  remarkPlugins={[remarkGfm, remarkMath]}
+  rehypePlugins={[rehypeKatex, rehypeRaw]}
+  components={{ img: LocalImage, ... }}
+>
+  {markdown}
+</ReactMarkdown>
+\end{lstlisting}
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item \texttt{remark-gfm}：表格、删除线、任务列表等 GitHub Flavored Markdown 扩展
+  \item \texttt{remark-math}：解析 \texttt{\$...\$} 和 \texttt{\$\$...\$\$} 数学块
+  \item \texttt{rehype-katex}：将数学块渲染为 KaTeX HTML
+  \item \texttt{rehype-raw}：透传 MinerU 输出中的原始 HTML 标签
+\end{itemize}
+
+\subsection{LocalImage 组件（图片 IPC Blob URL 模式）}
+
+由于渲染进程无法直接访问 \texttt{file://}，图片通过以下路径加载：
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=0.9cm,
+  box/.style={rectangle, rounded corners=4pt, draw=sectionblue,
+              fill=codebg, minimum width=3cm, minimum height=0.7cm,
+              font=\footnotesize\ttfamily, align=center},
+  arr/.style={-Stealth, thick, color=tsinghuapurple},
+]
+  \node[box] (md)  {\normalfont 图片相对路径};
+  \node[box, right=of md]  (res) {resolve 绝对路径};
+  \node[box, right=of res] (ipc) {IPC fs:readFile};
+  \node[box, right=of ipc] (blob) {Blob URL};
+  \node[box, right=of blob] (img) {<img src>};
+
+  \draw[arr] (md) -- (res);
+  \draw[arr] (res) -- (ipc);
+  \draw[arr] (ipc) -- (blob);
+  \draw[arr] (blob) -- (img);
+\end{tikzpicture}
+\end{center}
+
+\textbf{Windows 路径注意事项}：
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item \texttt{path-browserify} 是 POSIX 实现，\texttt{dirname('H:\\path\\file')} 返回 \texttt{'.'}。
+        解决方案：\texttt{dirname(filePath.replace(/\textbackslash\textbackslash/g, '/'))}
+  \item \texttt{isAbsolute('C:/path')} 返回 \texttt{false}，需自定义检测：
+        \texttt{/\^{}[A-Za-z]:\textbackslash//.test(n)}
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{图片画廊 (ImageGalleryPane)}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\textbf{文件}：\texttt{src/renderer/src/components/pdf-viewer/ImageGalleryPane.tsx}
+
+精准解析完成后，\texttt{imagedir} 附件出现在附件面板，点击即可打开图片画廊。
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item 调用 \texttt{fs:listDir} IPC 递归枚举目录内所有图片文件
+        （扩展名：\texttt{.png .jpg .jpeg .gif .webp .svg .bmp}）
+  \item 网格布局：\texttt{grid-template-columns: repeat(auto-fill, minmax(160px, 1fr))}
+  \item 缩略图通过 \texttt{Thumb} 组件，同样使用 IPC Blob URL 模式加载
+  \item 点击缩略图打开 \texttt{Lightbox}：全屏显示，支持键盘 \textbf{←/→} 切换、\textbf{Esc} 关闭
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{关键词提取系统}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\textbf{文件}：\texttt{src/main/pdfImporter.ts}
+
+\subsection{提取优先级}
+
+\begin{enumerate}[leftmargin=2em, itemsep=2pt]
+  \item \textbf{Markdown 附件}（MinerU 输出结构更清晰，优先读取）：
+        \begin{itemize}
+          \item Bold 内联：\texttt{**Keywords**: word1; word2}
+          \item Plain 内联：\texttt{Keywords: word1; word2}
+          \item Heading 块：\texttt{\#\# Keywords\textbackslash n word1; word2}
+          \item 同时支持中文：\texttt{关键词}
+        \end{itemize}
+  \item \textbf{PDF 原始文本}（\texttt{pdf-parse-new}，仅前 8 页）：回退方案
+  \item \textbf{CrossRef \texttt{subject} 字段}：导入时自动合并
+\end{enumerate}
+
+\subsection{分词逻辑 (splitKeywords)}
+
+优先级依次：\texttt{·}（中圆点）$>$ \texttt{;}（分号）$>$ \texttt{,}（逗号）$>$ 多空格。
+
+结果过滤：长度 2--80 字符，最多 20 个关键词。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{UI 组件与样式规范}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{布局结构}
+
+\begin{center}
+\begin{tabular}{p{2.5cm} p{2.5cm} p{2.5cm} p{3cm}}
+  \toprule
+  左侧边栏 (220px) & 中央内容区 (flex:1) & & 右侧详情 (320px) \\
+  \midrule
+  CollectionPane & \multicolumn{2}{l}{ItemListPane（文献列表）} & DetailPane \\
+                 & \multicolumn{2}{l}{-- 或 --} & \\
+                 & \multicolumn{2}{l}{PdfReaderPane / MarkdownReaderPane / ImageGalleryPane} & \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+中央区同一时刻只渲染一个：文献列表或某种查看器（PDF/Markdown/图片画廊）。
+查看器打开时右侧详情面板隐藏（\texttt{viewerPath !== null} 时不渲染 \texttt{DetailPane}）。
+
+\subsection{视觉规范}
+
+\begin{center}
+\begin{tabular}{lll}
+  \toprule
+  \textbf{元素} & \textbf{字体} & \textbf{字号 / 颜色} \\
+  \midrule
+  文献条目标题  & Times New Roman, Georgia, serif & 18px \\
+  标签气泡      & Adobe Gothic Std B, Source Han Sans, Microsoft YaHei & 14px / \textcolor{tsinghuapurple}{\#660874} \\
+  标签背景      & \multicolumn{2}{l}{\texttt{rgba(102,8,116,0.07)}，边框 \texttt{rgba(102,8,116,0.22)}} \\
+  界面文本      & 系统 sans-serif & 13px \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{状态管理}
+
+三个 Zustand Store：
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item \texttt{itemStore}：当前选中文献、文献列表、查看器路径/类型
+        （\texttt{viewerType: 'pdf' | 'markdown' | 'gallery'}）、
+        集合筛选、搜索关键词、年份排序
+  \item \texttt{collectionStore}：集合树数据
+  \item \texttt{statusStore}：状态栏队列指示、pdf2md 转换进度
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{本地 HTTP 服务器}
+% ─────────────────────────────────────────────────────────────────────────────
+
+监听 \texttt{127.0.0.1:23120}，为浏览器扩展提供本地 API，
+支持从浏览器直接向 RefNest 导入当前页面的文献元数据。
+
+浏览器扩展位于 \texttt{browser-extension/}，
+通过 \texttt{background.js} 与本地服务器通信。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{设置系统}
+% ─────────────────────────────────────────────────────────────────────────────
+
+设置以 JSON 文件存储于 Electron \texttt{userData} 目录下的
+\texttt{refnest-settings.json}，通过 \texttt{settings:get/set} IPC 通道读写。
+
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  \textbf{键名} & \textbf{说明} \\
+  \midrule
+  \texttt{tool.pdf2md.enabled}   & 是否启用 PDF 自动转换（默认 \texttt{true}） \\
+  \texttt{tool.pdf2md.mode}      & \texttt{'agent'}（免费）或 \texttt{'precision'}（精准） \\
+  \texttt{tool.pdf2md.apiToken}  & Precision API Bearer Token \\
+  \texttt{storage.path}          & 用户指定的文件存储根目录 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{开发工作流}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{环境要求}
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item Node.js $\geq$ 20，npm $\geq$ 10
+  \item Windows 11（主要开发平台）；macOS / Linux 理论可用
+  \item \texttt{better-sqlite3} 需要原生编译：\texttt{npm run postinstall} 自动执行
+\end{itemize}
+
+\subsection{常用命令}
+
+\begin{lstlisting}[language=bash, numbers=none]
+npm install               # 安装依赖（含 better-sqlite3 原生编译）
+npm run dev               # 开发模式（electron-vite dev，热重载）
+npm run build             # 构建（输出到 out/）
+npm run package           # 打包安装程序（输出到 dist/）
+npm run typecheck         # TypeScript 类型检查
+npm run lint              # ESLint 检查
+npm run test              # vitest 单元测试
+\end{lstlisting}
+
+\subsection{Git 分支策略}
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item \textbf{所有 RefAI 功能提交必须推送到} \texttt{feat/pdf-annotation} \textbf{分支}，
+        严禁直接提交到 \texttt{master/main}。
+  \item 功能开发完成后通过 PR 合并。
+\end{itemize}
+
+\subsection{构建产物}
+
+\begin{center}
+\begin{tabular}{ll}
+  \toprule
+  \textbf{目录} & \textbf{内容} \\
+  \midrule
+  \texttt{out/main/}     & 主进程编译输出（由 electron-vite 生成） \\
+  \texttt{out/preload/}  & 预加载脚本编译输出 \\
+  \texttt{out/renderer/} & 渲染进程编译输出（Vite 打包） \\
+  \texttt{dist/}         & electron-builder 打包的安装程序 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{路径别名（Vite 配置）}
+
+\begin{lstlisting}[language={}, numbers=none]
+'@'        -> src/renderer/src
+'@shared'  -> src/shared
+'fs'       -> src/renderer/src/stubs/fs.ts  // 渲染进程 Node fs 桩
+'path'     -> path-browserify               // POSIX 实现（注意 Windows 路径问题）
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{已知注意事项与陷阱}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{enumerate}[leftmargin=2em, itemsep=4pt]
+  \item \textbf{path-browserify Windows 路径问题}：
+        \texttt{dirname} 和 \texttt{isAbsolute} 对 \texttt{C:\textbackslash...} 路径行为异常。
+        使用前必须将反斜杠替换为正斜杠：\texttt{p.replace(/\textbackslash\textbackslash/g, '/')}，
+        并用自定义函数检测绝对路径。
+
+  \item \textbf{contextBridge 传递二进制数据}：
+        \texttt{contextBridge} 不能透传 \texttt{Buffer}，
+        \texttt{fs:readFile} 返回 \texttt{number[]}，
+        渲染进程用 \texttt{new Uint8Array(bytes)} 重建再创建 \texttt{Blob}。
+
+  \item \textbf{better-sqlite3 重建}：
+        Electron 版本升级后必须重新执行 \texttt{npm run rebuild}，
+        否则会出现 \texttt{NODE\_MODULE\_VERSION} 不匹配错误。
+
+  \item \textbf{MinerU ZIP 结构}：
+        \texttt{full.md} 的确切位置（根目录 vs 子目录）依 MinerU 版本而异，
+        \texttt{findFile()} 递归查找。
+        图片子目录紧邻 \texttt{full.md} 所在目录，名称不固定，
+        当前取第一个子目录。
+
+  \item \textbf{Precision API 超时}：
+        Precision API 接受完整 PDF（无需分块），
+        但超时上限设为 20 分钟（240 次 $\times$ 5 秒）。
+        大文件（$>$200 页）可能超时。
+
+  \item \textbf{imagedir 删除行为}：
+        删除 \texttt{imagedir} 类型附件仅从数据库移除记录，
+        不删除磁盘上的图片目录，防止误删用户文件。
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{待扩展功能 (Future Work)}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item Zotero 同步协议集成（\texttt{sync\_state} 表已预留）
+  \item 注释层持久化（\texttt{PdfAnnotationViewer} 框架已存在）
+  \item 免费模式（Agent API）图片支持（当前无图片输出）
+  \item 引文插入（\texttt{citeproc} 依赖已引入）
+  \item 网页存档（浏览器扩展已具备基础框架）
+  \item 多窗口 / 浮动阅读器
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\end{document}

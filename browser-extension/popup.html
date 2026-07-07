@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Veridian</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 360px;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC',
+                 'Helvetica Neue', sans-serif;
+    font-size: 13px;
+    color: #1c1c1e;
+    background: #f2f2f7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px 10px;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(60,60,67,0.10);
+  }
+  .header .logo {
+    font-size: 15px;
+    font-weight: 700;
+    color: #007aff;
+    letter-spacing: -0.02em;
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #8e8e93;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .status-dot.online  { background: #34c759; }
+  .status-dot.offline { background: #ff3b30; }
+  .status-label {
+    font-size: 11px;
+    color: #8e8e93;
+  }
+
+  /* Content */
+  .body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+
+  /* Card */
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid rgba(60,60,67,0.10);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    overflow: hidden;
+  }
+
+  /* Metadata preview */
+  .meta-title {
+    padding: 12px 14px 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1c1c1e;
+    line-height: 1.4;
+    border-bottom: 1px solid rgba(60,60,67,0.08);
+  }
+  .meta-rows { padding: 4px 0; }
+  .meta-row {
+    display: flex;
+    align-items: baseline;
+    padding: 5px 14px;
+    gap: 8px;
+  }
+  .meta-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8e8e93;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    width: 52px;
+    flex-shrink: 0;
+  }
+  .meta-value {
+    font-size: 12px;
+    color: #3a3a3c;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .meta-value.doi { font-family: ui-monospace, monospace; font-size: 11px; color: #007aff; }
+
+  /* Authors */
+  .authors { padding: 5px 14px 8px; font-size: 12px; color: #3a3a3c; line-height: 1.5; }
+
+  /* Collection select */
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8e8e93;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+    padding: 0 2px;
+  }
+  select {
+    width: 100%;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(60,60,67,0.15);
+    background: #fff;
+    font-size: 13px;
+    color: #1c1c1e;
+    outline: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  select:focus { border-color: #007aff; box-shadow: 0 0 0 3px rgba(0,122,255,0.12); }
+
+  /* Buttons */
+  .btn {
+    width: 100%;
+    height: 42px;
+    border-radius: 12px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 120ms, transform 120ms;
+    letter-spacing: -0.01em;
+  }
+  .btn:active { opacity: 0.75; transform: scale(0.98); }
+  .btn-primary {
+    background: #007aff;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0,122,255,0.30);
+  }
+  .btn-primary:disabled { background: #aeaeb2; box-shadow: none; cursor: not-allowed; }
+  .btn-secondary {
+    background: rgba(0,122,255,0.10);
+    color: #007aff;
+  }
+
+  /* States */
+  .empty-state {
+    text-align: center;
+    padding: 20px 16px;
+    color: #8e8e93;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .empty-state .icon { font-size: 28px; margin-bottom: 8px; display: block; }
+  .success-state {
+    text-align: center;
+    padding: 20px 16px;
+    color: #34c759;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .success-state .icon { font-size: 32px; margin-bottom: 6px; display: block; }
+  .error-msg {
+    font-size: 12px;
+    color: #ff3b30;
+    padding: 4px 2px;
+    text-align: center;
+  }
+
+  /* Spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .spinner.blue {
+    border-color: rgba(0,122,255,0.25);
+    border-top-color: #007aff;
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <span class="logo">Veridian</span>
+    <span class="status-label" id="statusLabel">连接中...</span>
+    <span class="status-dot" id="statusDot"></span>
+  </div>
+
+  <div class="body" id="mainBody">
+    <div class="empty-state">
+      <span class="spinner blue"></span>
+      <p style="margin-top:10px;color:#8e8e93">正在提取页面信息...</p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

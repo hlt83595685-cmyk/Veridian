@@ -1,0 +1,856 @@
+% RefNest 2.0 -- Architecture Redesign Proposal
+% Compiled with: xelatex redesign.tex
+% ----------------------------------------------------------------------------
+
+\documentclass[12pt, a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{listingsutf8}
+\usepackage{xcolor}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+\usepackage{multirow}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, calc}
+\tcbuselibrary{skins, breakable}
+
+% ── Fonts ─────────────────────────────────────────────────────────────────────
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+\setmonofont{Consolas}
+\setCJKmainfont[BoldFont=SimHei, ItalicFont=KaiTi]{SimSun}
+\setCJKsansfont{Microsoft YaHei}
+\setCJKmonofont{FangSong}
+
+% ── Page geometry ─────────────────────────────────────────────────────────────
+\geometry{
+  a4paper,
+  top=25mm, bottom=25mm,
+  left=28mm, right=28mm,
+  headheight=24.5pt
+}
+
+% ── Colors ────────────────────────────────────────────────────────────────────
+\definecolor{tsinghuapurple}{HTML}{660874}
+\definecolor{codebg}{HTML}{F7F7F9}
+\definecolor{codeframe}{HTML}{CCCCCC}
+\definecolor{linkblue}{HTML}{0066CC}
+\definecolor{sectionblue}{HTML}{003366}
+\definecolor{layerui}{HTML}{E8F4FD}
+\definecolor{layerbridge}{HTML}{F3E8FD}
+\definecolor{layersvc}{HTML}{FDF6E8}
+\definecolor{layerdata}{HTML}{E8FDF0}
+\definecolor{warnbg}{HTML}{FFF8E1}
+\definecolor{warnframe}{HTML}{F59E0B}
+\definecolor{goodbg}{HTML}{F0FDF4}
+\definecolor{goodframe}{HTML}{16A34A}
+\definecolor{badbg}{HTML}{FEF2F2}
+\definecolor{badframe}{HTML}{DC2626}
+
+% ── Hyperref ──────────────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  linkcolor=tsinghuapurple,
+  urlcolor=linkblue,
+  citecolor=tsinghuapurple,
+  pdftitle={RefNest 2.0 -- Architecture Redesign Proposal},
+  pdfauthor={RefAI Development Team},
+}
+
+% ── Section formatting ────────────────────────────────────────────────────────
+\titleformat{\section}
+  {\large\bfseries\color{sectionblue}}
+  {\thesection}{1em}{}[{\color{tsinghuapurple}\titlerule[0.5pt]}]
+
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{sectionblue}}
+  {\thesubsection}{1em}{}
+
+\titleformat{\subsubsection}
+  {\normalsize\bfseries}
+  {\thesubsubsection}{1em}{}
+
+% ── tcolorbox styles ──────────────────────────────────────────────────────────
+\tcbset{
+  principlebox/.style={
+    colback=tsinghuapurple!5, colframe=tsinghuapurple,
+    fonttitle=\bfseries\small,
+    left=6pt, right=6pt, top=4pt, bottom=4pt,
+    breakable,
+  },
+  fixbox/.style={
+    colback=goodbg, colframe=goodframe,
+    fonttitle=\bfseries\small,
+    left=6pt, right=6pt, top=4pt, bottom=4pt,
+    breakable,
+  },
+  problembox/.style={
+    colback=badbg, colframe=badframe,
+    fonttitle=\bfseries\small,
+    left=6pt, right=6pt, top=4pt, bottom=4pt,
+    breakable,
+  },
+  notebox/.style={
+    colback=warnbg, colframe=warnframe,
+    fonttitle=\bfseries\small,
+    left=6pt, right=6pt, top=4pt, bottom=4pt,
+    breakable,
+  },
+}
+
+% ── Code listings ─────────────────────────────────────────────────────────────
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeframe},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  tabsize=2,
+  xleftmargin=6pt, xrightmargin=6pt,
+  aboveskip=4pt, belowskip=4pt,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=5pt,
+  keywordstyle=\color{tsinghuapurple}\bfseries,
+  commentstyle=\color{gray}\itshape,
+  stringstyle=\color{linkblue},
+}
+
+% ── Header / Footer ───────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{gray} RefNest 2.0 -- Architecture Redesign}
+\fancyhead[R]{\small\color{gray} 2026-07-07}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{tsinghuapurple}\leaders\hrule height \headrulewidth\hfill}}
+
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{document}
+
+% ── Title page ────────────────────────────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{2.5cm}
+  {\Huge\bfseries\color{tsinghuapurple} RefNest 2.0}\par
+  \vspace{0.6em}
+  {\Large\color{sectionblue} 底层架构重构方案}\par
+  \vspace{0.4em}
+  {\large Architecture Redesign Proposal}\par
+  \vspace{2em}
+  \hrule height 1.5pt \relax
+  \vspace{2em}
+  {\normalsize 事件驱动 \,·\, 仓储模式 \,·\, 契约化 IPC \,·\, 同步就绪 \,·\, 可测试}\par
+  \vspace{3cm}
+  {\small
+  本方案针对《RefNest vs Zotero 框架对比分析》中识别的七项架构短板，\\
+  提出一套完整的分层重构设计。方案兼容全部现有功能，\\
+  为所有待扩展功能（Future Work）预留清晰的落位点，\\
+  并给出分阶段迁移路线图，避免一次性重写风险。
+  }\par
+  \vfill
+  {\small\color{gray} Last updated: 2026-07-07 \quad 配套文档：readme/architecture/ · readme/analysis/}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{重构目标与设计原则}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{要解决的七个问题}
+
+对照《框架对比分析》的评分结论，本方案逐项给出对策：
+
+\begin{center}
+\begin{tabular}{p{0.8cm} p{4.6cm} p{7.2cm}}
+  \toprule
+  \textbf{\#} & \textbf{现有短板（评分）} & \textbf{对策（章节）} \\
+  \midrule
+  1 & 数据模型无变更通知（4/10） & Notifier 事件总线 + 仓储层（\S3） \\
+  2 & 状态管理各自 reload（3/10） & 查询缓存 + 失效键机制（\S6） \\
+  3 & IPC 无校验、路径无限权（6/10） & 契约化 IPC + zod 校验 + 路径白名单（\S4） \\
+  4 & 同步 SQL 阻塞主进程（5/10） & DB Worker 线程 + 事务封装（\S5） \\
+  5 & 测试覆盖近零（1/10） & 分层可测设计 + 测试金字塔（\S9) \\
+  6 & 同步系统缺失（2/10） & 版本号 + 墓碑 + 操作日志预埋（\S7） \\
+  7 & 附件路径为绝对路径 & 托管存储布局 + 相对路径（\S8） \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{五条设计原则}
+
+\begin{tcolorbox}[principlebox, title={设计原则}]
+\begin{enumerate}[leftmargin=1.5em, itemsep=3pt]
+  \item \textbf{本地优先（Local-first）}：所有操作先落本地 SQLite，同步是叠加层而非前提。
+  \item \textbf{单一写入口（Single write path)}：所有数据写操作必须经过 Service 层，
+        禁止 UI 或 IPC 处理器直接拼 SQL。写入自动触发事件广播。
+  \item \textbf{契约先行（Contract-first IPC）}：主/渲染进程共享一份类型化 IPC 契约文件，
+        参数与返回值均有 schema，两端编译期对齐。
+  \item \textbf{同步就绪（Sync-ready）}：每次写入递增版本号、软删除留墓碑、
+        写操作追加到操作日志——即使同步功能暂不实现，数据结构先行。
+  \item \textbf{渐进迁移（Strangler pattern）}：新旧代码并存，按模块逐步替换，
+        每个阶段都保持应用可运行、可发布。
+\end{enumerate}
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{分层架构总览}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{五层结构}
+
+\begin{center}
+\begin{tikzpicture}[
+  layer/.style={rectangle, rounded corners=5pt, draw=sectionblue, thick,
+                minimum width=12.5cm, minimum height=1.15cm,
+                font=\small, align=center},
+  sub/.style={rectangle, rounded corners=3pt, draw=gray!60,
+              minimum height=0.7cm, font=\footnotesize, align=center,
+              fill=white},
+  arr/.style={-Stealth, very thick, color=tsinghuapurple},
+  evt/.style={-Stealth, very thick, color=goodframe, dashed},
+]
+  % Layer 1: UI
+  \node[layer, fill=layerui] (ui) {};
+  \node[anchor=west, font=\small\bfseries\color{sectionblue}] at ($(ui.west)+(0.2,0.32)$) {L1 渲染进程 UI 层};
+  \node[sub, anchor=east] at ($(ui.east)+(-0.2,-0.12)$) (uisub3) {Viewers};
+  \node[sub, anchor=east] at ($(uisub3.west)+(-0.15,0)$) (uisub2) {Panels};
+  \node[sub, anchor=east] at ($(uisub2.west)+(-0.15,0)$) (uisub1) {React 组件};
+
+  % Layer 2: Query cache
+  \node[layer, fill=layerui!60, below=0.45cm of ui] (qc) {};
+  \node[anchor=west, font=\small\bfseries\color{sectionblue}] at ($(qc.west)+(0.2,0.32)$) {L2 查询缓存层（渲染进程）};
+  \node[sub, anchor=east] at ($(qc.east)+(-0.2,-0.12)$) (qcsub2) {失效键订阅};
+  \node[sub, anchor=east] at ($(qcsub2.west)+(-0.15,0)$) (qcsub1) {queryCache + 乐观更新};
+
+  % Layer 3: Bridge
+  \node[layer, fill=layerbridge, below=0.45cm of qc] (br) {};
+  \node[anchor=west, font=\small\bfseries\color{sectionblue}] at ($(br.west)+(0.2,0.32)$) {L3 契约桥接层（preload + shared）};
+  \node[sub, anchor=east] at ($(br.east)+(-0.2,-0.12)$) (brsub2) {zod schema 校验};
+  \node[sub, anchor=east] at ($(brsub2.west)+(-0.15,0)$) (brsub1) {ipc-contract.ts（单一契约源）};
+
+  % Layer 4: Service
+  \node[layer, fill=layersvc, below=0.45cm of br] (svc) {};
+  \node[anchor=west, font=\small\bfseries\color{sectionblue}] at ($(svc.west)+(0.2,0.32)$) {L4 服务层（主进程）};
+  \node[sub, anchor=east] at ($(svc.east)+(-0.2,-0.12)$) (svcsub3) {JobQueue};
+  \node[sub, anchor=east] at ($(svcsub3.west)+(-0.15,0)$) (svcsub2) {Notifier 事件总线};
+  \node[sub, anchor=east] at ($(svcsub2.west)+(-0.15,0)$) (svcsub1) {ItemService 等业务服务};
+
+  % Layer 5: Data
+  \node[layer, fill=layerdata, below=0.45cm of svc] (data) {};
+  \node[anchor=west, font=\small\bfseries\color{sectionblue}] at ($(data.west)+(0.2,0.32)$) {L5 数据层（DB Worker 线程）};
+  \node[sub, anchor=east] at ($(data.east)+(-0.2,-0.12)$) (dsub3) {迁移框架};
+  \node[sub, anchor=east] at ($(dsub3.west)+(-0.15,0)$) (dsub2) {UnitOfWork 事务};
+  \node[sub, anchor=east] at ($(dsub2.west)+(-0.15,0)$) (dsub1) {Repository 仓储};
+
+  % Down arrows (request)
+  \draw[arr] ($(ui.south)+(-4.5,0)$) -- node[left, font=\tiny\color{tsinghuapurple}]{调用} ($(qc.north)+(-4.5,0)$);
+  \draw[arr] ($(qc.south)+(-4.5,0)$) -- ($(br.north)+(-4.5,0)$);
+  \draw[arr] ($(br.south)+(-4.5,0)$) -- node[left, font=\tiny\color{tsinghuapurple}]{invoke} ($(svc.north)+(-4.5,0)$);
+  \draw[arr] ($(svc.south)+(-4.5,0)$) -- ($(data.north)+(-4.5,0)$);
+
+  % Up arrows (events)
+  \draw[evt] ($(data.north)+(5.2,0)$) -- ($(svc.south)+(5.2,0)$);
+  \draw[evt] ($(svc.north)+(5.2,0)$) -- node[right, font=\tiny\color{goodframe}]{事件推送} ($(br.south)+(5.2,0)$);
+  \draw[evt] ($(br.north)+(5.2,0)$) -- ($(qc.south)+(5.2,0)$);
+  \draw[evt] ($(qc.north)+(5.2,0)$) -- node[right, font=\tiny\color{goodframe}]{自动失效} ($(ui.south)+(5.2,0)$);
+\end{tikzpicture}
+\end{center}
+
+左侧紫色箭头是\textbf{请求流}（UI 发起 → 数据层执行），
+右侧绿色虚线是\textbf{事件流}（数据变更 → 自动广播 → UI 自动刷新）。
+现有架构只有请求流没有事件流，这是本次重构的核心补足。
+
+\subsection{重构后目录结构}
+
+\begin{lstlisting}[language={},numbers=none]
+src/
+├── shared/                      # 两端共享（编译进 main 和 renderer）
+│   ├── ipc-contract.ts          # ★ IPC 契约：通道名 + zod schema + 类型
+│   ├── events.ts                # ★ Notifier 事件类型定义
+│   └── types.ts                 # 领域模型类型（现有，保留）
+├── main/
+│   ├── index.ts                 # 入口（瘦身：只做装配）
+│   ├── ipc/
+│   │   ├── gateway.ts           # ★ IPC 网关：统一校验 + 错误包装 + 日志
+│   │   └── handlers/            # 按域拆分的薄处理器（只调 Service）
+│   ├── services/                # ★ 业务服务层（单一写入口）
+│   │   ├── ItemService.ts
+│   │   ├── AttachmentService.ts
+│   │   ├── CollectionService.ts
+│   │   ├── TagService.ts
+│   │   ├── ImportService.ts     # PDF/BibTeX/CSL-JSON 导入编排
+│   │   ├── KeywordService.ts    # 关键词提取（MD→PDF→CrossRef 三级）
+│   │   └── SettingsService.ts
+│   ├── core/
+│   │   ├── Notifier.ts          # ★ 事件总线（进程内 + IPC 推送）
+│   │   ├── JobQueue.ts          # ★ 通用任务队列（取代 pdf2md 专用队列）
+│   │   └── StorageManager.ts    # ★ 托管存储布局（附件目录管理）
+│   ├── db/
+│   │   ├── worker.ts            # ★ DB Worker 线程入口
+│   │   ├── DbClient.ts          # ★ 主进程侧异步代理（postMessage RPC）
+│   │   ├── migrations/          # ★ 版本化迁移目录（001_xxx.ts ...）
+│   │   ├── UnitOfWork.ts        # ★ 事务封装
+│   │   └── repositories/        # ★ 仓储（纯 SQL，无业务逻辑）
+│   │       ├── ItemRepo.ts
+│   │       ├── AttachmentRepo.ts
+│   │       ├── ...
+│   │       └── OplogRepo.ts     # ★ 操作日志（同步预埋）
+│   ├── integrations/            # 外部 API 客户端（无状态、可 mock）
+│   │   ├── mineru.ts            # 现 mineruApi.ts
+│   │   ├── crossref.ts          # 现 crossref.ts
+│   │   └── localServer.ts       # 现 server.ts（浏览器扩展）
+│   └── security/
+│       └── pathGuard.ts         # ★ 文件访问白名单
+├── preload/
+│   └── index.ts                 # 由 ipc-contract 自动生成桥接
+└── renderer/src/
+    ├── data/                    # ★ 查询缓存层
+    │   ├── queryCache.ts        # 缓存 + 失效键 + 乐观更新
+    │   └── hooks.ts             # useItems / useAttachments / ...
+    ├── stores/                  # 仅存纯 UI 状态（选中、视图类型）
+    └── components/              # 现有组件（数据获取改走 hooks）
+\end{lstlisting}
+
+标 ★ 的是新增模块，其余为现有代码的迁移落位。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{数据模型重构：仓储 + 事件总线}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{三级职责分离}
+
+现有代码中 \texttt{db/items.ts} 混合了 SQL、业务规则和 IPC 返回格式。重构为：
+
+\begin{center}
+\begin{tabular}{p{3cm} p{4.6cm} p{4.8cm}}
+  \toprule
+  \textbf{层} & \textbf{职责} & \textbf{禁止事项} \\
+  \midrule
+  Repository & 纯 SQL 读写，行 $\leftrightarrow$ 对象映射 & 不含业务规则，不发事件 \\
+  Service & 业务规则、事务编排、发事件 & 不写 SQL，不碰 IPC \\
+  IPC Handler & 参数校验、调 Service、包装错误 & 不含任何逻辑（$\leq$5 行） \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Service 层写入范式}
+
+以「更新文献标题」为例，所有写操作遵循同一模板：
+
+\begin{lstlisting}[language={}]
+// services/ItemService.ts
+class ItemService {
+  async updateItem(id: number, patch: Partial<ItemData>): Promise<Item> {
+    return this.uow.transaction(async (tx) => {
+      const before = await tx.items.getById(id)
+      if (!before) throw new NotFoundError('item', id)
+
+      // 1. 写主表：版本号自动 +1，updated_at 自动刷新
+      const after = await tx.items.update(id, patch)
+
+      // 2. 追加操作日志（同步预埋，见第7节）
+      await tx.oplog.append('item', id, 'modify', patch)
+
+      // 3. 事务提交后广播事件（提交前不发，防止脏通知）
+      tx.onCommit(() =>
+        this.notifier.emit({ type: 'item.modified', ids: [id] }))
+
+      return after
+    })
+  }
+}
+\end{lstlisting}
+
+\begin{tcolorbox}[fixbox, title={对策 \#1：解决「无变更通知」}]
+  任何写操作必然经过 Service → 必然发事件 → UI 必然收到刷新信号。
+  「忘记 reload」这类 bug 在结构上不可能发生。
+\end{tcolorbox}
+
+\subsection{Notifier 事件总线}
+
+借鉴 Zotero.Notifier，但用 TypeScript 类型化事件：
+
+\begin{lstlisting}[language={}]
+// shared/events.ts -- 事件即契约，两端共享
+export type DomainEvent =
+  | { type: 'item.created';      ids: number[] }
+  | { type: 'item.modified';     ids: number[] }
+  | { type: 'item.trashed';      ids: number[] }
+  | { type: 'item.deleted';      ids: number[] }
+  | { type: 'attachment.changed'; itemIds: number[] }
+  | { type: 'tag.changed';        itemIds: number[] }
+  | { type: 'collection.changed'; ids: number[] }
+  | { type: 'job.progress';       job: JobStatus }   // pdf2md 等
+
+// main/core/Notifier.ts
+class Notifier {
+  emit(e: DomainEvent): void {
+    for (const fn of this.subscribers) fn(e)        // 进程内订阅者
+    this.mainWindow?.webContents.send('domain-event', e)  // 推给渲染进程
+  }
+  subscribe(fn: (e: DomainEvent) => void): () => void { ... }
+}
+\end{lstlisting}
+
+进程内订阅者包括：未来的同步引擎、全文索引器、插件系统——
+它们只需订阅事件，无需侵入业务代码。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{契约化 IPC 与安全加固}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{单一契约源}
+
+现状：通道名散落在 \texttt{ipc.ts}、\texttt{preload/index.ts}、\texttt{env.d.ts} 三处，
+靠人工保持一致。重构为单文件契约：
+
+\begin{lstlisting}[language={}]
+// shared/ipc-contract.ts
+import { z } from 'zod'
+
+export const contract = {
+  'items.update': {
+    args: z.tuple([z.number().int().positive(), ItemPatchSchema]),
+    returns: ItemSchema,
+  },
+  'fs.readFile': {
+    args: z.tuple([z.string().max(1024)]),
+    returns: z.instanceof(Uint8Array),   // 见 4.3
+  },
+  // ... 全部 40+ 通道
+} as const
+
+export type Contract = typeof contract
+\end{lstlisting}
+
+主进程网关和 preload 桥接均由此文件驱动：
+
+\begin{lstlisting}[language={}]
+// main/ipc/gateway.ts -- 统一注册，自动校验
+for (const [channel, spec] of Object.entries(contract)) {
+  ipcMain.handle(channel, async (_e, ...raw) => {
+    const args = spec.args.parse(raw)        // zod 校验，失败即拒绝
+    try {
+      return { ok: true, data: await handlers[channel](...args) }
+    } catch (err) {
+      log.error(channel, err)
+      return { ok: false, error: toPublicError(err) }  // 不泄露堆栈
+    }
+  })
+}
+\end{lstlisting}
+
+\begin{tcolorbox}[fixbox, title={对策 \#3a：解决「IPC 无校验」}]
+  新增通道必须先在契约文件声明 schema，否则两端编译报错。
+  校验、错误包装、日志在网关统一处理，处理器本体归零样板代码。
+\end{tcolorbox}
+
+\subsection{文件访问白名单（pathGuard）}
+
+\begin{lstlisting}[language={}]
+// main/security/pathGuard.ts
+export function assertReadable(p: string): string {
+  const real = realpathSync(resolve(p))          // 消解 .. 和符号链接
+  const allowed = [
+    app.getPath('userData'),
+    settings.getStoragePath(),
+  ].filter(Boolean).map(d => realpathSync(d))
+  if (!allowed.some(dir => real.startsWith(dir + sep)))
+    throw new AccessDeniedError(p)
+  return real
+}
+// 所有 fs.* IPC 处理器入口第一行调用 assertReadable / assertWritable
+\end{lstlisting}
+
+\begin{tcolorbox}[fixbox, title={对策 \#3b：解决「任意文件读取」}]
+  \texttt{realpathSync} 先行，杜绝 \texttt{..\textbackslash..} 和符号链接逃逸；
+  白名单仅含 \texttt{userData} 与用户指定存储根目录。
+\end{tcolorbox}
+
+\subsection{二进制传输改造}
+
+现有 \texttt{fs:readFile} 返回 \texttt{number[]}（每字节一个 JS Number，
+10 MB 图片膨胀为约 80 MB 堆对象）。Electron 的结构化克隆原生支持
+\texttt{Uint8Array} 零拷贝传输，直接替换即可；
+大文件（PDF 本体）则不走 IPC，改由 \texttt{refnest-file://} 协议流式响应，
+并在协议 handler 中同样接入 pathGuard。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{数据库层：Worker 线程 + 事务 + 迁移框架}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{DB Worker 线程}
+
+保留 better-sqlite3（其同步 API 在专用线程内反而是优点：无回调开销、天然串行），
+但整体移入 \texttt{worker\_threads}：
+
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={rectangle, rounded corners=4pt, draw=sectionblue,
+              fill=codebg, minimum width=3.4cm, minimum height=1cm,
+              font=\footnotesize, align=center},
+  arr/.style={Stealth-Stealth, thick, color=tsinghuapurple},
+]
+  \node[box] (main) {主进程\\DbClient（异步代理）};
+  \node[box, right=3cm of main] (worker) {DB Worker 线程\\better-sqlite3（同步）};
+  \draw[arr] (main) -- node[above, font=\tiny]{postMessage RPC} node[below, font=\tiny]{Transferable 结果} (worker);
+\end{tikzpicture}
+\end{center}
+
+\begin{lstlisting}[language={}]
+// 主进程侧 API 形态不变，只是变为真异步：
+const items = await db.items.getAll()   // 不再阻塞 GUI 事件循环
+\end{lstlisting}
+
+\begin{tcolorbox}[fixbox, title={对策 \#4：解决「同步 SQL 阻塞主进程」}]
+  万条级全量查询、FTS 重建、批量导入均在 Worker 内执行，
+  主进程事件循环零阻塞。列表 UI 配合分页 + 虚拟滚动（见 \S6.3）。
+\end{tcolorbox}
+
+\subsection{UnitOfWork 事务封装}
+
+\begin{lstlisting}[language={}]
+// 批量导入 50 篇 PDF：要么全部成功，要么整体回滚
+await uow.transaction(async (tx) => {
+  for (const meta of parsedEntries) {
+    const item = await tx.items.create(meta)
+    await tx.creators.setForItem(item.id, meta.creators)
+    await tx.collectionItems.add(collectionId, item.id)
+  }
+})   // 内部映射为 BEGIN IMMEDIATE ... COMMIT / ROLLBACK
+\end{lstlisting}
+
+\subsection{版本化迁移框架}
+
+\begin{lstlisting}[language={}]
+// db/migrations/003_add_oplog.ts
+export default defineMigration({
+  version: 3,
+  up(db) {
+    db.exec(`CREATE TABLE oplog (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      object_type TEXT NOT NULL, object_id INTEGER NOT NULL,
+      op TEXT NOT NULL, payload TEXT,
+      ts INTEGER NOT NULL, synced INTEGER DEFAULT 0)`)
+  },
+})
+// 运行器：读 user_version → 顺序执行缺失迁移 → 每步独立事务
+// 幂等保障：版本号判断取代 IF NOT EXISTS 猜测
+\end{lstlisting}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{渲染进程：查询缓存与失效键}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{queryCache 机制}
+
+渲染进程新增轻量查询缓存（约 150 行，无需引入 React Query 依赖）：
+
+\begin{lstlisting}[language={}]
+// renderer/src/data/hooks.ts
+export function useAttachments(itemId: number) {
+  return useQuery(
+    ['attachments', itemId],                     // 缓存键
+    () => window.refnest.attachments.getByItem(itemId))
+}
+
+// renderer/src/data/queryCache.ts -- 订阅主进程事件流
+window.refnest.onDomainEvent((e) => {
+  switch (e.type) {
+    case 'attachment.changed':
+      invalidate(['attachments', ...e.itemIds]); break
+    case 'tag.changed':
+      invalidate(['tags', ...e.itemIds])
+      invalidate(['items'])                      // 列表内联标签也要刷新
+      break
+    case 'item.modified':
+      invalidate(['items']); invalidate(['item', ...e.ids]); break
+  }
+})
+\end{lstlisting}
+
+\begin{tcolorbox}[fixbox, title={对策 \#2：解决「各组件手动 reload」}]
+  组件只声明「我要什么数据」，不再负责「何时刷新」。
+  AttachmentsTab / TagsTab / MetadataTab 中所有手写 \texttt{reload()}
+  与 \texttt{useEffect} 依赖追踪全部删除。
+  MinerU 转换完成后注册附件 → \texttt{attachment.changed} 事件 →
+  打开中的附件面板\textbf{自动}出现新的 .md 与图片文件夹，无需用户切换刷新。
+\end{tcolorbox}
+
+\subsection{乐观更新}
+
+高频小操作（加标签、改标题）先改缓存后发请求，失败回滚：
+
+\begin{lstlisting}[language={}]
+mutate(['tags', itemId],
+  (old) => [...old, newTag],                    // 立即反映到 UI
+  () => window.refnest.tags.setForItem(itemId, names))  // 失败自动还原
+\end{lstlisting}
+
+\subsection{Zustand 职责收缩}
+
+\texttt{itemStore} 不再持有 \texttt{items} 数据（移交 queryCache），
+只保留纯 UI 状态：\texttt{selectedId}、\texttt{activeCollection}、
+\texttt{viewerPath/viewerType}、\texttt{searchQuery}、排序方式。
+数据与视图状态彻底分离。列表组件配合虚拟滚动（渲染可视区约 30 行），
+万条文献流畅滚动。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{同步就绪设计（Sync-ready）}
+% ─────────────────────────────────────────────────────────────────────────────
+
+同步引擎本身属 Future Work，但数据结构必须现在就位，否则届时需要全量数据迁移。
+
+\subsection{三项预埋}
+
+\begin{center}
+\begin{tabular}{p{3cm} p{9.5cm}}
+  \toprule
+  \textbf{机制} & \textbf{设计} \\
+  \midrule
+  版本号 & \texttt{items.version} 已存在但从未递增 → Service 层每次写入自动 +1，
+           作为未来冲突检测依据（对齐 Zotero 协议语义） \\
+  墓碑 & 永久删除不再 \texttt{DELETE} 行，改写 \texttt{tombstones} 表
+         （object\_type, key, ts），使删除操作可同步到其他设备 \\
+  操作日志 & \texttt{oplog} 表记录每次写操作（见 \S5.3），
+             同步引擎按 \texttt{synced=0} 增量上传；本地回放也可用于撤销功能 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{未来同步引擎的接入点}
+
+\begin{lstlisting}[language={}]
+// 同步引擎作为 Notifier 订阅者接入，零侵入业务代码：
+class SyncEngine {
+  constructor(notifier: Notifier) {
+    notifier.subscribe((e) => this.scheduleUpload())  // 防抖批量上传
+  }
+  async pull() {
+    // 远端变更 → Service 层写入（复用同一写入口）→ 自动广播 → UI 自动刷新
+  }
+}
+\end{lstlisting}
+
+同步目标可插拔：Zotero WebDAV、自建服务器、S3 兼容存储，
+均实现同一 \texttt{SyncBackend} 接口。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{托管存储布局（StorageManager）}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{现状问题}
+
+附件 \texttt{path} 存绝对路径，且 MinerU 输出直接写在源 PDF 旁边：
+用户移动 PDF、换电脑、改盘符，所有附件全部失联；也无法做文件同步。
+
+\subsection{目标布局（对齐 Zotero storage key 模式）}
+
+\begin{lstlisting}[language={},numbers=none]
+<storage.path>/
+└── storage/
+    └── <item-key>/              # 每篇文献一个 8 位 key 目录
+        ├── paper.pdf            # 导入时复制（或移动）进来
+        ├── paper.md             # MinerU 输出
+        ├── images/              # 精准解析图片目录
+        └── annotations.json     # 未来：注释层持久化
+\end{lstlisting}
+
+数据库中 \texttt{attachments.path} 改存相对路径 \texttt{storage/<key>/paper.pdf}，
+运行时由 StorageManager 拼接存储根目录。
+好处：换机器只需拷贝 storage 目录 + 数据库文件；文件同步按 item-key 目录为单位；
+\texttt{imagedir}、多版本 .md 天然归位。
+
+\begin{tcolorbox}[notebox, title={迁移兼容}]
+  提供一次性「整理文件到托管存储」向导：复制现有附件进 storage 布局并改写路径；
+  同时保留「链接模式」（仅记路径不复制）供拒绝托管的用户使用，与 Zotero 的
+  linked file 模式对齐。
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{通用任务队列（JobQueue）与 AI 管线}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{从 pdf2md 专用队列泛化}
+
+现有串行队列是 \texttt{pdf2mdService} 内的专用实现（设计良好但不可复用）。
+泛化为通用 JobQueue，现有与未来的长任务统一接入：
+
+\begin{center}
+\begin{tabular}{p{4cm} p{4cm} p{4.5cm}}
+  \toprule
+  \textbf{任务类型} & \textbf{状态} & \textbf{说明} \\
+  \midrule
+  \texttt{pdf2md.agent}     & 现有，迁入 & MinerU 免费模式 \\
+  \texttt{pdf2md.precision} & 现有，迁入 & MinerU 精准模式（ZIP+图片） \\
+  \texttt{keywords.extract} & 现有，迁入 & MD→PDF→CrossRef 三级提取 \\
+  \texttt{fulltext.index}   & 新增 & 将 .md 全文纳入 FTS（当前仅索引标题摘要） \\
+  \texttt{embedding.build}  & Future & 文献向量化，支撑语义检索 / RAG 问答 \\
+  \texttt{webarchive.save}  & Future & 浏览器扩展网页存档 \\
+  \texttt{sync.batch}       & Future & 同步引擎批量上传/下载 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{lstlisting}[language={}]
+interface Job<T = unknown> {
+  id: string; type: string; payload: T
+  priority: number                  // 用户手动触发 > 导入自动触发
+  attempts: number                  // 失败重试（指数退避，上限 3 次）
+}
+class JobQueue {
+  // 按 type 配置并发度：pdf2md 串行(1)，keywords 可并行(4)
+  // 进度统一走 Notifier 的 job.progress 事件（取代专用 pdf2md:status 通道）
+  // 队列持久化到 jobs 表：应用崩溃/重启后未完成任务自动恢复
+}
+\end{lstlisting}
+
+队列持久化解决现有痛点：转换进行中关闭应用，任务丢失且无提示。
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{测试策略}
+% ─────────────────────────────────────────────────────────────────────────────
+
+分层架构使每层可独立测试，按测试金字塔投入：
+
+\begin{center}
+\begin{tabular}{p{2.6cm} p{4.6cm} p{5.2cm}}
+  \toprule
+  \textbf{层级} & \textbf{对象与工具} & \textbf{要点} \\
+  \midrule
+  单元测试（多） & 纯函数：关键词提取、splitKeywords、路径工具、pathGuard、zod schema。vitest & 无 mock 即可测，先行覆盖 \\
+  仓储测试（中） & Repository + 迁移框架。vitest + 内存 SQLite（\texttt{:memory:}） & 真 SQL 不 mock；迁移幂等性（空库/旧库各跑一次） \\
+  服务测试（中） & Service 层。vitest + 内存库 + 假 Notifier & 断言「写入后必发正确事件」 \\
+  集成测试（少） & IPC 网关 + 外部 API 客户端。mock MinerU/CrossRef HTTP & 契约 schema 拒绝非法参数 \\
+  E2E（极少） & Playwright for Electron & 冒烟：导入 PDF → 列表出现 → 打开查看器 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tcolorbox}[fixbox, title={对策 \#5：解决「零测试覆盖」}]
+  现有代码难测的根因是层混杂（SQL + 业务 + Electron API 纠缠）。
+  分层后 Service 与 Repository 均不依赖 Electron，普通 Node 环境即可测试，
+  CI（GitHub Actions）跑全部非 E2E 用例，PR 必须绿灯。
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{现有功能与 Future Work 落位总表}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{现有功能映射}
+
+\begin{longtable}{p{4.2cm} p{8.2cm}}
+  \toprule
+  \textbf{现有功能} & \textbf{重构后落位} \\
+  \midrule
+  PDF 导入 + CrossRef 元数据 & ImportService 编排；CrossRef 客户端移入 integrations/（可 mock） \\
+  MinerU Agent / Precision 转换 & JobQueue 任务类型；MinerU 客户端移入 integrations/ \\
+  多模态 Markdown 查看器 & 组件不变；图片改走 \texttt{refnest-file://} 流式协议 + pathGuard \\
+  图片画廊（imagedir） & 组件不变；目录纳入托管存储 \texttt{storage/<key>/images/} \\
+  关键词提取 + 标签 & KeywordService（JobQueue 接入）+ TagService；提取器纯函数化，单测覆盖 \\
+  集合树 / 回收站 & CollectionService + 墓碑化删除 \\
+  FTS 搜索 & 保留 FTS5；新增 \texttt{fulltext.index} 任务把 .md 全文纳入索引 \\
+  本地服务器 + 浏览器扩展 & integrations/localServer.ts，写操作改调 Service（获得事件广播） \\
+  设置系统 / i18n / 原生菜单 & SettingsService 统一（含 API Token 改用 \texttt{safeStorage} 加密存储） \\
+  \bottomrule
+\end{longtable}
+
+\subsection{Future Work 落位}
+
+\begin{longtable}{p{4.2cm} p{8.2cm}}
+  \toprule
+  \textbf{待扩展功能} & \textbf{架构支撑点} \\
+  \midrule
+  多设备同步 & \S7 三项预埋 + SyncEngine 订阅 Notifier + SyncBackend 可插拔接口 \\
+  PDF 注释持久化 & \texttt{storage/<key>/annotations.json} + AnnotationService + \texttt{annotation.changed} 事件 \\
+  引文插入（citeproc） & CitationService 读 ItemRepo；纯计算，无需新基建 \\
+  语义检索 / RAG 问答 & \texttt{embedding.build} 任务 + 向量存 SQLite（sqlite-vec 扩展）；问答服务订阅 \texttt{item.created} 自动增量索引 \\
+  网页存档 & \texttt{webarchive.save} 任务；产物存 \texttt{storage/<key>/snapshot/} \\
+  Agent 模式图片支持 & JobQueue 内组合任务：Agent 转文本 + 本地 pdf.js 抽图，产物布局与 Precision 对齐 \\
+  多窗口 / 浮动阅读器 & Notifier 已按 window 广播设计，第二窗口天然收到全部事件；仅需窗口管理器 \\
+  插件系统 & 插件 = Notifier 订阅者 + 受限 Service API 白名单；契约化 IPC 天然提供权限边界 \\
+  撤销 / 重做 & oplog 逆操作回放（\S7 副产品） \\
+  \bottomrule
+\end{longtable}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{分阶段迁移路线图}
+% ─────────────────────────────────────────────────────────────────────────────
+
+遵循 Strangler 模式，每阶段结束应用均可正常发布：
+
+\begin{center}
+\begin{tabular}{p{1.4cm} p{5.6cm} p{2.4cm} p{2.6cm}}
+  \toprule
+  \textbf{阶段} & \textbf{内容} & \textbf{工作量} & \textbf{风险} \\
+  \midrule
+  P0 & pathGuard + Uint8Array 传输 + Token 加密（纯加固，不动结构） & 1--2 天 & 低 \\
+  P1 & 契约化 IPC：ipc-contract.ts + 网关 + preload 自动生成 & 3--4 天 & 低（形态不变） \\
+  P2 & Notifier + Service 层（先 Item/Attachment/Tag 三域）+ queryCache，删除全部手动 reload & 5--7 天 & 中 \\
+  P3 & DB Worker 线程 + UnitOfWork + 迁移框架 & 4--5 天 & 中 \\
+  P4 & JobQueue 泛化 + 队列持久化；同步预埋（oplog/墓碑/版本号） & 3--4 天 & 低 \\
+  P5 & 托管存储布局 + 迁移向导 & 4--5 天 & 中（涉及用户文件） \\
+  测试 & 随各阶段同步编写（P1 起 CI 强制） & 贯穿 & -- \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+总计约 4--5 周。P0--P2 完成后即解决对比分析中危害最大的三项
+（安全漏洞、状态混乱、无事件通知）；P3--P5 面向规模与未来功能。
+
+\begin{tcolorbox}[notebox, title={迁移纪律}]
+  \begin{itemize}[leftmargin=1em, itemsep=1pt]
+    \item 每阶段独立 PR 到 \texttt{feat/pdf-annotation}，禁止跨阶段大杂烩提交
+    \item 旧模块删除前，新旧路径并行跑通一个发布周期
+    \item 数据库迁移（P3/P5）前自动备份 \texttt{userData} 下的 .sqlite 文件
+  \end{itemize}
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{重构前后对比总结}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{center}
+\begin{tabular}{p{3.4cm} p{4.6cm} p{4.6cm}}
+  \toprule
+  \textbf{维度} & \textbf{现状} & \textbf{重构后} \\
+  \midrule
+  写数据路径 & IPC 处理器直连 SQL & 唯一入口：Service + 事务 + 事件 \\
+  UI 刷新 & 各组件手动 reload & 事件驱动自动失效，含乐观更新 \\
+  IPC 安全 & 无校验、任意路径读取 & zod 契约 + pathGuard 白名单 \\
+  DB 执行 & 主进程同步阻塞 & Worker 线程，主进程零阻塞 \\
+  长任务 & pdf2md 专用队列，不持久 & 通用 JobQueue，崩溃可恢复 \\
+  附件路径 & 绝对路径，易失联 & 托管存储 + 相对路径，可迁移可同步 \\
+  同步能力 & 仅空表预留 & 版本号 + 墓碑 + oplog 就位，引擎即插即用 \\
+  可测试性 & 层混杂，难以测试 & 每层独立可测，CI 强制 \\
+  预期评分 & 4.3 / 10 & 约 7.5 / 10（同步引擎落地后 8+） \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\begin{tcolorbox}[principlebox, title={一句话总结}]
+  本方案不更换任何技术栈（Electron / React / better-sqlite3 全部保留），
+  只补齐 Zotero 用 20 年验证过的三件核心基建——
+  \textbf{单一写入口、事件总线、同步就绪的数据结构}——
+  并以渐进迁移保证每一步都可发布、可回退。
+\end{tcolorbox}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\end{document}

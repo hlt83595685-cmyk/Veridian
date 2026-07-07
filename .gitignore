@@ -1,0 +1,16 @@
+node_modules/
+out/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.local
+*.tsbuildinfo
+readme/**/*.aux
+readme/**/*.out
+readme/**/*.toc
+readme/**/*.synctex.gz

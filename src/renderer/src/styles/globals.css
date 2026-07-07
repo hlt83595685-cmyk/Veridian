@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+:root {
+  /* iOS-inspired color system */
+  --bg:             #f2f2f7;
+  --bg-elevated:    #ffffff;
+  --bg-grouped:     #f2f2f7;
+  --surface:        #ffffff;
+  --surface-2:      #f2f2f7;
+  --surface-hover:  rgba(0, 0, 0, 0.04);
+  --border:         rgba(60, 60, 67, 0.12);
+  --border-strong:  rgba(60, 60, 67, 0.20);
+  --separator:      rgba(60, 60, 67, 0.08);
+
+  /* Semantic colors */
+  --foreground:     #1c1c1e;
+  --foreground-2:   #3a3a3c;
+  --muted:          #8e8e93;
+  --muted-2:        #aeaeb2;
+  --muted-bg:       rgba(120,120,128,0.08);
+
+  /* iOS Blue */
+  --primary:        #007aff;
+  --primary-light:  rgba(0, 122, 255, 0.10);
+  --primary-hover:  #0062cc;
+
+  /* Accent */
+  --accent:         #ff3b30;
+  --accent-green:   #34c759;
+  --accent-orange:  #ff9500;
+
+  /* Shadows */
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.06);
+  --shadow-sm:  0 2px 8px rgba(0,0,0,0.08), 0 0 1px rgba(0,0,0,0.04);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.10), 0 0 1px rgba(0,0,0,0.06);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.12), 0 0 1px rgba(0,0,0,0.06);
+
+  /* Radii */
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  14px;
+  --radius-xl:  18px;
+
+  /* Transitions */
+  --ease:       cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --duration:   160ms;
+}
+
+/* Dark mode */
+.dark, @media (prefers-color-scheme: dark) {
+  --bg:             #1c1c1e;
+  --bg-elevated:    #2c2c2e;
+  --bg-grouped:     #1c1c1e;
+  --surface:        #2c2c2e;
+  --surface-2:      #3a3a3c;
+  --surface-hover:  rgba(255,255,255,0.06);
+  --border:         rgba(255,255,255,0.10);
+  --border-strong:  rgba(255,255,255,0.18);
+  --separator:      rgba(255,255,255,0.06);
+  --foreground:     #f2f2f7;
+  --foreground-2:   #ebebf5;
+  --muted:          #8e8e93;
+  --muted-2:        #636366;
+  --muted-bg:       rgba(255,255,255,0.06);
+  --primary:        #0a84ff;
+  --primary-light:  rgba(10,132,255,0.15);
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.30);
+  --shadow-sm:  0 2px 8px rgba(0,0,0,0.35);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.40);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,0.45);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+               'Helvetica Neue', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--muted-2); }
+
+/* Input / Select base */
+input, select, textarea {
+  outline: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--foreground);
+  background: var(--surface);
+  transition: border-color var(--duration) var(--ease),
+              box-shadow var(--duration) var(--ease);
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--primary-light) !important;
+}
+
+/* Button base */
+button {
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity var(--duration) var(--ease),
+              transform var(--duration) var(--ease),
+              background var(--duration) var(--ease);
+}
+button:active { opacity: 0.75; transform: scale(0.97); }
+
+/* Selection highlight */
+::selection { background: var(--primary-light); }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes led-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 5px 1px rgba(0,122,255,0.6); }
+  50%       { opacity: 0.5; box-shadow: 0 0 2px 0px rgba(0,122,255,0.2); }
+}
