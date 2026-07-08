@@ -67,7 +67,7 @@ const veridianAPI = {
     restore: (id: number) => call('items:restore', id),
     delete: (id: number) => call('items:delete', id),
     emptyTrash: (libraryId?: number) => call('items:emptyTrash', libraryId),
-    extractKeywords: (itemId: number) => call('items:extractKeywords', itemId),
+    fetchMetadata: (itemId: number) => call('items:fetchMetadata', itemId),
     search: (query: string) => call('items:search', query),
   },
   creators: {

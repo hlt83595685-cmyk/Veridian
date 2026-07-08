@@ -91,7 +91,7 @@ export function TagsTab({ itemId }: { itemId: number }): JSX.Element {
               border: '1px solid rgba(102,8,116,0.22)',
               color: '#660874',
               fontFamily: '"Adobe Gothic Std B", "Adobe Gothic Std", "Source Han Sans", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif',
-              fontSize: 14,
+              fontSize: 10,
               fontWeight: 700,
               letterSpacing: '0.02em',
               lineHeight: 1.6,

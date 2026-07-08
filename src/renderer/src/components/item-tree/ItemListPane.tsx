@@ -68,7 +68,7 @@ function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu }: {
                 display: 'inline-block',
                 padding: '2px 8px',
                 borderRadius: 4,
-                fontSize: 14,
+                fontSize: 10,
                 fontFamily: '"Adobe Gothic Std B", "Adobe Gothic Std", "Source Han Sans", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif',
                 fontWeight: 700,
                 letterSpacing: '0.02em',
@@ -216,10 +216,11 @@ export function ItemListPane(): JSX.Element {
     setContextMenu(null)
   }
 
-  const handleExtractKeywords = async (itemId: number): Promise<void> => {
+  const handleFetchMetadata = async (itemId: number): Promise<void> => {
     setContextMenu(null)
-    const result = await window.veridian.items.extractKeywords(itemId)
-    if (result.added > 0) await loadItems()
+    // No manual reload needed -- CrossRef/markdown updates flow through
+    // item.modified / tag.changed domain events which already refresh the list.
+    await window.veridian.items.fetchMetadata(itemId)
   }
 
   const handlePdf2md = async (itemId: number): Promise<void> => {
@@ -366,23 +367,23 @@ export function ItemListPane(): JSX.Element {
             <>
               {contextMenu.itemId !== null && (
                 <>
-                  <ContextItem label={t('item.restore')} icon="↩" color="var(--primary)"
+                  <ContextItem label={t('item.restore')}
                     onClick={() => handleRestore(contextMenu.itemId!)} />
-                  <ContextItem label={t('item.deletePermanently')} icon="✕" color="var(--accent)"
+                  <ContextItem label={t('item.deletePermanently')}
                     onClick={() => handleDeletePermanently(contextMenu.itemId!)} />
                   <div style={{ height: 1, background: 'var(--separator)', margin: '4px 8px' }} />
                 </>
               )}
-              <ContextItem label={t('item.emptyTrash')} icon="🗑" color="var(--accent)"
+              <ContextItem label={t('item.emptyTrash')}
                 onClick={handleEmptyTrash} />
             </>
           ) : isCollection ? (
             <>
               {contextMenu.itemId !== null && (
                 <>
-                  <ContextItem label={t('item.extractKeywords')} icon="🔑" color="var(--foreground)"
-                    onClick={() => handleExtractKeywords(contextMenu.itemId!)} />
-                  <ContextItem label={t('item.pdf2md')} icon="M↓" color="var(--primary)"
+                  <ContextItem label={t('item.fetchMetadata')}
+                    onClick={() => handleFetchMetadata(contextMenu.itemId!)} />
+                  <ContextItem label={t('item.pdf2md')}
                     onClick={() => handlePdf2md(contextMenu.itemId!)} />
                 </>
               )}
@@ -393,19 +394,19 @@ export function ItemListPane(): JSX.Element {
                   onSelect={(colId) => handleMoveToCollection(contextMenu.itemId!, colId)}
                 />
               )}
-              <ContextItem label={t('item.removeFromCollection')} icon="↩" color="var(--primary)"
+              <ContextItem label={t('item.removeFromCollection')}
                 onClick={() => handleRemoveFromCollection(contextMenu.itemId!)} />
               <div style={{ height: 1, background: 'var(--separator)', margin: '4px 8px' }} />
-              <ContextItem label={t('item.moveToTrash')} icon="🗑" color="var(--accent)"
+              <ContextItem label={t('item.moveToTrash')}
                 onClick={() => handleTrash(contextMenu.itemId!)} />
             </>
           ) : (
             <>
               {contextMenu.itemId !== null && (
                 <>
-                  <ContextItem label={t('item.extractKeywords')} icon="🔑" color="var(--foreground)"
-                    onClick={() => handleExtractKeywords(contextMenu.itemId!)} />
-                  <ContextItem label={t('item.pdf2md')} icon="M↓" color="var(--primary)"
+                  <ContextItem label={t('item.fetchMetadata')}
+                    onClick={() => handleFetchMetadata(contextMenu.itemId!)} />
+                  <ContextItem label={t('item.pdf2md')}
                     onClick={() => handlePdf2md(contextMenu.itemId!)} />
                 </>
               )}
@@ -417,7 +418,7 @@ export function ItemListPane(): JSX.Element {
                 />
               )}
               {<div style={{ height: 1, background: 'var(--separator)', margin: '4px 8px' }} />}
-              <ContextItem label={t('item.moveToTrash')} icon="🗑" color="var(--accent)"
+              <ContextItem label={t('item.moveToTrash')}
                 onClick={() => handleTrash(contextMenu.itemId!)} />
             </>
           )}
@@ -427,21 +428,20 @@ export function ItemListPane(): JSX.Element {
   )
 }
 
-function ContextItem({ label, icon, color, onClick }: {
-  label: string; icon: string; color: string; onClick: () => void
+function ContextItem({ label, onClick }: {
+  label: string; onClick: () => void
 }): JSX.Element {
   return (
     <button
       onClick={onClick}
       style={{
-        display: 'flex', alignItems: 'center', gap: 8,
+        display: 'flex', alignItems: 'center',
         width: '100%', padding: '7px 12px',
         borderRadius: 'var(--radius-md)', border: 'none',
-        background: 'transparent', color,
+        background: 'transparent', color: 'var(--foreground)',
         fontSize: 13, fontWeight: 500, textAlign: 'left',
       }}
     >
-      <span>{icon}</span>
       {label}
     </button>
   )
@@ -469,9 +469,7 @@ function CollectionSubMenu({ label, collections, onSelect }: {
           fontSize: 13, fontWeight: 500, textAlign: 'left',
         }}
       >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>📁</span>{label}
-        </span>
+        <span>{label}</span>
         <span style={{ color: 'var(--muted)', fontSize: 10 }}>▶</span>
       </button>
       {open && (

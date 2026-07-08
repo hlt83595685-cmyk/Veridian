@@ -50,7 +50,7 @@ export const contract = {
   'items:delete':          z.tuple([id]),
   'items:emptyTrash':      z.tuple([optionalLibraryId]),
   'items:search':          z.tuple([z.string().max(512)]),
-  'items:extractKeywords': z.tuple([id]),
+  'items:fetchMetadata':   z.tuple([id]),
 
   // Creators
   'creators:getByItem':    z.tuple([id]),

@@ -1,41 +1,44 @@
-// Keyword extraction: markdown attachments first (MinerU output is cleaner),
-// PDF text as fallback. Tag writes go through TagService so the UI refreshes
-// via the tag.changed event.
+// Keyword + title extraction from the converted markdown attachment only
+// (MinerU output). PDF text is no longer used as a source -- markdown is the
+// single source of truth once conversion has run. Writes go through
+// TagService / ItemService so the UI refreshes via their domain events.
 import { readFileSync } from 'fs'
 import { listByItem } from './AttachmentService'
 import { mergeTagsForItem } from './TagService'
-import { extractKeywordsFromMarkdown, extractKeywordsFromText, extractPdfText } from '../pdfImporter'
+import { updateItem } from './ItemService'
+import { extractKeywordsFromMarkdown, extractTitleFromMarkdown } from '../pdfImporter'
 
-export async function extractKeywordsForItem(itemId: number): Promise<{ added: number; total: number }> {
-  const attachments = listByItem(itemId)
-  const found = new Set<string>()
-
-  const mds = attachments.filter(
+function firstMarkdownText(itemId: number): string | null {
+  const mds = listByItem(itemId).filter(
     (a) => a.path && (a.mime_type === 'text/markdown' || a.filename?.toLowerCase().endsWith('.md'))
   )
   for (const att of mds) {
     try {
-      const kws = extractKeywordsFromMarkdown(readFileSync(att.path!, 'utf-8'))
-      for (const kw of kws) found.add(kw)
+      return readFileSync(att.path!, 'utf-8')
     } catch (err) {
       console.warn(`[KeywordService] markdown read failed for item ${itemId}:`, err)
     }
   }
+  return null
+}
 
-  if (!found.size) {
-    const pdfs = attachments.filter(
-      (a) => a.path && (a.mime_type === 'application/pdf' || a.filename?.toLowerCase().endsWith('.pdf'))
-    )
-    for (const att of pdfs) {
-      try {
-        const kws = extractKeywordsFromText(await extractPdfText(att.path!))
-        for (const kw of kws) found.add(kw)
-      } catch (err) {
-        console.warn(`[KeywordService] PDF text extraction failed for item ${itemId}:`, err)
-      }
-    }
+export async function extractKeywordsForItem(
+  itemId: number
+): Promise<{ added: number; total: number; titleUpdated: boolean }> {
+  const md = firstMarkdownText(itemId)
+  if (!md) return { added: 0, total: 0, titleUpdated: false }
+
+  const keywords = extractKeywordsFromMarkdown(md)
+  const { added, total } = keywords.length
+    ? mergeTagsForItem(itemId, keywords)
+    : { added: 0, total: 0 }
+
+  const title = extractTitleFromMarkdown(md)
+  let titleUpdated = false
+  if (title) {
+    updateItem(itemId, { title })
+    titleUpdated = true
   }
 
-  if (!found.size) return { added: 0, total: 0 }
-  return mergeTagsForItem(itemId, [...found])
+  return { added, total, titleUpdated }
 }

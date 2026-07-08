@@ -10,7 +10,7 @@ import type { ItemCreator } from '../db/creators'
 import * as Tags from '../services/TagService'
 import * as Collections from '../services/CollectionService'
 import * as Attachments from '../services/AttachmentService'
-import * as Keywords from '../services/KeywordService'
+import * as Metadata from '../services/MetadataService'
 import * as Import from '../services/ImportService'
 import * as Settings from '../services/SettingsService'
 import { manualConvertPdfToMd } from '../services/ConversionService'
@@ -53,7 +53,7 @@ export const handlers: Record<IpcChannel, Handler> = {
   'items:delete':          (_e, id: number) => Items.deleteItem(id),
   'items:emptyTrash':      (_e, libraryId?: number) => Items.emptyTrash(libraryId),
   'items:search':          (_e, query: string) => Items.search(query),
-  'items:extractKeywords': (_e, itemId: number) => Keywords.extractKeywordsForItem(itemId),
+  'items:fetchMetadata':   (_e, itemId: number) => Metadata.fetchMetadataForItem(itemId),
 
   // Creators
   'creators:getByItem':  (_e, itemId: number) => Creators.listByItem(itemId),

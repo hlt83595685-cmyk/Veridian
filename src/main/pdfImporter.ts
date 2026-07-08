@@ -5,7 +5,7 @@ import { setCreatorsForItem } from './db/creators'
 import { addAttachment } from './db/attachments'
 import { addItemToCollection } from './db/collections'
 import { setTagsForItem } from './db/tags'
-import { fetchCrossRefByDoi, CROSSREF_TYPE_MAP, type CrossRefWork } from './crossref'
+import { fetchCrossRefByDoi, searchCrossRefByTitle, CROSSREF_TYPE_MAP, type CrossRefWork } from './crossref'
 import { autoConvertPdfToMd } from './services/ConversionService'
 
 // ── PDF text extraction via pdf-parse ───────────────────────────────────────
@@ -25,20 +25,20 @@ export async function extractPdfText(filePath: string): Promise<string> {
 
 // ── DOI extraction ──────────────────────────────────────────────────────────
 
-function extractDoi(text: string): string | null {
+export function extractDoi(text: string): string | null {
   const m = text.match(/\b(10\.\d{4,9}\/[^\s"'<>[\]{}|\\^`]+)/i)
   return m ? m[1].replace(/[.)]+$/, '') : null
 }
 
 // ── Local heuristic fallback ─────────────────────────────────────────────────
 
-interface LocalMeta {
+export interface LocalMeta {
   title: string | null
   abstract: string | null
   year: number | null
 }
 
-function parseLocalMeta(text: string, filename: string): LocalMeta {
+export function parseLocalMeta(text: string, filename: string): LocalMeta {
   const lines = text
     .split('\n')
     .map((l) => l.trim())
@@ -144,9 +144,20 @@ export async function importPDF(filePath: string, collectionId?: number): Promis
 
   let work: CrossRefWork | null = null
   if (doi) {
-    console.log('[pdfImporter] Querying CrossRef...')
+    console.log('[pdfImporter] Querying CrossRef by DOI...')
     work = await fetchCrossRefByDoi(doi)
-    console.log(`[pdfImporter] CrossRef result: ${work ? 'OK' : 'not found / offline'}`)
+    console.log(`[pdfImporter] CrossRef DOI lookup: ${work ? 'OK' : 'not found / offline'}`)
+  }
+
+  // Fallback: no DOI in the text, or the extracted DOI didn't resolve --
+  // very common for scanned PDFs, hyphen-wrapped DOIs, or non-journal
+  // preprints. Search CrossRef by the heuristically-guessed title instead of
+  // giving up on CrossRef entirely.
+  const localMeta = parseLocalMeta(text, filePath)
+  if (!work && localMeta.title) {
+    console.log('[pdfImporter] No DOI match, trying CrossRef title search...')
+    work = await searchCrossRefByTitle(localMeta.title)
+    console.log(`[pdfImporter] CrossRef title search: ${work ? 'OK' : 'no match'}`)
   }
 
   if (work) {
@@ -206,12 +217,11 @@ export async function importPDF(filePath: string, collectionId?: number): Promis
     console.log(`[pdfImporter] Imported via CrossRef: "${item.title}" (${allKeywords.length} keywords)`)
     autoConvertPdfToMd(item.id, filePath)
   } else {
-    const meta = parseLocalMeta(text, filePath)
     const item = createItem({
       type: 'journalArticle',
-      title: meta.title,
-      abstract: meta.abstract,
-      year: meta.year,
+      title: localMeta.title,
+      abstract: localMeta.abstract,
+      year: localMeta.year,
       doi: doi ?? null,
     })
     if (collectionId) addItemToCollection(collectionId, item.id)
@@ -260,5 +270,48 @@ export function extractKeywordsFromMarkdown(md: string): string[] {
   return []
 }
 
-// On-demand keyword extraction for existing items lives in
-// services/KeywordService.ts (single write path via TagService).
+// ── Title extraction from Markdown text ──────────────────────────────────────
+
+// Section/heading words that are never the paper's own title even when they
+// appear as the first heading (MinerU sometimes emits a running header or an
+// "Abstract" heading before the real title slips into plain bold text).
+const NON_TITLE_HEADINGS = /^(abstract|keywords?|关键词|摘要|contents|目录|references?|参考文献)$/i
+
+export function extractTitleFromMarkdown(md: string): string | null {
+  const text = md.replace(/\r\n?/g, '\n')
+
+  // Prefer the first Markdown heading (# / ##); MinerU puts the paper title
+  // there in the vast majority of converted PDFs.
+  const headingMatches = text.matchAll(/^#{1,2}\s+(.+?)\s*$/gm)
+  for (const m of headingMatches) {
+    const candidate = cleanTitle(m[1])
+    if (isPlausibleTitle(candidate)) return candidate
+  }
+
+  // Fallback: first bold line near the top (some MinerU outputs skip the
+  // heading marker and just bold the title).
+  const boldMatches = text.matchAll(/^\*{2}(.+?)\*{2}\s*$/gm)
+  for (const m of boldMatches) {
+    const candidate = cleanTitle(m[1])
+    if (isPlausibleTitle(candidate)) return candidate
+  }
+
+  return null
+}
+
+function cleanTitle(raw: string): string {
+  return raw
+    .replace(/\*{1,2}/g, '')          // stray emphasis markers
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 300)
+}
+
+function isPlausibleTitle(candidate: string): boolean {
+  if (candidate.length < 6 || candidate.length > 300) return false
+  if (NON_TITLE_HEADINGS.test(candidate)) return false
+  return true
+}
+
+// On-demand keyword + title extraction for existing items lives in
+// services/KeywordService.ts (single write path via TagService/ItemService).

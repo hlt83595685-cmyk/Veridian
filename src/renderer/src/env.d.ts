@@ -15,7 +15,7 @@ interface VeridianAPI {
     restore: (id: number) => Promise<void>
     delete: (id: number) => Promise<void>
     emptyTrash: (libraryId?: number) => Promise<void>
-    extractKeywords: (itemId: number) => Promise<{ added: number; total: number }>
+    fetchMetadata: (itemId: number) => Promise<{ source: 'crossref' | 'markdown' | 'none'; titleUpdated: boolean; tagsAdded: number }>
     search: (query: string) => Promise<Item[]>
   }
   creators: {
