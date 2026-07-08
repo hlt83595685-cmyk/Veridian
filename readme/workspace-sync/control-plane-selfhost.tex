@@ -1,0 +1,315 @@
+% Veridian -- Self-Hosted Control Plane (Supabase OSS subset)
+% Compiled with: xelatex control-plane-selfhost.tex
+% ----------------------------------------------------------------------------
+
+\documentclass[12pt, a4paper]{article}
+
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{listingsutf8}
+\usepackage{xcolor}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, calc}
+\tcbuselibrary{skins, breakable}
+
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+\setmonofont{Consolas}
+\setCJKmainfont[BoldFont=SimHei, ItalicFont=KaiTi]{SimSun}
+\setCJKsansfont{Microsoft YaHei}
+\setCJKmonofont{FangSong}
+
+\geometry{a4paper, top=25mm, bottom=25mm, left=28mm, right=28mm, headheight=24.5pt}
+
+\definecolor{tsinghuapurple}{HTML}{660874}
+\definecolor{codebg}{HTML}{F7F7F9}
+\definecolor{codeframe}{HTML}{CCCCCC}
+\definecolor{linkblue}{HTML}{0066CC}
+\definecolor{sectionblue}{HTML}{003366}
+\definecolor{warnbg}{HTML}{FFF8E1}
+\definecolor{warnframe}{HTML}{F59E0B}
+\definecolor{goodbg}{HTML}{F0FDF4}
+\definecolor{goodframe}{HTML}{16A34A}
+\definecolor{badbg}{HTML}{FEF2F2}
+\definecolor{badframe}{HTML}{DC2626}
+
+\hypersetup{
+  colorlinks=true, linkcolor=tsinghuapurple, urlcolor=linkblue, citecolor=tsinghuapurple,
+  pdftitle={Veridian -- Self-Hosted Control Plane}, pdfauthor={RefAI Development Team},
+}
+
+\titleformat{\section}{\large\bfseries\color{sectionblue}}{\thesection}{1em}{}[{\color{tsinghuapurple}\titlerule[0.5pt]}]
+\titleformat{\subsection}{\normalsize\bfseries\color{sectionblue}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
+
+\tcbset{
+  principlebox/.style={colback=tsinghuapurple!5, colframe=tsinghuapurple,
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt, breakable},
+  fixbox/.style={colback=goodbg, colframe=goodframe,
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt, breakable},
+  problembox/.style={colback=badbg, colframe=badframe,
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt, breakable},
+  notebox/.style={colback=warnbg, colframe=warnframe,
+    fonttitle=\bfseries\small, left=6pt, right=6pt, top=4pt, bottom=4pt, breakable},
+}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize, backgroundcolor=\color{codebg},
+  frame=single, rulecolor=\color{codeframe}, breaklines=true,
+  columns=fullflexible, keepspaces=true, showstringspaces=false, tabsize=2,
+  xleftmargin=6pt, xrightmargin=6pt, aboveskip=4pt, belowskip=4pt,
+  numbers=left, numberstyle=\tiny\color{gray}, numbersep=5pt,
+  keywordstyle=\color{tsinghuapurple}\bfseries, commentstyle=\color{gray}\itshape,
+  stringstyle=\color{linkblue},
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{gray} Veridian -- Self-Hosted Control Plane}
+\fancyhead[R]{\small\color{gray} 2026-07-08}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{tsinghuapurple}\leaders\hrule height \headrulewidth\hfill}}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{2.5cm}
+  {\Huge\bfseries\color{tsinghuapurple} Veridian}\par
+  \vspace{0.6em}
+  {\Large\color{sectionblue} 自托管控制面：精简版 Supabase 开源组件}\par
+  \vspace{0.4em}
+  {\large Self-Hosted Control Plane -- a Minimal Supabase OSS Subset}\par
+  \vspace{2em}
+  \hrule height 1.5pt \relax
+  \vspace{2em}
+  {\normalsize 只用 Postgres + GoTrue + PostgREST \,·\, 管理员专属 Studio \,·\, 兼容官方 supabase-js SDK}\par
+  \vspace{3cm}
+  {\small
+  本文档是《readme/workspace-sync/design.tex》控制面章节的补充：\\
+  研究 Supabase 实际开源架构后，给出"自托管而非用 Supabase Cloud"的具体落地方案，\\
+  对应可运行的部署文件位于仓库 \texttt{control-plane/} 目录。
+  }\par
+  \vfill
+  {\small\color{gray} Last updated: 2026-07-08 \quad 配套文件：control-plane/\{docker-compose.yml, Caddyfile, schema.sql\}}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{研究结论：Supabase 完整自托管栈有多重}
+% ═════════════════════════════════════════════════════════════════════════════
+
+Supabase 官方自托管方案（\texttt{docker-compose.yml}，来自
+\href{https://github.com/supabase/supabase}{supabase/supabase} 仓库的
+\texttt{docker/} 目录）由 \textbf{12--13 个容器化服务}组成：
+
+\begin{center}
+\begin{longtable}{p{3.2cm} p{3.6cm} p{5.3cm}}
+  \toprule
+  \textbf{服务} & \textbf{技术栈} & \textbf{Veridian 是否需要} \\
+  \midrule
+  Postgres      & C                & \checkmark 需要（唯一的数据存储） \\
+  GoTrue (Auth) & Go               & \checkmark 需要（登录/注册/邀请接受） \\
+  PostgREST     & Haskell          & \checkmark 需要（自动生成的 REST API） \\
+  Kong          & Lua/OpenResty    & $\times$ 不需要——见 \S 2.2 \\
+  Realtime      & Elixir/Phoenix   & $\times$ 不需要——见 \S 4 \\
+  Storage API   & Node.js          & $\times$ 不需要，文件走 GitHub 仓库/云盘 \\
+  postgres-meta & Node.js          & 仅 Studio 依赖它，管理员按需启用 \\
+  imgproxy      & Go               & $\times$ 完全不需要 \\
+  Edge Functions & Deno            & $\times$ 完全不需要 \\
+  Studio        & Next.js          & 仅管理员本机/隧道访问 \\
+  Analytics/Vector & Elixir/Rust   & $\times$ 完全不需要 \\
+  \bottomrule
+\end{longtable}
+\end{center}
+
+\begin{tcolorbox}[problembox, title={为什么不能整套塞进 Electron 客户端}]
+  这 12--13 个服务的设计前提是"跑在一台服务器上"：需要 Docker、持久化卷、
+  常驻进程、几 GB 内存。要求\textbf{每一个} Veridian 终端用户的电脑上都装
+  Docker 并常驻运行这一整套栈，对个人桌面应用是不可接受的——
+  这与"轻量 Electron 应用、零后台服务依赖"的既有定位（见
+  readme/analysis/comparison.tex）直接冲突。
+\end{tcolorbox}
+
+\begin{tcolorbox}[fixbox, title={真正可行的路径}]
+  控制面本质上需要一个\textbf{管理员运营的共享服务}——这是"多人共享同一份
+  成员/角色记录"这件事本身决定的，无法绕开。真正的问题不是"要不要有服务器"，
+  而是"这个服务器需要跑多重"。精简到 Postgres + GoTrue + PostgREST 三个真实
+  服务后，管理员可以在一台免费/廉价的 VPS 上轻松承担，而不需要理解或运维
+  Kong/Realtime/Storage/Edge Functions 这些 Veridian 用不上的部分。
+\end{tcolorbox}
+
+Sources:
+\begin{itemize}[leftmargin=2em, itemsep=1pt]
+  \item \href{https://github.com/supabase/supabase/blob/master/docker/README.md}{supabase/supabase docker/README.md}
+  \item \href{https://supabase.com/docs/guides/self-hosting/docker}{Supabase Docs -- Self-Hosting with Docker}
+  \item \href{https://github.com/supabase/auth}{supabase/auth (GoTrue)}
+  \item \href{https://github.com/PostgREST/postgrest}{PostgREST}
+\end{itemize}
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{精简方案：三个真实服务 + 一个反代}
+% ═════════════════════════════════════════════════════════════════════════════
+
+\subsection{为什么可以去掉 Kong}
+
+Kong 在完整栈里做两件事：统一路径路由，以及给浏览器端跨域请求做 CORS 处理。
+Veridian 的控制面调用发生在 \textbf{Electron 主进程}里（就像现有的
+CrossRef/MinerU API 调用一样），而不是渲染进程——\textbf{主进程没有
+CORS 限制}，这是浏览器沙箱层面的安全机制，Node.js 的 \texttt{fetch}
+完全不受影响。JWT 校验本身也不需要网关来做：PostgREST 用
+\texttt{PGRST\_JWT\_SECRET} 自行验证请求头里的 JWT。
+
+Kong 唯一还有价值的地方是"让客户端只需要记一个 base URL"——这个用一个
+十几行的 Caddy 反代（\texttt{control-plane/Caddyfile}）就能达到同样效果，
+换来的好处是客户端仍可以用官方
+\texttt{@supabase/supabase-js} SDK（免去自己实现 JWT 刷新/重试逻辑）。
+
+\begin{lstlisting}[language={}, numbers=none]
+:8000 {
+	handle /auth/v1/* { uri strip_prefix /auth/v1; reverse_proxy gotrue:9999 }
+	handle /rest/v1/* { uri strip_prefix /rest/v1; reverse_proxy postgrest:3000 }
+	handle { respond "Veridian control plane -- not a public endpoint" 404 }
+}
+\end{lstlisting}
+
+\subsection{最终架构图}
+
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={rectangle, rounded corners=5pt, draw=sectionblue,
+              minimum width=3cm, minimum height=1cm, font=\footnotesize, align=center},
+  admin/.style={rectangle, rounded corners=5pt, draw=badframe, dashed,
+                minimum width=3cm, minimum height=1cm, font=\footnotesize, align=center},
+  arr/.style={-Stealth, thick, color=tsinghuapurple},
+  arradmin/.style={-Stealth, thick, color=badframe, dashed},
+]
+  \node[box, fill=goodbg] (client) {协作者的\\Veridian 客户端};
+  \node[box, fill=codebg, right=2.2cm of client] (proxy) {Caddy 反代\\:8000（唯一公开端口）};
+  \node[box, right=1.6cm of proxy] (gotrue) {GoTrue\\:9999};
+  \node[box, below=0.6cm of gotrue] (rest) {PostgREST\\:3000};
+  \node[box, fill=codebg, below=1.2cm of proxy] (pg) {Postgres\\（不对外暴露端口）};
+  \node[admin, right=1.6cm of rest] (studio) {Studio\\127.0.0.1 专属};
+
+  \draw[arr] (client) -- (proxy);
+  \draw[arr] (proxy) -- (gotrue);
+  \draw[arr] (proxy) -- (rest);
+  \draw[arr] (gotrue) -- (pg);
+  \draw[arr] (rest) -- (pg);
+  \draw[arradmin] (studio) -- (pg);
+  \node[font=\tiny\color{badframe}, below=0.1cm of studio] {仅限 SSH 隧道访问};
+\end{tikzpicture}
+\end{center}
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{管理员专属访问：Studio 网络隔离}
+% ═════════════════════════════════════════════════════════════════════════════
+
+对应你提出的"只有管理员账号可以查看控制面"这一要求，具体实现\textbf{不是}
+应用层的账号判断（那样仍然暴露了整张表可被查询的攻击面），而是
+\textbf{网络层隔离}：
+
+\begin{lstlisting}[language={}, numbers=none]
+studio:
+  ports:
+    - "127.0.0.1:3001:3000"   # 只绑定回环地址，公网完全不可达
+\end{lstlisting}
+
+管理员需要浏览原始表时，通过 SSH 隧道把远程的 \texttt{127.0.0.1:3001}
+映射到自己电脑：
+
+\begin{lstlisting}[language=bash, numbers=none]
+ssh -L 3001:127.0.0.1:3001 admin@your-server
+# 然后在自己电脑打开 http://localhost:3001
+\end{lstlisting}
+
+普通协作者的 Veridian 客户端\textbf{从未}、也\textbf{不可能}访问到
+Studio——它们只知道 \texttt{proxy:8000} 这一个地址，而这个地址背后只有
+Auth 和 REST 两类受 RLS 保护的接口，看不到任何"管理后台"。
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{取舍：不跑 Realtime 服务}
+% ═════════════════════════════════════════════════════════════════════════════
+
+design.tex 早期版本设想用 Supabase Realtime 推送成员/角色变更。
+精简为三服务后，这项能力被有意去掉：
+
+\begin{tcolorbox}[notebox, title={轮询取代推送，够用即可}]
+  成员/角色变更是低频事件（一个工作空间一个月可能就邀请几次人），
+  不需要毫秒级传播。客户端在以下时机主动查询 \texttt{workspace\_members}：
+  应用启动时、每次同步 push/pull 前、以及用户手动点"刷新"——
+  权限变更几分钟内生效即可，不追求"实时"。这与 Zotero 自身的成员/
+  权限模型（也非实时）一致。
+\end{tcolorbox}
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{控制面的核心用途：工作空间 $\to$ GitHub 仓库映射}
+% ═════════════════════════════════════════════════════════════════════════════
+
+按你的要求，控制面\textbf{不是}一个通用的 Notion 式内容数据库——它只做一件
+事：记住"这个工作空间的数据在哪个 GitHub 仓库（或云盘路径）里，谁能以什么
+角色访问它"。\texttt{control-plane/schema.sql} 里 \texttt{workspaces} 表的
+核心字段正是：
+
+\begin{lstlisting}[language=SQL]
+sync_backend_type   sync_backend not null,       -- 'git' | 'cloud_folder'
+sync_backend_config jsonb not null default '{}',  -- 仓库地址 / 云盘路径
+\end{lstlisting}
+
+角色（owner/admin/editor/viewer）判断的\textbf{唯一后果}就是：
+该成员的 Veridian 客户端是否被允许对这个 \texttt{sync\_backend\_config}
+指向的 GitHub 仓库发起 push（写）——控制面不存储、不理解文献内容本身，
+那部分完全在 \S design.tex \S4 描述的数据面（GitHub 仓库）里。
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{部署文件清单}
+% ═════════════════════════════════════════════════════════════════════════════
+
+\begin{center}
+\begin{tabular}{p{3.6cm} p{8.9cm}}
+  \toprule
+  \textbf{文件} & \textbf{内容} \\
+  \midrule
+  \texttt{control-plane/docker-compose.yml} & Postgres + GoTrue + PostgREST + Caddy + 管理员专属 Studio/postgres-meta \\
+  \texttt{control-plane/Caddyfile} & \S2.1 的路径转发配置 \\
+  \texttt{control-plane/schema.sql} & 角色/权限初始化 + \texttt{auth.uid()} 等辅助函数 +
+    \texttt{workspaces/workspace\_members/invites/devices} 四张表 + RLS 策略 \\
+  \texttt{control-plane/.env.example} & 密钥占位模板（真实 \texttt{.env} 已被仓库根 \texttt{.gitignore} 拦截，不会被提交） \\
+  \texttt{control-plane/README.md} & 部署步骤、管理员访问方式、与工作空间/GitHub 仓库关系的说明 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{待办：客户端集成（下一步）}
+% ═════════════════════════════════════════════════════════════════════════════
+
+本文档与 \texttt{control-plane/} 目录只完成了"控制面服务本身"。
+Veridian 客户端侧仍需实现（对应 design.tex \S6 模块清单）：
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+  \item \texttt{main/services/PermissionSource.ts} 的 Supabase 实现
+        （封装 \texttt{@supabase/supabase-js}，指向 \texttt{proxy:8000}）
+  \item \texttt{main/services/WorkspaceService.ts}：创建工作空间时选择
+        GitHub 仓库或云盘路径、写入 \texttt{sync\_backend\_config}
+  \item 邀请/成员管理 UI（\texttt{InviteDialog.tsx}/\texttt{MembersPanel.tsx}）
+  \item 设置界面里新增"连接到控制面"的一栏（填入管理员提供的 \texttt{SITE\_URL}）
+\end{itemize}
+
+尚未开始编码——这是下一步需要确认的实施顺序。
+
+\end{document}

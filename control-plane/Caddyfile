@@ -1,0 +1,19 @@
+# Path-based routing so the client can use the standard @supabase/supabase-js
+# SDK unmodified (it expects one base URL fronting /auth/v1/* and /rest/v1/*,
+# Kong-style). No CORS config needed -- Veridian's main process calls this
+# directly over plain HTTP, never through a browser-sandboxed renderer.
+:8000 {
+	handle /auth/v1/* {
+		uri strip_prefix /auth/v1
+		reverse_proxy gotrue:9999
+	}
+
+	handle /rest/v1/* {
+		uri strip_prefix /rest/v1
+		reverse_proxy postgrest:3000
+	}
+
+	handle {
+		respond "Veridian control plane -- not a public endpoint" 404
+	}
+}

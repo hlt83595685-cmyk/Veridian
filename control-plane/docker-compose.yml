@@ -1,0 +1,123 @@
+# Veridian Control Plane -- minimal self-hosted subset of Supabase's OSS
+# components. Only three real services (Postgres + GoTrue + PostgREST) plus a
+# tiny reverse proxy for path routing -- no Kong, no Realtime, no Storage, no
+# Studio-in-production. Deployed and operated by the workspace admin only;
+# regular collaborators' Veridian clients only ever reach the `proxy` service.
+#
+# Admin-only access: Studio (raw table browser) is bound to 127.0.0.1 so it is
+# NEVER reachable from outside the host. To use it, SSH-tunnel in:
+#   ssh -L 3001:127.0.0.1:3001 admin@your-server
+# then open http://localhost:3001 on your own machine.
+#
+# Usage:
+#   cp .env.example .env   # fill in real secrets (see README.md)
+#   docker compose up -d
+#   docker compose exec postgres sh -c \
+#     'psql -U postgres -d postgres -v POSTGRES_PASSWORD="$POSTGRES_PASSWORD" -f /schema.sql'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/schema.sql:ro
+    # Not published to the host network at all -- only `gotrue`, `postgrest`,
+    # and `studio` (admin-only) reach it, over the internal compose network.
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  gotrue:
+    image: supabase/gotrue:v2.170.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@postgres:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      # Email/password + magic link only in v1 -- no SMS, no third-party OAuth
+      # (GitHub OAuth can be added later by setting GOTRUE_EXTERNAL_GITHUB_*).
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_SMTP_HOST: ${SMTP_HOST}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT}
+      GOTRUE_SMTP_USER: ${SMTP_USER}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS}
+      GOTRUE_SMTP_SENDER_NAME: Veridian
+      GOTRUE_DISABLE_SIGNUP: "true"   # admin creates accounts via invite only
+    expose:
+      - "9999"
+
+  postgrest:
+    image: postgrest/postgrest:v12.2.8
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@postgres:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      # PostgREST verifies the JWT itself (same secret GoTrue signs with) --
+      # no gateway-level auth check needed since there's no Kong in front.
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_JWT_ROLE_CLAIM_KEY: .role
+    expose:
+      - "3000"
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - gotrue
+      - postgrest
+    ports:
+      - "8000:8000"     # the ONLY port collaborators' clients ever reach
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+
+  # Admin-only -- bound to loopback, reach it only via SSH tunnel (see header).
+  studio:
+    image: supabase/studio:20250106-c22d243
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      SUPABASE_URL: http://proxy:8000
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      STUDIO_PG_META_URL: http://postgres-meta:8080
+    depends_on:
+      - postgres-meta
+
+  # Studio needs postgres-meta for its schema browser; also admin-only,
+  # never published beyond the compose network.
+  postgres-meta:
+    image: supabase/postgres-meta:v0.87.1
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PG_META_DB_HOST: postgres
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+    expose:
+      - "8080"
+
+volumes:
+  pgdata:
