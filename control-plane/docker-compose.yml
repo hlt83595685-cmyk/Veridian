@@ -60,6 +60,13 @@ services:
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@postgres:5432/postgres
       GOTRUE_SITE_URL: ${SITE_URL}
+      # Required by GoTrue -- the externally-reachable URL of its own API
+      # (through the Caddy proxy's /auth/v1 path, see Caddyfile), used to
+      # build links in emails etc. Without this GoTrue refuses to start at
+      # all ("required key API_EXTERNAL_URL missing value"). NOTE: this one
+      # config key is deliberately unprefixed (no GOTRUE_) -- that's not a
+      # typo, it's how GoTrue itself expects it.
+      API_EXTERNAL_URL: ${SITE_URL}/auth/v1
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: "3600"
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
