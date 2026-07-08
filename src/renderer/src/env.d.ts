@@ -61,6 +61,7 @@ interface VeridianAPI {
     configure: (url: string, anonKey: string) => Promise<void>
     getStatus: () => Promise<ControlPlaneStatus>
     signIn: (email: string, password: string) => Promise<{ error: string | null }>
+    signUp: (email: string, password: string) => Promise<{ error: string | null }>
     signOut: () => Promise<void>
   }
   workspaces: {

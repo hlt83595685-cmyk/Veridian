@@ -120,6 +120,7 @@ const veridianAPI = {
     configure: (url: string, anonKey: string) => call('controlPlane:configure', url, anonKey),
     getStatus: () => call('controlPlane:getStatus'),
     signIn: (email: string, password: string) => call('controlPlane:signIn', email, password),
+    signUp: (email: string, password: string) => call('controlPlane:signUp', email, password),
     signOut: () => call('controlPlane:signOut'),
   },
   workspaces: {

@@ -13,8 +13,10 @@ export function WorkspaceSettingsTab(): JSX.Element {
   const [anonKey, setAnonKey] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
 
   useEffect(() => {
     loadStatus()
@@ -37,14 +39,21 @@ export function WorkspaceSettingsTab(): JSX.Element {
     }
   }
 
-  const signIn = async (): Promise<void> => {
+  const submitAuth = async (): Promise<void> => {
     if (!email.trim() || !password) return
     setBusy(true)
     setError(null)
+    setInfo(null)
     try {
-      const result = await window.veridian.controlPlane.signIn(email.trim(), password)
-      if (result.error) setError(result.error)
-      else { setPassword(''); await loadStatus() }
+      if (mode === 'signUp') {
+        const result = await window.veridian.controlPlane.signUp(email.trim(), password)
+        if (result.error) setError(result.error)
+        else { setPassword(''); setMode('signIn'); setInfo(t('workspace.auth.signUpSuccess')) }
+      } else {
+        const result = await window.veridian.controlPlane.signIn(email.trim(), password)
+        if (result.error) setError(result.error)
+        else { setPassword(''); await loadStatus() }
+      }
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -123,14 +132,27 @@ export function WorkspaceSettingsTab(): JSX.Element {
                 type="password"
                 style={inputStyle}
               />
-              <button onClick={signIn} disabled={busy} style={{ ...primaryBtnStyle, alignSelf: 'flex-start' }}>
-                {t('workspace.auth.signIn')}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button onClick={submitAuth} disabled={busy} style={primaryBtnStyle}>
+                  {mode === 'signUp' ? t('workspace.auth.signUp') : t('workspace.auth.signIn')}
+                </button>
+                <button
+                  onClick={() => { setMode(mode === 'signUp' ? 'signIn' : 'signUp'); setError(null); setInfo(null) }}
+                  style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: 12, cursor: 'pointer' }}
+                >
+                  {mode === 'signUp' ? t('workspace.auth.toggleToSignIn') : t('workspace.auth.toggleToSignUp')}
+                </button>
+              </div>
             </div>
           )}
         </Section>
       )}
 
+      {info && (
+        <div style={{ fontSize: 12, color: 'var(--accent-green)', padding: '4px 2px' }}>
+          {info}
+        </div>
+      )}
       {error && (
         <div style={{ fontSize: 12, color: 'var(--accent)', padding: '4px 2px' }}>
           {error}

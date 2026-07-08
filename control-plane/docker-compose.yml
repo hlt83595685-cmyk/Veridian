@@ -59,7 +59,16 @@ services:
       GOTRUE_SMTP_USER: ${SMTP_USER}
       GOTRUE_SMTP_PASS: ${SMTP_PASS}
       GOTRUE_SMTP_SENDER_NAME: Veridian
-      GOTRUE_DISABLE_SIGNUP: "true"   # admin creates accounts via invite only
+      # Public self-signup is left ON by default: an account with no invites
+      # can see and do literally nothing (every workspace/data query is
+      # gated by workspace_members rows -- see schema.sql RLS policies), so
+      # an unsolicited signup is a harmless empty account, not a security
+      # hole. This is what makes local testing and the first admin account
+      # trivial -- just sign up normally from Settings -> Workspace.
+      # To lock this down later (e.g. a public-IP deployment where even
+      # empty-account spam is undesirable), set this to "true" and create
+      # accounts with scripts/invite-user.mjs instead (see README.md).
+      GOTRUE_DISABLE_SIGNUP: "false"
     expose:
       - "9999"
 

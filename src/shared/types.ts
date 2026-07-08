@@ -119,6 +119,13 @@ export interface WorkspaceInvite {
   email: string
   role: MemberRole
   status: InviteStatus
+  /**
+   * The one-time acceptance code. There is no automatic email for this
+   * custom workspace-level invite (unlike GoTrue's own account-invite
+   * emails) -- the inviter must relay this out-of-band (Settings/Members UI
+   * shows a copy button).
+   */
+  token: string
   expires_at: string
   created_at: string
 }

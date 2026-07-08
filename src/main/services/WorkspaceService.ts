@@ -42,6 +42,22 @@ export async function signIn(email: string, password: string): Promise<{ error: 
   return { error: null }
 }
 
+/**
+ * Only succeeds while the control plane has GOTRUE_DISABLE_SIGNUP=false (the
+ * default -- see control-plane/docker-compose.yml). A freshly signed-up
+ * account can see and do nothing until someone invites it to a workspace, so
+ * open signup is a convenience for testing/onboarding, not a security hole.
+ * In the hardened mode (signup disabled), this call fails and accounts must
+ * be created by the admin via control-plane/scripts/invite-user.mjs instead.
+ */
+export async function signUp(email: string, password: string): Promise<{ error: string | null }> {
+  const client = requireClient()
+  const { error } = await client.auth.signUp({ email, password })
+  if (error) return { error: error.message }
+  emit({ type: 'controlPlane.changed' })
+  return { error: null }
+}
+
 export async function signOut(): Promise<void> {
   const client = ControlPlane.getClient()
   if (client) await client.auth.signOut()
@@ -177,38 +193,25 @@ export async function revokeInvite(inviteId: string): Promise<void> {
 
 /**
  * Accepting an invite requires the invitee to already be signed in with an
- * account whose email matches the invite (enforced by the invites_self_accept
- * RLS policy) -- this only promotes a pending invite into real membership.
+ * account whose email matches the invite. The actual validate+insert-member+
+ * mark-accepted sequence runs atomically server-side via the
+ * accept_workspace_invite() Postgres function (control-plane/schema.sql) --
+ * a plain client-side multi-step version doesn't work here: the invitee
+ * isn't a member yet, so the ordinary members_write RLS policy (which
+ * requires already being an owner/admin member) would reject their own
+ * insert, and there is no safe way to let a client-side UPDATE flip just the
+ * `status` column on invites without RLS also having to trust the rest of
+ * the row (role, workspace_id) unchanged.
  */
 export async function acceptInvite(token: string): Promise<Workspace> {
   const client = requireClient()
   const { data: userData } = await client.auth.getUser()
   if (!userData?.user) throw new Error('Sign in first, using the email the invite was sent to')
 
-  const { data: invite, error: findError } = await client
-    .from('invites')
-    .select('*')
-    .eq('token', token)
-    .eq('status', 'pending')
-    .single()
-  if (findError || !invite) throw new Error('Invite not found, expired, or already used')
-  if (new Date(invite.expires_at).getTime() < Date.now()) throw new Error('Invite has expired')
-
-  const { error: memberError } = await client
-    .from('workspace_members')
-    .insert({ workspace_id: invite.workspace_id, user_id: userData.user.id, role: invite.role })
-  if (memberError) throw new Error(memberError.message)
-
-  await client.from('invites').update({ status: 'accepted' }).eq('id', invite.id)
-
-  const { data: ws, error: wsError } = await client
-    .from('workspaces')
-    .select('*')
-    .eq('id', invite.workspace_id)
-    .single()
-  if (wsError) throw new Error(wsError.message)
+  const { data, error } = await client.rpc('accept_workspace_invite', { p_token: token })
+  if (error) throw new Error(error.message)
 
   await supabasePermissionSource.refresh()
-  emit({ type: 'workspace.changed', ids: [invite.workspace_id] })
-  return { ...(ws as Workspace), my_role: invite.role as MemberRole }
+  emit({ type: 'workspace.changed', ids: [(data as Workspace).id] })
+  return data as Workspace
 }

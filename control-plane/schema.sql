@@ -194,11 +194,25 @@ create policy members_write on public.workspace_members for all
       and me.role in ('owner', 'admin')
   ));
 
+-- Bootstrap case: members_write above requires you to ALREADY be an
+-- owner/admin member before you can insert a membership row -- which can
+-- never be satisfied for the very first row of a brand-new workspace (you'd
+-- need to already be a member to become a member). This lets the workspace's
+-- owner (per workspaces.owner_id, set at creation time) insert their own
+-- initial 'owner' row exactly once.
+create policy members_insert_owner on public.workspace_members for insert
+  with check (
+    user_id = auth.uid()
+    and role = 'owner'
+    and exists (select 1 from public.workspaces w where w.id = workspace_id and w.owner_id = auth.uid())
+  );
+
 -- invites: workspace owner/admin manage them; the invited person can read
--- (and accept) their own pending invite once authenticated with a matching
--- email, even before they're a member of anything.
--- Same shadowing hazard as above: invites.workspace_id must be qualified,
--- since the workspace_members subquery has its own workspace_id column.
+-- their own pending invite once authenticated with a matching email (to
+-- preview "you've been invited to X"), even before they're a member of
+-- anything. Same shadowing hazard as above: invites.workspace_id must be
+-- qualified, since the workspace_members subquery has its own workspace_id
+-- column.
 create policy invites_admin on public.invites for all
   using (exists (
     select 1 from public.workspace_members m
@@ -208,6 +222,51 @@ create policy invites_admin on public.invites for all
 
 create policy invites_self_accept on public.invites for select
   using (email = auth.email() and status = 'pending');
+
+-- Accepting an invite needs to (a) insert the invitee's own membership row
+-- and (b) flip the invite to 'accepted', atomically. Neither step is safely
+-- expressible as a plain client-side RLS-gated write: the invitee isn't yet
+-- a member (so members_write's "must already be owner/admin" check fails,
+-- same bootstrap problem as above) and a raw client-side UPDATE on invites
+-- can't be restricted to "only the status column may change" through RLS
+-- alone (a client could smuggle role='owner' into the same request). A
+-- security-definer function does the validation once, server-side, and
+-- performs both writes as a single transaction.
+create or replace function public.accept_workspace_invite(p_token text)
+returns public.workspaces
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_invite public.invites;
+  v_ws     public.workspaces;
+begin
+  select * into v_invite from public.invites
+    where token = p_token and status = 'pending'
+    for update;
+
+  if not found then
+    raise exception 'Invite not found or already used';
+  end if;
+  if v_invite.expires_at < now() then
+    raise exception 'Invite has expired';
+  end if;
+  if v_invite.email <> auth.email() then
+    raise exception 'This invite was sent to a different email address';
+  end if;
+
+  insert into public.workspace_members (workspace_id, user_id, role)
+  values (v_invite.workspace_id, auth.uid(), v_invite.role)
+  on conflict (workspace_id, user_id) do update set role = excluded.role;
+
+  update public.invites set status = 'accepted' where id = v_invite.id;
+
+  select * into v_ws from public.workspaces where id = v_invite.workspace_id;
+  return v_ws;
+end;
+$$;
+
+grant execute on function public.accept_workspace_invite(text) to authenticated;
 
 -- devices: strictly private to their owner
 create policy devices_own on public.devices for all

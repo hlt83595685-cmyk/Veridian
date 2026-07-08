@@ -107,6 +107,7 @@ export const contract = {
   'controlPlane:configure': z.tuple([z.string().url().max(512), z.string().min(10).max(2048)]),
   'controlPlane:getStatus': z.tuple([]),
   'controlPlane:signIn':    z.tuple([z.string().email().max(320), z.string().min(6).max(256)]),
+  'controlPlane:signUp':    z.tuple([z.string().email().max(320), z.string().min(6).max(256)]),
   'controlPlane:signOut':   z.tuple([]),
 
   // Workspaces (control-plane data: identity/membership/roles/invites only --

@@ -93,6 +93,11 @@ function ListView({ workspaces, onSelect, onCreated }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [acceptToken, setAcceptToken] = useState('')
+  const [acceptBusy, setAcceptBusy] = useState(false)
+  const [acceptError, setAcceptError] = useState<string | null>(null)
+  const [acceptInfo, setAcceptInfo] = useState<string | null>(null)
+
   const roleLabel = (role: MemberRole): string => t(`workspace.members.role${cap(role)}`)
 
   const submit = async (): Promise<void> => {
@@ -109,6 +114,23 @@ function ListView({ workspaces, onSelect, onCreated }: {
       setError((err as Error).message)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const acceptInvite = async (): Promise<void> => {
+    if (!acceptToken.trim()) return
+    setAcceptBusy(true)
+    setAcceptError(null)
+    setAcceptInfo(null)
+    try {
+      const ws = await window.veridian.workspaces.acceptInvite(acceptToken.trim())
+      setAcceptToken('')
+      await loadWorkspaces()
+      setAcceptInfo(t('workspace.members.acceptSuccess', { name: ws.name }))
+    } catch (err) {
+      setAcceptError((err as Error).message)
+    } finally {
+      setAcceptBusy(false)
     }
   }
 
@@ -138,6 +160,27 @@ function ListView({ workspaces, onSelect, onCreated }: {
       {workspaces.length === 0 && (
         <div style={{ fontSize: 13, color: 'var(--muted)' }}>{t('workspace.empty')}</div>
       )}
+
+      <div style={{
+        padding: '14px', borderRadius: 10,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column', gap: 8,
+      }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--foreground)' }}>
+          {t('workspace.members.accept')}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={acceptToken} onChange={(e) => setAcceptToken(e.target.value)}
+            placeholder={t('workspace.members.acceptPlaceholder')} style={{ ...inputStyle, flex: 1 }}
+          />
+          <button onClick={acceptInvite} disabled={acceptBusy} style={primaryBtnStyle}>
+            {t('workspace.members.acceptSubmit')}
+          </button>
+        </div>
+        {acceptInfo && <div style={{ fontSize: 12, color: 'var(--accent-green)' }}>{acceptInfo}</div>}
+        {acceptError && <div style={{ fontSize: 12, color: 'var(--accent)' }}>{acceptError}</div>}
+      </div>
 
       <div style={{
         padding: '14px', borderRadius: 10,
@@ -191,6 +234,7 @@ function MembersView({ workspace }: { workspace: Workspace }): JSX.Element {
   const [role, setRole] = useState<MemberRole>('viewer')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [lastToken, setLastToken] = useState<string | null>(null)
 
   const canManage = workspace.my_role === 'owner' || workspace.my_role === 'admin'
 
@@ -209,14 +253,19 @@ function MembersView({ workspace }: { workspace: Workspace }): JSX.Element {
     setBusy(true)
     setError(null)
     try {
-      await window.veridian.workspaces.invite(workspace.id, email.trim(), role)
+      const created = await window.veridian.workspaces.invite(workspace.id, email.trim(), role)
       setEmail('')
+      setLastToken(created.token)
       await reload()
     } catch (err) {
       setError((err as Error).message)
     } finally {
       setBusy(false)
     }
+  }
+
+  const copyToken = (token: string): void => {
+    navigator.clipboard?.writeText(token)
   }
 
   const changeRole = async (userId: string, newRole: MemberRole): Promise<void> => {
@@ -293,6 +342,20 @@ function MembersView({ workspace }: { workspace: Workspace }): JSX.Element {
               </button>
             </div>
             {error && <div style={{ fontSize: 12, color: 'var(--accent)' }}>{error}</div>}
+            {lastToken && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 10px', borderRadius: 8, background: 'var(--primary-light)',
+              }}>
+                <span style={{ fontSize: 11, color: 'var(--primary)' }}>{t('workspace.members.inviteSent')}:</span>
+                <code style={{ fontSize: 11, color: 'var(--foreground)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {lastToken}
+                </code>
+                <button onClick={() => copyToken(lastToken)} style={{ ...secondaryBtnStyle, height: 24, padding: '0 10px', fontSize: 11 }}>
+                  {t('workspace.members.copyCode')}
+                </button>
+              </div>
+            )}
           </div>
 
           {invites.filter((i) => i.status === 'pending').length > 0 && (
@@ -308,9 +371,14 @@ function MembersView({ workspace }: { workspace: Workspace }): JSX.Element {
                   <span style={{ fontSize: 13, color: 'var(--foreground)' }}>
                     {inv.email} <span style={{ color: 'var(--muted)' }}>· {t(`workspace.members.role${cap(inv.role)}`)}</span>
                   </span>
-                  <button onClick={() => revoke(inv.id)} style={{ ...secondaryBtnStyle, height: 28, color: 'var(--accent)' }}>
-                    {t('workspace.members.revoke')}
-                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => copyToken(inv.token)} style={{ ...secondaryBtnStyle, height: 28 }}>
+                      {t('workspace.members.copyCode')}
+                    </button>
+                    <button onClick={() => revoke(inv.id)} style={{ ...secondaryBtnStyle, height: 28, color: 'var(--accent)' }}>
+                      {t('workspace.members.revoke')}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

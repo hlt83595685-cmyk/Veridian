@@ -183,6 +183,7 @@ export const handlers: Record<IpcChannel, Handler> = {
   'controlPlane:configure': (_e, url: string, anonKey: string) => Workspaces.configureControlPlane(url, anonKey),
   'controlPlane:getStatus': () => Workspaces.getControlPlaneStatus(),
   'controlPlane:signIn':    (_e, email: string, password: string) => Workspaces.signIn(email, password),
+  'controlPlane:signUp':    (_e, email: string, password: string) => Workspaces.signUp(email, password),
   'controlPlane:signOut':   () => Workspaces.signOut(),
 
   // Workspaces
