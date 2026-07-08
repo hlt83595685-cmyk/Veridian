@@ -37,14 +37,37 @@ cat /tmp/keys.txt   # copy the JWT_SECRET you passed in, plus the two printed ke
 cp .env.example .env
 # Fill in: the JWT_SECRET you generated, ANON_KEY, SERVICE_ROLE_KEY from
 # scripts/generate-keys.mjs's output, POSTGRES_PASSWORD (any long random
-# string), SITE_URL (http://localhost:8000 for local testing), and SMTP_*
-# (can be left blank for local testing -- password-reset emails just won't
-# send; sign-in/sign-up still work).
+# string with no spaces/quotes -- alphanumeric is safest on Windows), SITE_URL
+# (http://localhost:8000 for local testing), and SMTP_* (can be left blank for
+# local testing -- password-reset emails just won't send; sign-in/sign-up
+# still work).
 
 docker compose up -d
-docker compose exec postgres sh -c \
-  'psql -U postgres -d postgres -v POSTGRES_PASSWORD="$POSTGRES_PASSWORD" -f /schema.sql'
 ```
+
+`init/01-roles.sh` creates the Postgres roles GoTrue/PostgREST need
+automatically the first time the `postgres` container initializes its data
+directory — nothing to run by hand for that part. **If you already ran
+`docker compose up -d` before this point with an earlier version of this
+repo**, that data directory already exists (even if broken/half-initialized),
+so the auto-init script won't run again. Wipe it and start clean once:
+
+```bash
+docker compose down -v   # removes the postgres volume -- safe, nothing of
+                          # value exists in a broken/fresh deployment
+docker compose up -d
+```
+
+Then wait ~10 seconds for `gotrue` to connect and run its own internal
+migrations (creates the `auth.users` table `schema.sql` references) —
+check with `docker compose logs gotrue` if unsure, then:
+
+```bash
+docker compose exec postgres psql -U postgres -d postgres -f /schema.sql
+```
+
+No password substitution needed for this one — expect a wall of
+`CREATE TABLE` / `CREATE POLICY` / `GRANT` lines and no red `ERROR`.
 
 ## 2. Connect Veridian and create your own account
 

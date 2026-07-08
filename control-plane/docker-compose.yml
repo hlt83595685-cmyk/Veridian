@@ -12,8 +12,13 @@
 # Usage:
 #   cp .env.example .env   # fill in real secrets (see README.md)
 #   docker compose up -d
-#   docker compose exec postgres sh -c \
-#     'psql -U postgres -d postgres -v POSTGRES_PASSWORD="$POSTGRES_PASSWORD" -f /schema.sql'
+#   # wait a few seconds for gotrue to migrate its own auth.* tables, then:
+#   docker compose exec postgres psql -U postgres -d postgres -f /schema.sql
+#
+# init/01-roles.sh runs automatically on first container creation (see
+# schema.sql's header comment for why role/password setup lives there and
+# not in schema.sql itself) -- no manual bootstrap step, no password
+# quoting to get wrong.
 #
 # `docker compose up -d` above starts only the four services collaborators'
 # clients actually need (postgres, gotrue, postgrest, proxy). Studio and
@@ -31,6 +36,7 @@ services:
       POSTGRES_DB: postgres
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
       - ./schema.sql:/schema.sql:ro
     # Not published to the host network at all -- only `gotrue`, `postgrest`,
     # and `studio` (admin-only) reach it, over the internal compose network.

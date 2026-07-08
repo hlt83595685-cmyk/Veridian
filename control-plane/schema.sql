@@ -1,38 +1,19 @@
--- Veridian control-plane schema. Bootstraps the standard Postgres roles that
--- GoTrue and PostgREST expect (this file exists because we deliberately used
--- vanilla postgres:16-alpine instead of the supabase/postgres image, which
--- ships these pre-installed -- keeping everything explicit and auditable in
--- one file rather than depending on hidden image-specific setup).
+-- Veridian control-plane schema -- part 2 of 2.
 --
--- Run once after `docker compose up -d`:
---   docker compose exec postgres sh -c \
---     'psql -U postgres -d postgres -v POSTGRES_PASSWORD="$POSTGRES_PASSWORD" -f /schema.sql'
-
--- ── Roles ─────────────────────────────────────────────────────────────────────
--- authenticator: what PostgREST connects as; NOINHERIT so it must explicitly
--- SET ROLE to anon/authenticated per-request based on the verified JWT.
-do $$ begin
-  if not exists (select 1 from pg_roles where rolname = 'anon') then
-    create role anon nologin noinherit;
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
-    create role authenticated nologin noinherit;
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'service_role') then
-    create role service_role nologin noinherit bypassrls;
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'authenticator') then
-    create role authenticator noinherit login password :'POSTGRES_PASSWORD';
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
-    create role supabase_auth_admin noinherit createrole login password :'POSTGRES_PASSWORD';
-  end if;
-end $$;
-
-grant anon to authenticator;
-grant authenticated to authenticator;
-grant service_role to authenticator;
-grant create on database postgres to supabase_auth_admin;
+-- Part 1 (init/01-roles.sh: anon/authenticated/authenticator/
+-- supabase_auth_admin roles + the pgcrypto extension) runs AUTOMATICALLY on
+-- first container creation, via Postgres's own docker-entrypoint-initdb.d
+-- mechanism -- no manual step, no password-substitution quoting to get
+-- wrong. This file depends on those roles already existing, AND on GoTrue
+-- having successfully connected at least once and run its own internal
+-- migrations (which create the auth.users table this file's `profiles`
+-- table references) -- so run this *after* `docker compose up -d`, once
+-- `docker compose logs gotrue` shows it started cleanly (a few seconds is
+-- enough):
+--
+--   docker compose exec postgres psql -U postgres -d postgres -f /schema.sql
+--
+-- No -v / password substitution needed here at all.
 
 -- ── auth.uid() / auth.role() helpers ─────────────────────────────────────────
 -- PostgREST decodes the incoming JWT and sets request.jwt.claims as a GUC
