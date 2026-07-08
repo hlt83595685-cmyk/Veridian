@@ -81,3 +81,50 @@ export interface ImportResult {
   canceled: boolean
   imported: number
 }
+
+// ── Workspace / control-plane types ──────────────────────────────────────────
+// See readme/workspace-sync/design.tex for the full architecture. These
+// mirror control-plane/schema.sql's tables; ids are Postgres uuids (strings),
+// not the local SQLite integer ids used by Item/Collection/etc.
+
+export type WorkspaceKind = 'private' | 'shared'
+export type MemberRole = 'owner' | 'admin' | 'editor' | 'viewer'
+export type SyncBackendType = 'git' | 'cloud_folder'
+export type InviteStatus = 'pending' | 'accepted' | 'revoked'
+
+export interface Workspace {
+  id: string
+  name: string
+  kind: WorkspaceKind
+  owner_id: string
+  sync_backend_type: SyncBackendType
+  sync_backend_config: Record<string, unknown>
+  created_at: string
+  /** The current user's role in this workspace, joined in by WorkspaceService. */
+  my_role?: MemberRole
+}
+
+export interface WorkspaceMember {
+  workspace_id: string
+  user_id: string
+  role: MemberRole
+  joined_at: string
+  /** Populated by WorkspaceService from the auth admin API for display. */
+  email?: string
+}
+
+export interface WorkspaceInvite {
+  id: string
+  workspace_id: string
+  email: string
+  role: MemberRole
+  status: InviteStatus
+  expires_at: string
+  created_at: string
+}
+
+export interface ControlPlaneStatus {
+  configured: boolean
+  signedIn: boolean
+  email: string | null
+}

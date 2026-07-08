@@ -25,5 +25,7 @@ export type DomainEvent =
   | { type: 'creator.changed'; itemIds: number[] }
   | { type: 'settings.changed'; keys: string[] }
   | { type: 'job.progress'; job: JobStatus }
+  | { type: 'workspace.changed'; ids: string[] }
+  | { type: 'controlPlane.changed' }
 
 export type DomainEventType = DomainEvent['type']

@@ -1,6 +1,10 @@
 /// <reference types="vite/client" />
 
-import type { Item, Creator, Collection, Tag, Attachment, ImportResult } from '../../shared/types'
+import type {
+  Item, Creator, Collection, Tag, Attachment, ImportResult,
+  Workspace, WorkspaceMember, WorkspaceInvite, MemberRole, WorkspaceKind,
+  SyncBackendType, ControlPlaneStatus,
+} from '../../shared/types'
 import type { DomainEvent } from '../../shared/events'
 
 interface VeridianAPI {
@@ -52,6 +56,25 @@ interface VeridianAPI {
   }
   pdf2md: {
     convertItem: (itemId: number) => Promise<{ error: string | null }>
+  }
+  controlPlane: {
+    configure: (url: string, anonKey: string) => Promise<void>
+    getStatus: () => Promise<ControlPlaneStatus>
+    signIn: (email: string, password: string) => Promise<{ error: string | null }>
+    signOut: () => Promise<void>
+  }
+  workspaces: {
+    list: () => Promise<Workspace[]>
+    create: (
+      name: string, kind: WorkspaceKind, backendType: SyncBackendType, config: Record<string, unknown>
+    ) => Promise<Workspace>
+    listMembers: (workspaceId: string) => Promise<WorkspaceMember[]>
+    updateMemberRole: (workspaceId: string, userId: string, role: MemberRole) => Promise<void>
+    removeMember: (workspaceId: string, userId: string) => Promise<void>
+    listInvites: (workspaceId: string) => Promise<WorkspaceInvite[]>
+    invite: (workspaceId: string, email: string, role: MemberRole) => Promise<WorkspaceInvite>
+    revokeInvite: (inviteId: string) => Promise<void>
+    acceptInvite: (token: string) => Promise<Workspace>
   }
   onPdf2mdStatus: (cb: (e: {
     filename: string

@@ -64,6 +64,41 @@ create type member_role    as enum ('owner', 'admin', 'editor', 'viewer');
 create type invite_status  as enum ('pending', 'accepted', 'revoked');
 create type sync_backend   as enum ('git', 'cloud_folder');
 
+-- GoTrue's user table (auth.users) is not exposed via PostgREST (only the
+-- `public` schema is, per PGRST_DB_SCHEMAS), and reading someone else's email
+-- normally requires the service_role key, which clients never hold. Mirror
+-- just the display-relevant fields into `public` so member lists can embed
+-- them via a normal FK join, kept in sync by the trigger below.
+create table public.profiles (
+  id    uuid primary key references auth.users(id) on delete cascade,
+  email text not null
+);
+
+alter table public.profiles enable row level security;
+-- Any authenticated user can see the basic profile of any other authenticated
+-- user -- this is a small, invite-only control plane for known collaborators,
+-- not a public directory; the actual workspace/data access boundary is
+-- enforced by the workspace_members/workspaces policies below, not by
+-- hiding profile existence.
+create policy profiles_select on public.profiles for select
+  using (auth.role() = 'authenticated');
+grant select on public.profiles to authenticated;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email) values (new.id, new.email);
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
 -- The single most important table: which GitHub repo (or cloud-folder path)
 -- backs each workspace. This -- not a general content store -- is the control
 -- plane's actual job (see readme/workspace-sync/design.tex §1, §3.2).
@@ -71,7 +106,7 @@ create table public.workspaces (
   id                  uuid primary key default gen_random_uuid(),
   name                text not null,
   kind                workspace_kind not null default 'private',
-  owner_id            uuid not null,
+  owner_id            uuid not null references public.profiles(id),
   sync_backend_type   sync_backend not null,
   -- Non-secret connection info only (repo URL, folder path). Tokens/PATs
   -- never live here -- they stay client-side, encrypted via safeStorage
@@ -82,7 +117,7 @@ create table public.workspaces (
 
 create table public.workspace_members (
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
-  user_id      uuid not null,
+  user_id      uuid not null references public.profiles(id),
   role         member_role not null default 'viewer',
   joined_at    timestamptz not null default now(),
   primary key (workspace_id, user_id)

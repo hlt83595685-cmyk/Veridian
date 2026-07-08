@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '../../i18n'
+import { WorkspaceSettingsTab } from '../workspace/WorkspaceSettingsTab'
 
 interface Props {
   initialTab?: string
   onClose: () => void
 }
 
-type Tab = 'storage' | 'language'
+type Tab = 'storage' | 'language' | 'workspace'
 
 export function SettingsDialog({ initialTab = 'storage', onClose }: Props): JSX.Element {
   const { t } = useTranslation('common')
@@ -20,8 +21,9 @@ export function SettingsDialog({ initialTab = 'storage', onClose }: Props): JSX.
   }, [onClose])
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'storage',  label: t('settings.storage.title') },
-    { id: 'language', label: t('settings.language.title') },
+    { id: 'storage',   label: t('settings.storage.title') },
+    { id: 'language',  label: t('settings.language.title') },
+    { id: 'workspace', label: t('workspace.title') },
   ]
 
   return (
@@ -89,8 +91,9 @@ export function SettingsDialog({ initialTab = 'storage', onClose }: Props): JSX.
 
         {/* Tab content */}
         <div style={{ padding: '20px 22px 22px', flex: 1, overflow: 'auto' }}>
-          {tab === 'storage'  && <StorageTab />}
-          {tab === 'language' && <LanguageTab />}
+          {tab === 'storage'   && <StorageTab />}
+          {tab === 'language'  && <LanguageTab />}
+          {tab === 'workspace' && <WorkspaceSettingsTab />}
         </div>
 
         {/* Footer */}

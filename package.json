@@ -17,6 +17,7 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
     "adm-zip": "^0.5.18",
     "better-sqlite3": "^11.9.1",
     "citeproc": "^2.4.62",

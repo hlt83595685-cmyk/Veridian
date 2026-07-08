@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
+import { WorkspaceSwitcher } from '../workspace/WorkspaceSwitcher'
 import logoUrl from '../../assets/logo.png'
 
 export function Toolbar(): JSX.Element {
@@ -70,6 +71,8 @@ export function Toolbar(): JSX.Element {
           Veridian
         </span>
       </div>
+
+      <WorkspaceSwitcher />
 
       {/* Search */}
       <div style={{ position: 'relative', flex: 1, maxWidth: 370 }}>

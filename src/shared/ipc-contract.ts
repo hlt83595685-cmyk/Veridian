@@ -36,6 +36,9 @@ const creator = z.object({
 })
 
 const pathString = z.string().min(1).max(1024)
+const uuid = z.string().uuid()
+const memberRole = z.enum(['owner', 'admin', 'editor', 'viewer'])
+const syncBackendConfig = z.record(z.string(), z.unknown())
 
 export const contract = {
   // Items
@@ -99,6 +102,27 @@ export const contract = {
   'tool:pick-dir':      z.tuple([]),
   'tool:pdf2md':        z.tuple([pathString, pathString]),
   'pdf2md:convertItem': z.tuple([id]),
+
+  // Control plane (self-hosted Supabase OSS subset -- see control-plane/)
+  'controlPlane:configure': z.tuple([z.string().url().max(512), z.string().min(10).max(2048)]),
+  'controlPlane:getStatus': z.tuple([]),
+  'controlPlane:signIn':    z.tuple([z.string().email().max(320), z.string().min(6).max(256)]),
+  'controlPlane:signOut':   z.tuple([]),
+
+  // Workspaces (control-plane data: identity/membership/roles/invites only --
+  // never literature data, which lives in the git/cloud-folder data plane)
+  'workspaces:list':             z.tuple([]),
+  'workspaces:create':           z.tuple([
+    z.string().min(1).max(256), z.enum(['private', 'shared']),
+    z.enum(['git', 'cloud_folder']), syncBackendConfig,
+  ]),
+  'workspaces:listMembers':      z.tuple([uuid]),
+  'workspaces:updateMemberRole': z.tuple([uuid, uuid, memberRole]),
+  'workspaces:removeMember':     z.tuple([uuid, uuid]),
+  'workspaces:listInvites':      z.tuple([uuid]),
+  'workspaces:invite':           z.tuple([uuid, z.string().email().max(320), memberRole]),
+  'workspaces:revokeInvite':     z.tuple([uuid]),
+  'workspaces:acceptInvite':     z.tuple([z.string().min(10).max(256)]),
 } as const
 
 export type IpcChannel = keyof typeof contract

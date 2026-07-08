@@ -13,6 +13,8 @@ import * as Attachments from '../services/AttachmentService'
 import * as Metadata from '../services/MetadataService'
 import * as Import from '../services/ImportService'
 import * as Settings from '../services/SettingsService'
+import * as Workspaces from '../services/WorkspaceService'
+import type { MemberRole, WorkspaceKind, SyncBackendType } from '../../shared/types'
 import { manualConvertPdfToMd } from '../services/ConversionService'
 import { convertPdfToMarkdown } from '../mineruApi'
 import { assertReadable, assertWritable, grantAccess } from '../security/pathGuard'
@@ -176,4 +178,26 @@ export const handlers: Record<IpcChannel, Handler> = {
     }
   },
   'pdf2md:convertItem': (_e, itemId: number) => ({ error: manualConvertPdfToMd(itemId) }),
+
+  // Control plane
+  'controlPlane:configure': (_e, url: string, anonKey: string) => Workspaces.configureControlPlane(url, anonKey),
+  'controlPlane:getStatus': () => Workspaces.getControlPlaneStatus(),
+  'controlPlane:signIn':    (_e, email: string, password: string) => Workspaces.signIn(email, password),
+  'controlPlane:signOut':   () => Workspaces.signOut(),
+
+  // Workspaces
+  'workspaces:list':   () => Workspaces.listWorkspaces(),
+  'workspaces:create': (_e, name: string, kind: WorkspaceKind,
+    backendType: SyncBackendType, config: Record<string, unknown>) =>
+    Workspaces.createWorkspace(name, kind, backendType, config),
+  'workspaces:listMembers':      (_e, workspaceId: string) => Workspaces.listMembers(workspaceId),
+  'workspaces:updateMemberRole': (_e, workspaceId: string, userId: string, role: MemberRole) =>
+    Workspaces.updateMemberRole(workspaceId, userId, role),
+  'workspaces:removeMember': (_e, workspaceId: string, userId: string) =>
+    Workspaces.removeMember(workspaceId, userId),
+  'workspaces:listInvites':  (_e, workspaceId: string) => Workspaces.listInvites(workspaceId),
+  'workspaces:invite':       (_e, workspaceId: string, email: string, role: MemberRole) =>
+    Workspaces.inviteMember(workspaceId, email, role),
+  'workspaces:revokeInvite': (_e, inviteId: string) => Workspaces.revokeInvite(inviteId),
+  'workspaces:acceptInvite': (_e, token: string) => Workspaces.acceptInvite(token),
 }

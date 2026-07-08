@@ -116,6 +116,26 @@ const veridianAPI = {
   pdf2md: {
     convertItem: (itemId: number) => call('pdf2md:convertItem', itemId),
   },
+  controlPlane: {
+    configure: (url: string, anonKey: string) => call('controlPlane:configure', url, anonKey),
+    getStatus: () => call('controlPlane:getStatus'),
+    signIn: (email: string, password: string) => call('controlPlane:signIn', email, password),
+    signOut: () => call('controlPlane:signOut'),
+  },
+  workspaces: {
+    list: () => call('workspaces:list'),
+    create: (name: string, kind: string, backendType: string, config: Record<string, unknown>) =>
+      call('workspaces:create', name, kind, backendType, config),
+    listMembers: (workspaceId: string) => call('workspaces:listMembers', workspaceId),
+    updateMemberRole: (workspaceId: string, userId: string, role: string) =>
+      call('workspaces:updateMemberRole', workspaceId, userId, role),
+    removeMember: (workspaceId: string, userId: string) => call('workspaces:removeMember', workspaceId, userId),
+    listInvites: (workspaceId: string) => call('workspaces:listInvites', workspaceId),
+    invite: (workspaceId: string, email: string, role: string) =>
+      call('workspaces:invite', workspaceId, email, role),
+    revokeInvite: (inviteId: string) => call('workspaces:revokeInvite', inviteId),
+    acceptInvite: (token: string) => call('workspaces:acceptInvite', token),
+  },
   // Domain-event stream: the renderer query cache subscribes here
   onDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.add(cb) },
   offDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.delete(cb) },
