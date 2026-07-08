@@ -14,6 +14,13 @@
 #   docker compose up -d
 #   docker compose exec postgres sh -c \
 #     'psql -U postgres -d postgres -v POSTGRES_PASSWORD="$POSTGRES_PASSWORD" -f /schema.sql'
+#
+# `docker compose up -d` above starts only the four services collaborators'
+# clients actually need (postgres, gotrue, postgrest, proxy). Studio and
+# postgres-meta are behind the `admin` profile -- they're optional, admin-only
+# debugging tools, not needed for the app to work, so they're not pulled/
+# started unless you explicitly ask for them:
+#   docker compose --profile admin up -d
 
 services:
   postgres:
@@ -100,9 +107,11 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
 
-  # Admin-only -- bound to loopback, reach it only via SSH tunnel (see header).
+  # Admin-only, optional (profile: admin) -- bound to loopback, reach it only
+  # via SSH tunnel (see header). Not started by a plain `docker compose up -d`.
   studio:
-    image: supabase/studio:20250106-c22d243
+    image: supabase/studio:latest
+    profiles: ["admin"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:3001:3000"
@@ -114,10 +123,11 @@ services:
     depends_on:
       - postgres-meta
 
-  # Studio needs postgres-meta for its schema browser; also admin-only,
-  # never published beyond the compose network.
+  # Studio needs postgres-meta for its schema browser; also admin-only/
+  # optional, never published beyond the compose network.
   postgres-meta:
-    image: supabase/postgres-meta:v0.87.1
+    image: supabase/postgres-meta:latest
+    profiles: ["admin"]
     restart: unless-stopped
     depends_on:
       postgres:

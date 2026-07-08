@@ -90,9 +90,18 @@ GoTrue treats it as a distinct account).
 
 ## 4. Admin-only Studio access
 
-`studio` and `postgres-meta` are bound to `127.0.0.1` in `docker-compose.yml`
-— they are **never** exposed on the public network. To browse/edit raw
-tables yourself on a remote server:
+`studio` and `postgres-meta` sit behind the `admin` Compose profile — the
+plain `docker compose up -d` from step 1 never pulls or starts them, so a
+normal deployment doesn't need those (larger) images at all. Start them only
+when you actually want to browse raw tables:
+
+```bash
+docker compose --profile admin up -d
+```
+
+They're also bound to `127.0.0.1`, so even running locally they're never
+exposed on the public network. On a remote server, reach them via an SSH
+tunnel:
 
 ```bash
 ssh -L 3001:127.0.0.1:3001 admin@your-server
