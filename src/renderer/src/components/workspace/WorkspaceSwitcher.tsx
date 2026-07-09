@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { WorkspaceDialog } from './WorkspaceDialog'
@@ -12,12 +12,21 @@ export function WorkspaceSwitcher(): JSX.Element {
   const { status, workspaces, activeWorkspaceId, loadStatus, setActiveWorkspace } = useWorkspaceStore()
   const [open, setOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { loadStatus() }, [loadStatus])
 
   useEffect(() => {
     if (!open) return
-    const close = (): void => setOpen(false)
+    // Only close on a mousedown OUTSIDE the dropdown. A blanket "any
+    // mousedown closes it" handler unmounts the dropdown (and the row the
+    // user is clicking) before the browser gets to dispatch the click event
+    // on it, since mousedown fires first and React re-renders synchronously
+    // -- every row's onClick silently never fires. Checking .contains()
+    // lets clicks inside the dropdown reach their own onClick normally.
+    const close = (e: MouseEvent): void => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
   }, [open])
@@ -27,7 +36,7 @@ export function WorkspaceSwitcher(): JSX.Element {
     : workspaces.find((w) => w.id === activeWorkspaceId)?.name ?? t('workspace.personalLibrary')
 
   return (
-    <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+    <div ref={rootRef} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen((v) => !v)}
         style={{

@@ -1,4 +1,4 @@
-import { useEffect, useState, KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useCollectionStore } from '../../stores/collectionStore'
@@ -138,14 +138,21 @@ export function CollectionPane(): JSX.Element {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [collectionsOpen, setCollectionsOpen] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; colId: number } | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
 
   const trashFull = collections.length >= 0  // placeholder — real check is item count; always show normal icon for now
 
   useEffect(() => { load() }, [load])
 
-  // Close context menu on outside click
+  // Close context menu on outside click. Must check .contains() rather than
+  // closing on every mousedown -- a blanket handler unmounts the menu (and
+  // whichever row the user is clicking) before the browser dispatches the
+  // click event, since mousedown fires first and React re-renders
+  // synchronously, so every row's onClick silently never fires.
   useEffect(() => {
-    const handler = (): void => setContextMenu(null)
+    const handler = (e: MouseEvent): void => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) setContextMenu(null)
+    }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
@@ -370,6 +377,7 @@ export function CollectionPane(): JSX.Element {
       {/* Right-click context menu for collections */}
       {contextMenu && (
         <div
+          ref={contextMenuRef}
           onClick={(e) => e.stopPropagation()}
           style={{
             position: 'fixed',
