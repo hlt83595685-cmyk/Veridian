@@ -73,7 +73,14 @@ services:
       # Email/password + magic link only in v1 -- no SMS, no third-party OAuth
       # (GitHub OAuth can be added later by setting GOTRUE_EXTERNAL_GITHUB_*).
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
-      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      # Defaults to auto-confirming new signups (no "click the link we
+      # emailed you" step) because SMTP_* below is typically left blank for
+      # local testing / a small trusted team -- with AUTOCONFIRM=false and
+      # no SMTP configured, GoTrue still creates the account but never sends
+      # (or can send) the confirmation email, permanently stuck. If you
+      # configure real SMTP_* for a production deployment and want actual
+      # email verification, flip this to "false".
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
       GOTRUE_SMTP_HOST: ${SMTP_HOST}
       GOTRUE_SMTP_PORT: ${SMTP_PORT}
       GOTRUE_SMTP_USER: ${SMTP_USER}

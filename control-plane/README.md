@@ -39,8 +39,10 @@ cp .env.example .env
 # scripts/generate-keys.mjs's output, POSTGRES_PASSWORD (any long random
 # string with no spaces/quotes -- alphanumeric is safest on Windows), SITE_URL
 # (http://localhost:8000 for local testing), and SMTP_* (can be left blank for
-# local testing -- password-reset emails just won't send; sign-in/sign-up
-# still work).
+# local testing / a small trusted team -- accounts are auto-confirmed on
+# signup by default in this config precisely so blank SMTP doesn't strand
+# anyone waiting on an email that can never be sent; password-reset just
+# won't work without real SMTP).
 
 docker compose up -d
 ```
