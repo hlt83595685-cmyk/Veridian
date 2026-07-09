@@ -6,6 +6,7 @@ import { initDatabase } from './db'
 import { startLocalServer, stopLocalServer } from './server'
 import { registerIpcGateway } from './ipc/gateway'
 import { initConversionService } from './services/ConversionService'
+import { initWorkspaceSyncService } from './services/WorkspaceSyncService'
 import { assertReadable } from './security/pathGuard'
 
 let mainWindow: BrowserWindow | null = null
@@ -89,6 +90,7 @@ app.whenReady().then(async () => {
     console.error('[main] Local server failed:', err)
   }
   initConversionService()
+  initWorkspaceSyncService()
   registerIpcGateway(ipcMain)
 
   // No native menu bar -- Tools/Settings live as in-app pages reached from

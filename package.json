@@ -23,6 +23,7 @@
     "citeproc": "^2.4.62",
     "clsx": "^2.1.1",
     "i18next": "^24.2.3",
+    "isomorphic-git": "^1.38.6",
     "katex": "^0.17.0",
     "octokit": "^4.1.0",
     "path-browserify": "^1.0.1",

@@ -34,9 +34,9 @@ let _pdf2mdProgressCb: Pdf2mdProgressCb | null = null
 ipcRenderer.on('domain-event', (_ev, e: DomainEvent) => {
   for (const cb of _domainEventCbs) cb(e)
 
-  // Legacy adapter: surface pdf2md job progress through the old status API so
-  // the status bar keeps working unchanged.
-  if (e.type === 'job.progress' && e.job.type === 'pdf2md') {
+  // Legacy adapter: surface job progress (pdf2md, workspace.sync, ...)
+  // through the old status API so the status bar shows all background work.
+  if (e.type === 'job.progress') {
     const job: JobStatus = e.job
     _pdf2mdStatusCb?.({
       filename: job.label,
@@ -114,6 +114,10 @@ const veridianAPI = {
     create: (name: string, kind: string, repoOwner: string | null, repoName: string | null) =>
       call('localWorkspaces:create', name, kind, repoOwner, repoName),
     remove: (id: number) => call('localWorkspaces:remove', id),
+  },
+  workspace: {
+    setActive: (id: number | null) => call('workspace:setActive', id),
+    syncNow: () => call('workspace:syncNow'),
   },
   github: {
     setPat: (pat: string) => call('github:setPat', pat),

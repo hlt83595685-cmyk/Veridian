@@ -14,6 +14,8 @@ import * as Metadata from '../services/MetadataService'
 import * as Import from '../services/ImportService'
 import * as Settings from '../services/SettingsService'
 import * as LocalWorkspaces from '../services/LocalWorkspaceService'
+import * as WorkspaceContext from '../services/WorkspaceContextService'
+import * as WorkspaceSync from '../services/WorkspaceSyncService'
 import * as GitHub from '../services/GitHubService'
 import type { LocalWorkspaceKind } from '../../shared/types'
 import { manualConvertPdfToMd } from '../services/ConversionService'
@@ -186,6 +188,8 @@ export const handlers: Record<IpcChannel, Handler> = {
     repoOwner: string | null, repoName: string | null) =>
     LocalWorkspaces.createWorkspace(name, kind, repoOwner, repoName),
   'localWorkspaces:remove': (_e, id: number) => LocalWorkspaces.removeWorkspace(id),
+  'workspace:setActive':    (_e, id: number | null) => WorkspaceContext.setActiveWorkspace(id),
+  'workspace:syncNow':      () => WorkspaceSync.syncNow(),
 
   // GitHub
   'github:setPat':    (_e, pat: string) => GitHub.setPat(pat),

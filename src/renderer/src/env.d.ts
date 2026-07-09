@@ -62,6 +62,10 @@ interface VeridianAPI {
     ) => Promise<LocalWorkspace>
     remove: (id: number) => Promise<void>
   }
+  workspace: {
+    setActive: (id: number | null) => Promise<{ id: number | null; kind: string; repoRoot: string | null }>
+    syncNow: () => Promise<void>
+  }
   github: {
     setPat: (pat: string) => Promise<void>
     getStatus: () => Promise<{ hasPat: boolean; login: string | null; error: string | null }>

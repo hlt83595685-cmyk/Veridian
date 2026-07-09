@@ -3,25 +3,60 @@ import { app } from 'electron'
 import { join } from 'path'
 import { mkdirSync } from 'fs'
 
-let db: Database.Database | null = null
+// Two database contexts:
+// - personalDb: the always-open default library (userData/data/veridian.db).
+//   Also holds the workspaces REGISTRY (which workspaces exist) -- registry
+//   reads/writes must use getPersonalDb() explicitly.
+// - workspaceDb: the per-workspace index database, open only while a
+//   workspace is active. For github-kind workspaces this is a DISPOSABLE
+//   CACHE -- the human-readable files in the repo working tree are the
+//   source of truth (see WorkspaceFiles.ts); deleting the index db loses
+//   nothing that a re-import can't rebuild.
+//
+// getDb() routes to whichever is active, which is the entire trick that lets
+// every existing repo/service work against a workspace unchanged (DIP: they
+// depend on this accessor, never on a concrete database identity).
+let personalDb: Database.Database | null = null
+let workspaceDb: Database.Database | null = null
 
 export function getDb(): Database.Database {
+  const db = workspaceDb ?? personalDb
   if (!db) throw new Error('Database not initialized')
+  return db
+}
+
+export function getPersonalDb(): Database.Database {
+  if (!personalDb) throw new Error('Database not initialized')
+  return personalDb
+}
+
+function open(dbPath: string): Database.Database {
+  const db = new Database(dbPath)
+  // Enable WAL mode for better concurrency
+  db.pragma('journal_mode = WAL')
+  db.pragma('foreign_keys = ON')
+  runMigrations(db)
   return db
 }
 
 export async function initDatabase(): Promise<void> {
   const dataDir = join(app.getPath('userData'), 'data')
   mkdirSync(dataDir, { recursive: true })
+  personalDb = open(join(dataDir, 'veridian.db'))
+}
 
-  const dbPath = join(dataDir, 'veridian.db')
-  db = new Database(dbPath)
+/** Open (creating if needed) a workspace index db and make it the active context. */
+export function openWorkspaceDb(dbPath: string): void {
+  closeWorkspaceDb()
+  workspaceDb = open(dbPath)
+}
 
-  // Enable WAL mode for better concurrency
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-
-  runMigrations(db)
+/** Close any active workspace db; getDb() falls back to the personal library. */
+export function closeWorkspaceDb(): void {
+  if (workspaceDb) {
+    try { workspaceDb.close() } catch { /* already closed */ }
+    workspaceDb = null
+  }
 }
 
 function runMigrations(db: Database.Database): void {

@@ -28,6 +28,15 @@ function entryFor(key: QueryKey): CacheEntry {
   return e
 }
 
+/** Nuke everything -- the entire data context changed (workspace switch/pull). */
+export function invalidateAll(): void {
+  for (const [, e] of cache) {
+    e.data = undefined   // stale data belongs to another workspace; don't show it
+    e.version++
+    for (const fn of e.listeners) fn()
+  }
+}
+
 /** Bump version of every entry whose key starts with the given prefix. */
 export function invalidate(prefix: QueryKey): void {
   const prefixStr = keyOf(prefix)
@@ -156,6 +165,9 @@ export function wireDomainEvents(onEvent?: (e: DomainEvent) => void): void {
         break
       case 'settings.changed':
         invalidate(['settings'])
+        break
+      case 'workspace.dataRefreshed':
+        invalidateAll()
         break
       case 'job.progress':
         break   // handled by the status bar, not the cache

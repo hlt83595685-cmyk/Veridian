@@ -9,10 +9,12 @@ import { WorkspaceDialog } from './WorkspaceDialog'
 // the data-plane sync engine lands.
 export function WorkspaceSwitcher(): JSX.Element {
   const { t } = useTranslation('common')
-  const { workspaces, activeWorkspaceId, load, setActiveWorkspace } = useWorkspaceStore()
+  const { workspaces, activeWorkspaceId, switching, switchError, load, setActiveWorkspace } = useWorkspaceStore()
   const [open, setOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+
+  const activeWs = workspaces.find((w) => w.id === activeWorkspaceId)
 
   useEffect(() => {
     load()
@@ -54,7 +56,7 @@ export function WorkspaceSwitcher(): JSX.Element {
         <span style={{
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
-          {activeLabel}
+          {switching ? t('workspace.switching') : activeLabel}
         </span>
         <span style={{ fontSize: 9, color: 'var(--muted)' }}>▾</span>
       </button>
@@ -82,7 +84,18 @@ export function WorkspaceSwitcher(): JSX.Element {
             />
           ))}
           <div style={{ height: 1, background: 'var(--separator)', margin: '4px 8px' }} />
+          {activeWs?.kind === 'github' && (
+            <Row
+              label={t('workspace.syncNow')}
+              onClick={() => { window.veridian.workspace.syncNow().catch(console.error); setOpen(false) }}
+            />
+          )}
           <Row label={t('workspace.manage')} onClick={() => { setDialogOpen(true); setOpen(false) }} />
+          {switchError && (
+            <div style={{ padding: '6px 12px', fontSize: 11, color: 'var(--accent)' }}>
+              {switchError === 'no_pat' ? t('workspace.github.noPat') : switchError}
+            </div>
+          )}
         </div>
       )}
 

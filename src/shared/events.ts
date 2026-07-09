@@ -26,6 +26,9 @@ export type DomainEvent =
   | { type: 'settings.changed'; keys: string[] }
   | { type: 'job.progress'; job: JobStatus }
   | { type: 'workspace.changed'; ids: string[] }
+  // The active data context was replaced wholesale (workspace switched, or a
+  // pull imported remote changes) -- every cached query is stale.
+  | { type: 'workspace.dataRefreshed' }
   | { type: 'controlPlane.changed' }
 
 export type DomainEventType = DomainEvent['type']

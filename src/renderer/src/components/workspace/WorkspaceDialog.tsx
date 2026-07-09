@@ -75,8 +75,8 @@ function WorkspaceList({ workspaces }: { workspaces: LocalWorkspace[] }): JSX.El
   const { load, activeWorkspaceId, setActiveWorkspace } = useWorkspaceStore()
 
   const remove = async (id: number): Promise<void> => {
+    if (activeWorkspaceId === id) await setActiveWorkspace(null)
     await window.veridian.localWorkspaces.remove(id)
-    if (activeWorkspaceId === id) setActiveWorkspace(null)
     await load()
   }
 

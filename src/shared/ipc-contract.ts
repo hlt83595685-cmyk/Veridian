@@ -109,6 +109,8 @@ export const contract = {
     z.string().max(256).nullable(), z.string().max(256).nullable(),
   ]),
   'localWorkspaces:remove': z.tuple([id]),
+  'workspace:setActive':    z.tuple([id.nullable()]),
+  'workspace:syncNow':      z.tuple([]),
 
   // GitHub (data-plane credential, strictly per-device -- never synced)
   'github:setPat':    z.tuple([z.string().max(512)]),   // empty string clears

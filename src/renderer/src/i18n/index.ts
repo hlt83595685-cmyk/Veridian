@@ -143,6 +143,8 @@ const zh = {
     empty: '暂无工作空间',
     kindLocal: '本地私人',
     deleteWs: '删除',
+    switching: '切换中...',
+    syncNow: '立即同步',
     connectRepo: {
       title: '接入协作仓库',
       desc: '列出你的 GitHub Token 可访问的仓库，选择一个即可创建同名工作空间。协作权限由 GitHub 仓库协作者设置决定，无需邀请码。',
@@ -324,6 +326,8 @@ const en = {
     empty: 'No workspaces yet',
     kindLocal: 'Local / private',
     deleteWs: 'Remove',
+    switching: 'Switching...',
+    syncNow: 'Sync Now',
     connectRepo: {
       title: 'Connect a Collaborative Repository',
       desc: "Lists the repositories your GitHub token can access; picking one creates a same-named workspace. Collaboration permissions are the repo's own GitHub collaborator settings -- no invite codes.",

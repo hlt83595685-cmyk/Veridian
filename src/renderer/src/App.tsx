@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { MainLayout } from './components/layout/MainLayout'
 import { useItemStore } from './stores/itemStore'
+import { useCollectionStore } from './stores/collectionStore'
 import { useStatusStore } from './stores/statusStore'
 import { wireDomainEvents } from './data/queryCache'
 import './i18n'
@@ -19,6 +20,15 @@ export default function App(): JSX.Element {
     // query cache handles per-item panels on its own.
     wireDomainEvents((e) => {
       if (e.type.startsWith('item.') || e.type === 'tag.changed' || e.type === 'collection.changed') {
+        useItemStore.getState().loadItems()
+      }
+      if (e.type === 'collection.changed' || e.type === 'workspace.dataRefreshed') {
+        useCollectionStore.getState().load()
+      }
+      if (e.type === 'workspace.dataRefreshed') {
+        // Whole data context replaced (workspace switch / remote pull):
+        // reset selection and reload everything
+        useItemStore.getState().setSelectedId(null)
         useItemStore.getState().loadItems()
       }
     })
