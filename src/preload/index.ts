@@ -137,6 +137,11 @@ const veridianAPI = {
     revokeInvite: (inviteId: string) => call('workspaces:revokeInvite', inviteId),
     acceptInvite: (token: string) => call('workspaces:acceptInvite', token),
   },
+  github: {
+    setPat: (pat: string) => call('github:setPat', pat),
+    getStatus: () => call('github:getStatus'),
+    testRepo: (repoUrl: string) => call('github:testRepo', repoUrl),
+  },
   // Domain-event stream: the renderer query cache subscribes here
   onDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.add(cb) },
   offDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.delete(cb) },

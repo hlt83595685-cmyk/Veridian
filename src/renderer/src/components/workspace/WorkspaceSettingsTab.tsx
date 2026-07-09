@@ -148,6 +148,8 @@ export function WorkspaceSettingsTab(): JSX.Element {
         </Section>
       )}
 
+      <GitHubSection />
+
       {info && (
         <div style={{ fontSize: 12, color: 'var(--accent-green)', padding: '4px 2px' }}>
           {info}
@@ -159,6 +161,88 @@ export function WorkspaceSettingsTab(): JSX.Element {
         </div>
       )}
     </div>
+  )
+}
+
+// ── GitHub PAT (per-device data-plane credential) ─────────────────────────────
+
+function GitHubSection(): JSX.Element {
+  const { t } = useTranslation('common')
+  const [ghStatus, setGhStatus] = useState<{ hasPat: boolean; login: string | null; error: string | null }>(
+    { hasPat: false, login: null, error: null }
+  )
+  const [pat, setPat] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const refresh = async (): Promise<void> => {
+    setGhStatus(await window.veridian.github.getStatus())
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  const save = async (): Promise<void> => {
+    if (!pat.trim()) return
+    setBusy(true)
+    try {
+      await window.veridian.github.setPat(pat.trim())
+      setPat('')
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const clear = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      await window.veridian.github.setPat('')
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Section label={t('workspace.github.title')}>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+        {t('workspace.github.desc')}
+      </div>
+
+      {ghStatus.hasPat && ghStatus.login ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-green)' }}>
+            {t('workspace.github.connectedAs', { login: ghStatus.login })}
+          </span>
+          <button onClick={clear} disabled={busy} style={secondaryBtnStyle}>
+            {t('workspace.github.clear')}
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <input
+            value={pat}
+            onChange={(e) => setPat(e.target.value)}
+            placeholder={t('workspace.github.patPlaceholder')}
+            type="password"
+            style={inputStyle}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={save} disabled={busy} style={primaryBtnStyle}>
+              {t('workspace.github.save')}
+            </button>
+            <button
+              onClick={() => window.veridian.tools.openExternal('https://github.com/settings/personal-access-tokens/new')}
+              style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: 12, cursor: 'pointer' }}
+            >
+              {t('workspace.github.openTokenPage')}
+            </button>
+          </div>
+          {ghStatus.hasPat && ghStatus.error && (
+            <div style={{ fontSize: 12, color: 'var(--accent)' }}>{ghStatus.error}</div>
+          )}
+        </div>
+      )}
+    </Section>
   )
 }
 

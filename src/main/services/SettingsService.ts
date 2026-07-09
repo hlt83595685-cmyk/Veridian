@@ -6,7 +6,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { app, safeStorage } from 'electron'
 import { emit } from '../core/Notifier'
 
-const SECRET_KEYS = new Set(['tool.pdf2md.apiToken', 'controlPlane.session'])
+const SECRET_KEYS = new Set(['tool.pdf2md.apiToken', 'controlPlane.session', 'github.pat'])
 const ENC_PREFIX = 'enc:'
 
 let _cache: Record<string, unknown> | null = null

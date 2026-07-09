@@ -98,6 +98,14 @@ You need a second email address to simulate a collaborator (a `+alias`
 address on your own inbox works fine, e.g. `you+collab@gmail.com`, since
 GoTrue treats it as a distinct account).
 
+> **Existing deployments only**: if your database was initialized before the
+> `create_workspace` server-side function existed, apply the incremental
+> patch once (no data loss, no re-init):
+> ```bash
+> docker compose up -d   # remounts ./patches into the container
+> docker compose exec postgres psql -U postgres -d postgres -f /patches/002-create-workspace.sql
+> ```
+
 1. Signed in as yourself: **Workspace switcher → Manage Workspaces… → New
    Workspace**. Give it a name, pick "Shared" and a backend (the backend
    fields don't need to point anywhere real yet — data-plane sync isn't
@@ -112,6 +120,31 @@ GoTrue treats it as a distinct account).
 5. Back on your own (owner) account, open the workspace's Members tab — the
    second account should now be listed with the role you invited it as, and
    you can change its role or remove it.
+
+## 3.5 Connecting a GitHub repository
+
+For a `git`-backend workspace, each member connects to GitHub individually:
+
+1. Create a repository on GitHub (private is fine) that will hold the
+   workspace's data. Grant your collaborators access to it on GitHub itself
+   (repo → Settings → Collaborators) — read access for viewers, write for
+   editors, mirroring the roles you assigned in Veridian.
+2. Each member: GitHub → Settings → Developer settings →
+   [Fine-grained personal access tokens](https://github.com/settings/personal-access-tokens/new)
+   → generate a token scoped to just that repository with
+   **Contents: Read and write** (or Read-only for viewers).
+3. In Veridian: **Settings → Workspace → GitHub Connection** → paste the
+   token → **Save & Verify**. It should show `Connected as @yourname`.
+   The token is safeStorage-encrypted on that device only — it is never
+   uploaded to the control plane or anywhere else.
+4. When creating (or checking) a workspace with the GitHub backend, use the
+   **Test Connection** button next to the repository URL — it verifies the
+   token can reach the repo and reports whether it has write access.
+
+Note the two permission systems are complementary by design: Veridian roles
+(control plane) decide what the app lets a member do; GitHub repo access
+(data plane) is the hard enforcement of who can actually read/push the data.
+Keep them consistent.
 
 ## 4. Admin-only Studio access
 

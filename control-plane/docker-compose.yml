@@ -38,6 +38,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./init:/docker-entrypoint-initdb.d:ro
       - ./schema.sql:/schema.sql:ro
+      - ./patches:/patches:ro
     # Not published to the host network at all -- only `gotrue`, `postgrest`,
     # and `studio` (admin-only) reach it, over the internal compose network.
     expose:

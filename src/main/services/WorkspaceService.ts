@@ -83,6 +83,14 @@ export async function listWorkspaces(): Promise<Workspace[]> {
     .map((row) => ({ ...(row.workspaces as unknown as Workspace), my_role: row.role as MemberRole }))
 }
 
+/**
+ * Creation runs server-side via the create_workspace() security-definer
+ * function (control-plane/schema.sql) -- the workspace row and the creator's
+ * own 'owner' membership row must land atomically, and a client-side
+ * two-step version also trips over INSERT ... RETURNING requiring
+ * SELECT-policy visibility before the membership row exists. Same pattern
+ * as acceptInvite below.
+ */
 export async function createWorkspace(
   name: string,
   kind: WorkspaceKind,
@@ -90,27 +98,14 @@ export async function createWorkspace(
   syncBackendConfig: Record<string, unknown>
 ): Promise<Workspace> {
   const client = requireClient()
-  const { data: userData } = await client.auth.getUser()
-  if (!userData?.user) throw new Error('Not signed in')
-
-  const { data: ws, error } = await client
-    .from('workspaces')
-    .insert({
-      name, kind, owner_id: userData.user.id,
-      sync_backend_type: syncBackendType, sync_backend_config: syncBackendConfig,
-    })
-    .select()
-    .single()
+  const { data, error } = await client.rpc('create_workspace', {
+    p_name: name, p_kind: kind, p_backend: syncBackendType, p_config: syncBackendConfig,
+  })
   if (error) throw new Error(error.message)
 
-  const { error: memberError } = await client
-    .from('workspace_members')
-    .insert({ workspace_id: ws.id, user_id: userData.user.id, role: 'owner' as MemberRole })
-  if (memberError) throw new Error(memberError.message)
-
   await supabasePermissionSource.refresh()
-  emit({ type: 'workspace.changed', ids: [ws.id] })
-  return { ...(ws as Workspace), my_role: 'owner' }
+  emit({ type: 'workspace.changed', ids: [(data as Workspace).id] })
+  return { ...(data as Workspace), my_role: 'owner' }
 }
 
 // ── Members ───────────────────────────────────────────────────────────────────

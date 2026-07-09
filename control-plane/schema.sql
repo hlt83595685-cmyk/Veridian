@@ -132,12 +132,18 @@ alter table public.workspace_members enable row level security;
 alter table public.invites           enable row level security;
 alter table public.devices           enable row level security;
 
--- workspaces: visible to members; mutable only by the owner
+-- workspaces: visible to members (and always to the owner -- membership
+-- alone isn't enough as the SELECT gate, because Postgres applies SELECT
+-- policies to INSERT ... RETURNING too, and at creation time the owner's
+-- membership row doesn't exist yet); mutable only by the owner
 create policy workspaces_select on public.workspaces for select
-  using (exists (
-    select 1 from public.workspace_members m
-    where m.workspace_id = id and m.user_id = auth.uid()
-  ));
+  using (
+    owner_id = auth.uid()
+    or exists (
+      select 1 from public.workspace_members m
+      where m.workspace_id = id and m.user_id = auth.uid()
+    )
+  );
 
 create policy workspaces_update on public.workspaces for update
   using (owner_id = auth.uid());
@@ -248,6 +254,42 @@ end;
 $$;
 
 grant execute on function public.accept_workspace_invite(text) to authenticated;
+
+-- Workspace creation has the same shape as invite acceptance: two writes
+-- (the workspace row + the creator's own 'owner' membership row) that must
+-- land atomically, where the second write's RLS gate depends on the first
+-- having happened. Doing it client-side also trips over INSERT ...
+-- RETURNING requiring SELECT-policy visibility. One security-definer
+-- function, both writes, one transaction.
+create or replace function public.create_workspace(
+  p_name text, p_kind workspace_kind, p_backend sync_backend, p_config jsonb
+)
+returns public.workspaces
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_ws public.workspaces;
+begin
+  if auth.uid() is null then
+    raise exception 'Not signed in';
+  end if;
+  if p_name is null or length(trim(p_name)) = 0 then
+    raise exception 'Workspace name is required';
+  end if;
+
+  insert into public.workspaces (name, kind, owner_id, sync_backend_type, sync_backend_config)
+  values (trim(p_name), p_kind, auth.uid(), p_backend, coalesce(p_config, '{}'::jsonb))
+  returning * into v_ws;
+
+  insert into public.workspace_members (workspace_id, user_id, role)
+  values (v_ws.id, auth.uid(), 'owner');
+
+  return v_ws;
+end;
+$$;
+
+grant execute on function public.create_workspace(text, workspace_kind, sync_backend, jsonb) to authenticated;
 
 -- devices: strictly private to their owner
 create policy devices_own on public.devices for all

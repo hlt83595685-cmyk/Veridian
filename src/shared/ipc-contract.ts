@@ -124,6 +124,11 @@ export const contract = {
   'workspaces:invite':           z.tuple([uuid, z.string().email().max(320), memberRole]),
   'workspaces:revokeInvite':     z.tuple([uuid]),
   'workspaces:acceptInvite':     z.tuple([z.string().min(10).max(256)]),
+
+  // GitHub (data-plane credential, strictly per-device -- never synced)
+  'github:setPat':   z.tuple([z.string().max(512)]),   // empty string clears
+  'github:getStatus': z.tuple([]),
+  'github:testRepo': z.tuple([z.string().min(1).max(512)]),
 } as const
 
 export type IpcChannel = keyof typeof contract

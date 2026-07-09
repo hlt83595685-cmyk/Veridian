@@ -14,6 +14,7 @@ import * as Metadata from '../services/MetadataService'
 import * as Import from '../services/ImportService'
 import * as Settings from '../services/SettingsService'
 import * as Workspaces from '../services/WorkspaceService'
+import * as GitHub from '../services/GitHubService'
 import type { MemberRole, WorkspaceKind, SyncBackendType } from '../../shared/types'
 import { manualConvertPdfToMd } from '../services/ConversionService'
 import { convertPdfToMarkdown } from '../mineruApi'
@@ -201,4 +202,9 @@ export const handlers: Record<IpcChannel, Handler> = {
     Workspaces.inviteMember(workspaceId, email, role),
   'workspaces:revokeInvite': (_e, inviteId: string) => Workspaces.revokeInvite(inviteId),
   'workspaces:acceptInvite': (_e, token: string) => Workspaces.acceptInvite(token),
+
+  // GitHub
+  'github:setPat':    (_e, pat: string) => GitHub.setPat(pat),
+  'github:getStatus': () => GitHub.getStatus(),
+  'github:testRepo':  (_e, repoUrl: string) => GitHub.testRepoAccess(repoUrl),
 }

@@ -77,6 +77,15 @@ interface VeridianAPI {
     revokeInvite: (inviteId: string) => Promise<void>
     acceptInvite: (token: string) => Promise<Workspace>
   }
+  github: {
+    setPat: (pat: string) => Promise<void>
+    getStatus: () => Promise<{ hasPat: boolean; login: string | null; error: string | null }>
+    testRepo: (repoUrl: string) => Promise<{
+      ok: boolean
+      code: 'ok_write' | 'ok_read' | 'no_pat' | 'invalid_url' | 'not_found' | 'http_error' | 'network'
+      detail?: string
+    }>
+  }
   onPdf2mdStatus: (cb: (e: {
     filename: string
     state: 'running' | 'done' | 'error' | 'idle'

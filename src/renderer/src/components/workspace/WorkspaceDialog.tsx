@@ -98,7 +98,31 @@ function ListView({ workspaces, onSelect, onCreated }: {
   const [acceptError, setAcceptError] = useState<string | null>(null)
   const [acceptInfo, setAcceptInfo] = useState<string | null>(null)
 
+  const [testBusy, setTestBusy] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
+
   const roleLabel = (role: MemberRole): string => t(`workspace.members.role${cap(role)}`)
+
+  const testRepo = async (): Promise<void> => {
+    if (!repoUrl.trim()) return
+    setTestBusy(true)
+    setTestResult(null)
+    try {
+      const res = await window.veridian.github.testRepo(repoUrl.trim())
+      const known: Record<string, string> = {
+        ok_write: t('workspace.github.okWrite'),
+        ok_read: t('workspace.github.okRead'),
+        no_pat: t('workspace.github.noPat'),
+        invalid_url: t('workspace.github.invalidUrl'),
+        not_found: t('workspace.github.notFound'),
+      }
+      setTestResult({ ok: res.ok, text: known[res.code] ?? res.detail ?? res.code })
+    } catch (err) {
+      setTestResult({ ok: false, text: (err as Error).message })
+    } finally {
+      setTestBusy(false)
+    }
+  }
 
   const submit = async (): Promise<void> => {
     if (!name.trim()) return
@@ -205,10 +229,22 @@ function ListView({ workspaces, onSelect, onCreated }: {
           </select>
         </div>
         {backend === 'git' ? (
-          <input
-            value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)}
-            placeholder={t('workspace.create.repoUrlPlaceholder')} style={inputStyle}
-          />
+          <>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                value={repoUrl} onChange={(e) => { setRepoUrl(e.target.value); setTestResult(null) }}
+                placeholder={t('workspace.create.repoUrlPlaceholder')} style={{ ...inputStyle, flex: 1 }}
+              />
+              <button onClick={testRepo} disabled={testBusy || !repoUrl.trim()} style={secondaryBtnStyle}>
+                {testBusy ? t('workspace.github.testing') : t('workspace.github.test')}
+              </button>
+            </div>
+            {testResult && (
+              <div style={{ fontSize: 12, color: testResult.ok ? 'var(--accent-green)' : 'var(--accent)' }}>
+                {testResult.text}
+              </div>
+            )}
+          </>
         ) : (
           <input
             value={folderPath} onChange={(e) => setFolderPath(e.target.value)}
