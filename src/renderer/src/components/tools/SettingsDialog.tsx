@@ -110,8 +110,10 @@ export function SettingsDialog({ initialTab = 'storage', onClose }: Props): JSX.
 }
 
 // ── Storage tab ───────────────────────────────────────────────────────────────
+// Exported for reuse by pages/SettingsPage (the dialog itself is no longer
+// reachable since the native menu was removed, but the tab content lives on).
 
-function StorageTab(): JSX.Element {
+export function StorageTab(): JSX.Element {
   const { t } = useTranslation('common')
   const [storagePath, setStoragePath] = useState<string>('')
 
@@ -165,13 +167,12 @@ function StorageTab(): JSX.Element {
 
 // ── Language tab ──────────────────────────────────────────────────────────────
 
-function LanguageTab(): JSX.Element {
+export function LanguageTab(): JSX.Element {
   const { t, i18n: i18nInst } = useTranslation('common')
   const currentLang = i18nInst.language
 
   const setLang = (lang: string): void => {
     i18n.changeLanguage(lang)
-    window.veridian.settings.notifyLocale(lang)
   }
 
   return (

@@ -10,76 +10,6 @@ import { assertReadable } from './security/pathGuard'
 
 let mainWindow: BrowserWindow | null = null
 
-const menuLabels: Record<string, Record<string, string>> = {
-  zh: {
-    tools:       '工具',
-    pdf2md:      'pdf2md 设置...',
-    settings:    '设置',
-    storagePath: '文件存储路径...',
-    language:    '语言',
-    langZh:      '中文',
-    langEn:      'English',
-  },
-  en: {
-    tools:       'Tools',
-    pdf2md:      'pdf2md Settings...',
-    settings:    'Settings',
-    storagePath: 'Storage Path...',
-    language:    'Language',
-    langZh:      '中文',
-    langEn:      'English',
-  },
-}
-
-function buildMenu(locale: string): void {
-  const L = menuLabels[locale] ?? menuLabels['zh']
-  const menu = Menu.buildFromTemplate([
-    {
-      label: L.tools,
-      submenu: [
-        {
-          label: L.pdf2md,
-          click: (): void => { mainWindow?.webContents.send('tools:open', 'pdf2md') },
-        },
-      ],
-    },
-    {
-      label: L.settings,
-      submenu: [
-        {
-          label: L.storagePath,
-          click: (): void => { mainWindow?.webContents.send('settings:open', 'storage') },
-        },
-        { type: 'separator' },
-        {
-          label: L.language,
-          submenu: [
-            {
-              label: L.langZh,
-              type: 'radio',
-              checked: locale === 'zh',
-              click: (): void => {
-                mainWindow?.webContents.send('settings:setLocale', 'zh')
-                buildMenu('zh')
-              },
-            },
-            {
-              label: L.langEn,
-              type: 'radio',
-              checked: locale === 'en',
-              click: (): void => {
-                mainWindow?.webContents.send('settings:setLocale', 'en')
-                buildMenu('en')
-              },
-            },
-          ],
-        },
-      ],
-    },
-  ])
-  Menu.setApplicationMenu(menu)
-}
-
 // Dev runs from out/main, so resources/ sits two levels up; packaged Windows
 // builds take the icon from the exe itself and ignore a missing path here.
 const appIcon = join(__dirname, '../../resources/icon.ico')
@@ -161,10 +91,9 @@ app.whenReady().then(async () => {
   initConversionService()
   registerIpcGateway(ipcMain)
 
-  buildMenu('zh')
-
-  // Renderer can ask main to rebuild menu with a new locale
-  ipcMain.on('menu:setLocale', (_e, locale: string) => buildMenu(locale))
+  // No native menu bar -- Tools/Settings live as in-app pages reached from
+  // the sidebar's bottom icon bar.
+  Menu.setApplicationMenu(null)
 
   createWindow()
 

@@ -36,9 +36,6 @@ const creator = z.object({
 })
 
 const pathString = z.string().min(1).max(1024)
-const uuid = z.string().uuid()
-const memberRole = z.enum(['owner', 'admin', 'editor', 'viewer'])
-const syncBackendConfig = z.record(z.string(), z.unknown())
 
 export const contract = {
   // Items
@@ -103,32 +100,21 @@ export const contract = {
   'tool:pdf2md':        z.tuple([pathString, pathString]),
   'pdf2md:convertItem': z.tuple([id]),
 
-  // Control plane (self-hosted Supabase OSS subset -- see control-plane/)
-  'controlPlane:configure': z.tuple([z.string().url().max(512), z.string().min(10).max(2048)]),
-  'controlPlane:getStatus': z.tuple([]),
-  'controlPlane:signIn':    z.tuple([z.string().email().max(320), z.string().min(6).max(256)]),
-  'controlPlane:signUp':    z.tuple([z.string().email().max(320), z.string().min(6).max(256)]),
-  'controlPlane:signOut':   z.tuple([]),
-
-  // Workspaces (control-plane data: identity/membership/roles/invites only --
-  // never literature data, which lives in the git/cloud-folder data plane)
-  'workspaces:list':             z.tuple([]),
-  'workspaces:create':           z.tuple([
-    z.string().min(1).max(256), z.enum(['private', 'shared']),
-    z.enum(['git', 'cloud_folder']), syncBackendConfig,
+  // Local workspaces (rows in the local SQLite DB; shared ones are bound to
+  // a GitHub repo -- identity/permissions are GitHub's own PAT + repo
+  // collaborator model, no separate account system)
+  'localWorkspaces:list':   z.tuple([]),
+  'localWorkspaces:create': z.tuple([
+    z.string().min(1).max(256), z.enum(['local', 'github']),
+    z.string().max(256).nullable(), z.string().max(256).nullable(),
   ]),
-  'workspaces:listMembers':      z.tuple([uuid]),
-  'workspaces:updateMemberRole': z.tuple([uuid, uuid, memberRole]),
-  'workspaces:removeMember':     z.tuple([uuid, uuid]),
-  'workspaces:listInvites':      z.tuple([uuid]),
-  'workspaces:invite':           z.tuple([uuid, z.string().email().max(320), memberRole]),
-  'workspaces:revokeInvite':     z.tuple([uuid]),
-  'workspaces:acceptInvite':     z.tuple([z.string().min(10).max(256)]),
+  'localWorkspaces:remove': z.tuple([id]),
 
   // GitHub (data-plane credential, strictly per-device -- never synced)
-  'github:setPat':   z.tuple([z.string().max(512)]),   // empty string clears
+  'github:setPat':    z.tuple([z.string().max(512)]),   // empty string clears
   'github:getStatus': z.tuple([]),
-  'github:testRepo': z.tuple([z.string().min(1).max(512)]),
+  'github:testRepo':  z.tuple([z.string().min(1).max(512)]),
+  'github:listRepos': z.tuple([]),
 } as const
 
 export type IpcChannel = keyof typeof contract

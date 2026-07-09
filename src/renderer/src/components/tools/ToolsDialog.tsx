@@ -106,10 +106,12 @@ export function ToolsDialog({ initialTab = 'pdf2md', onClose }: Props): JSX.Elem
 }
 
 // ── pdf2md tab ────────────────────────────────────────────────────────────────
+// Exported for reuse by pages/ToolsPage (the dialog itself is no longer
+// reachable since the native menu was removed, but the tab content lives on).
 
 type Pdf2mdMode = 'agent' | 'precision'
 
-function Pdf2mdTab(): JSX.Element {
+export function Pdf2mdTab(): JSX.Element {
   const { t } = useTranslation('common')
   const [enabled, setEnabled] = useState(true)
   const [mode, setMode] = useState<Pdf2mdMode>('agent')

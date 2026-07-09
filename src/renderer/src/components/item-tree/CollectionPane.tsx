@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useCollectionStore } from '../../stores/collectionStore'
+import { useUiStore } from '../../stores/uiStore'
 
 // ── SVG icons (inline, no external dep) ────────────────────────────────────
 
@@ -258,9 +259,10 @@ export function CollectionPane(): JSX.Element {
 
   return (
     <div
-      style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
       onClick={() => setContextMenu(null)}
     >
+    <div style={{ padding: '16px 12px 8px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
       {/* ── My Library header ── */}
       <p style={{
         fontSize: 10, fontWeight: 700, color: 'var(--muted)',
@@ -412,6 +414,73 @@ export function CollectionPane(): JSX.Element {
         </div>
       )}
     </div>
+
+    {/* ── Bottom icon bar: Tools / Settings (page switch, replaces the old
+          native menu bar) ── */}
+    <SidebarFooter />
+    </div>
+  )
+}
+
+function SidebarFooter(): JSX.Element {
+  const { t } = useTranslation('common')
+  const { page, setPage } = useUiStore()
+
+  return (
+    <div style={{
+      display: 'flex', gap: 6,
+      padding: '8px 12px',
+      borderTop: '1px solid var(--separator)',
+      flexShrink: 0,
+    }}>
+      <FooterButton
+        label={t('sidebar.tools')}
+        active={page === 'tools'}
+        onClick={() => setPage(page === 'tools' ? 'library' : 'tools')}
+        icon={
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+            <path d="M10.5 2.5a3.5 3.5 0 0 0-4.6 4.1L2.2 10.3a1.3 1.3 0 0 0 0 1.9l1.6 1.6a1.3 1.3 0 0 0 1.9 0l3.7-3.7a3.5 3.5 0 0 0 4.1-4.6l-2.2 2.2-2-.5-.5-2 2.2-2.2z"
+              stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" fill="none"/>
+          </svg>
+        }
+      />
+      <FooterButton
+        label={t('sidebar.settings')}
+        active={page === 'settings'}
+        onClick={() => setPage(page === 'settings' ? 'library' : 'settings')}
+        icon={
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M8 1.8v1.7M8 12.5v1.7M14.2 8h-1.7M3.5 8H1.8M12.4 3.6l-1.2 1.2M4.8 11.2l-1.2 1.2M12.4 12.4l-1.2-1.2M4.8 4.8L3.6 3.6"
+              stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+        }
+      />
+    </div>
+  )
+}
+
+function FooterButton({ label, icon, active, onClick }: {
+  label: string; icon: JSX.Element; active: boolean; onClick: () => void
+}): JSX.Element {
+  return (
+    <button
+      onClick={onClick}
+      className="sidebar-row"
+      style={{
+        flex: 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        height: 34, borderRadius: 'var(--radius-md)', border: 'none',
+        background: active ? 'var(--primary-light)' : 'transparent',
+        color: active ? 'var(--primary)' : 'var(--foreground-3)',
+        fontSize: 13, fontWeight: active ? 600 : 500,
+        cursor: 'pointer',
+        transition: 'background var(--duration) var(--ease), color var(--duration) var(--ease)',
+      }}
+    >
+      {icon}
+      {label}
+    </button>
   )
 }
 

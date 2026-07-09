@@ -47,6 +47,36 @@ export async function getStatus(): Promise<GitHubStatus> {
   }
 }
 
+/**
+ * Repositories the stored PAT can reach (owned + collaborator + org),
+ * newest-activity first -- feeds the "connect a collaborative repo" picker.
+ * Fine-grained PATs only ever see the repos they were scoped to, so this
+ * list is usually short and exact.
+ */
+export async function listRepos(): Promise<import('../../shared/types').GitHubRepoInfo[]> {
+  const pat = getPat()
+  if (!pat) throw new Error('no_pat')
+  const res = await fetch(
+    'https://api.github.com/user/repos?per_page=100&sort=updated',
+    { headers: API_HEADERS(pat), signal: AbortSignal.timeout(15_000) }
+  )
+  if (!res.ok) throw new Error(`GitHub HTTP ${res.status}`)
+  const repos = (await res.json()) as Array<{
+    name: string
+    full_name: string
+    private: boolean
+    owner: { login: string }
+    permissions?: { push?: boolean }
+  }>
+  return repos.map((r) => ({
+    owner: r.owner.login,
+    name: r.name,
+    full_name: r.full_name,
+    private: r.private,
+    push: !!r.permissions?.push,
+  }))
+}
+
 export function parseRepoUrl(url: string): { owner: string; repo: string } | null {
   const m = url.trim().match(
     /^(?:https?:\/\/github\.com\/|git@github\.com:)([^/\s]+)\/([^/\s#?]+?)(?:\.git)?\/?$/i

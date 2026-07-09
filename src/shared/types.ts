@@ -82,7 +82,34 @@ export interface ImportResult {
   imported: number
 }
 
-// ── Workspace / control-plane types ──────────────────────────────────────────
+// ── Local workspaces ──────────────────────────────────────────────────────────
+// Workspaces are a local-first concept: rows in the local SQLite database,
+// optionally bound to a GitHub repository (identity/permissions for shared
+// workspaces are GitHub's own PAT + repo-collaborator model -- no separate
+// account system). 'local' = private, this machine only.
+
+export type LocalWorkspaceKind = 'local' | 'github'
+
+export interface LocalWorkspace {
+  id: number
+  name: string
+  kind: LocalWorkspaceKind
+  repo_owner: string | null
+  repo_name: string | null
+  created_at: number
+}
+
+export interface GitHubRepoInfo {
+  owner: string
+  name: string
+  full_name: string
+  private: boolean
+  push: boolean
+}
+
+// ── Workspace / control-plane types (dormant) ─────────────────────────────────
+// Retained for a possible future cloud-account mode (startup sign-in etc.);
+// the active workspace flow no longer uses the self-hosted control plane.
 // See readme/workspace-sync/design.tex for the full architecture. These
 // mirror control-plane/schema.sql's tables; ids are Postgres uuids (strings),
 // not the local SQLite integer ids used by Item/Collection/etc.

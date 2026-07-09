@@ -1,8 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useEffect } from 'react'
 import { MainLayout } from './components/layout/MainLayout'
-import { SettingsDialog } from './components/tools/SettingsDialog'
-import { ToolsDialog } from './components/tools/ToolsDialog'
 import { useItemStore } from './stores/itemStore'
 import { useStatusStore } from './stores/statusStore'
 import { wireDomainEvents } from './data/queryCache'
@@ -11,9 +8,6 @@ import './i18n'
 export default function App(): JSX.Element {
   const { loadItems, selectedId, setSelectedId } = useItemStore()
   const { setStatus } = useStatusStore()
-  const { i18n } = useTranslation('common')
-  const [settingsTab, setSettingsTab] = useState<string | null>(null)
-  const [toolsTab, setToolsTab] = useState<string | null>(null)
 
   useEffect(() => {
     if (!window.veridian) {
@@ -30,24 +24,6 @@ export default function App(): JSX.Element {
     })
     loadItems()
   }, [loadItems])
-
-  // Menu → open tools dialog
-  useEffect(() => {
-    window.veridian.onToolsOpen((tab) => setToolsTab(tab))
-    return () => window.veridian.offToolsOpen()
-  }, [])
-
-  // Menu → open settings dialog
-  useEffect(() => {
-    window.veridian.onSettingsOpen((tab) => setSettingsTab(tab))
-    return () => window.veridian.offSettingsOpen()
-  }, [])
-
-  // Menu → language change (menu radio clicked)
-  useEffect(() => {
-    window.veridian.onSetLocale((locale) => { i18n.changeLanguage(locale) })
-    return () => window.veridian.offSetLocale()
-  }, [i18n])
 
   // Global pdf2md status feed
   useEffect(() => {
@@ -78,18 +54,6 @@ export default function App(): JSX.Element {
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden">
       <MainLayout />
-      {toolsTab !== null && (
-        <ToolsDialog
-          initialTab={toolsTab}
-          onClose={() => setToolsTab(null)}
-        />
-      )}
-      {settingsTab !== null && (
-        <SettingsDialog
-          initialTab={settingsTab}
-          onClose={() => setSettingsTab(null)}
-        />
-      )}
     </div>
   )
 }

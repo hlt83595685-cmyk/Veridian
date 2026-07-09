@@ -1,3 +1,9 @@
+// DORMANT -- not wired to any IPC channel. The active workspace flow is
+// LocalWorkspaceService (local-first, GitHub-repo-bound); this control-plane
+// client (plus PermissionSource/ControlPlaneClient and the control-plane/
+// deployment) is retained for a possible future cloud-account mode with a
+// startup sign-in screen. See readme/workspace-sync/ for the original design.
+//
 // Single write path for everything workspace-related. Unlike the local
 // SQLite-backed services (ItemService, TagService, ...), writes here go to
 // the remote control plane (see control-plane/schema.sql) via

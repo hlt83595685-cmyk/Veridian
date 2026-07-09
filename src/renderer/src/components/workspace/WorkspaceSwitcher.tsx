@@ -3,27 +3,31 @@ import { useTranslation } from 'react-i18next'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { WorkspaceDialog } from './WorkspaceDialog'
 
-// Toolbar dropdown: pick between the local personal library (default, always
-// available) and any control-plane workspace the user has been invited to or
-// created. Purely a UI-state switch here -- which data the rest of the app
-// reads from is wired up when the data-plane sync engine lands.
+// Toolbar dropdown: pick between the personal library (default) and any
+// local workspace (private, or bound to a GitHub repo). Purely a UI-state
+// switch here -- which data the rest of the app reads from is wired up when
+// the data-plane sync engine lands.
 export function WorkspaceSwitcher(): JSX.Element {
   const { t } = useTranslation('common')
-  const { status, workspaces, activeWorkspaceId, loadStatus, setActiveWorkspace } = useWorkspaceStore()
+  const { workspaces, activeWorkspaceId, load, setActiveWorkspace } = useWorkspaceStore()
   const [open, setOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { loadStatus() }, [loadStatus])
+  useEffect(() => {
+    load()
+    // workspace.changed events (create/remove from the dialog) refresh the list
+    const onEvent = (e: { type: string }): void => {
+      if (e.type === 'workspace.changed') load()
+    }
+    window.veridian.onDomainEvent(onEvent)
+    return () => window.veridian.offDomainEvent(onEvent)
+  }, [load])
 
   useEffect(() => {
     if (!open) return
-    // Only close on a mousedown OUTSIDE the dropdown. A blanket "any
-    // mousedown closes it" handler unmounts the dropdown (and the row the
-    // user is clicking) before the browser gets to dispatch the click event
-    // on it, since mousedown fires first and React re-renders synchronously
-    // -- every row's onClick silently never fires. Checking .contains()
-    // lets clicks inside the dropdown reach their own onClick normally.
+    // Close only on mousedown OUTSIDE -- see the identical pattern note in
+    // ItemListPane's context menu.
     const close = (e: MouseEvent): void => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
@@ -69,10 +73,10 @@ export function WorkspaceSwitcher(): JSX.Element {
             active={activeWorkspaceId === null}
             onClick={() => { setActiveWorkspace(null); setOpen(false) }}
           />
-          {status.signedIn && workspaces.map((w) => (
+          {workspaces.map((w) => (
             <Row
               key={w.id}
-              label={w.name}
+              label={w.kind === 'github' ? `${w.name} · ${w.repo_owner}/${w.repo_name}` : w.name}
               active={activeWorkspaceId === w.id}
               onClick={() => { setActiveWorkspace(w.id); setOpen(false) }}
             />
@@ -98,6 +102,7 @@ function Row({ label, active, onClick }: { label: string; active?: boolean; onCl
         color: active ? 'var(--primary)' : 'var(--foreground)',
         fontWeight: active ? 600 : 500,
         fontSize: 13, textAlign: 'left',
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}
     >
       {label}

@@ -308,3 +308,9 @@ grant select, insert, update, delete on public.invites           to authenticate
 grant select, insert, update, delete on public.devices           to authenticated;
 
 grant usage on schema auth to authenticator, anon, authenticated, service_role;
+
+-- PostgREST caches the database schema at startup -- tell a running
+-- instance to reload so everything created above is visible immediately
+-- (otherwise: "Could not find the ... in the schema cache" until a
+-- postgrest restart).
+notify pgrst, 'reload schema';

@@ -1,34 +1,24 @@
 import { create } from 'zustand'
-import type { Workspace, ControlPlaneStatus } from '../../../shared/types'
+import type { LocalWorkspace } from '../../../shared/types'
 
 interface WorkspaceStore {
-  status: ControlPlaneStatus
-  workspaces: Workspace[]
-  /** null = the local personal library (default, always available). */
-  activeWorkspaceId: string | null
-  loadStatus: () => Promise<void>
-  loadWorkspaces: () => Promise<void>
-  setActiveWorkspace: (id: string | null) => void
+  workspaces: LocalWorkspace[]
+  /** null = the default personal library (always available). */
+  activeWorkspaceId: number | null
+  load: () => Promise<void>
+  setActiveWorkspace: (id: number | null) => void
 }
 
-export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
-  status: { configured: false, signedIn: false, email: null },
+export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
   workspaces: [],
   activeWorkspaceId: null,
 
-  loadStatus: async () => {
-    const status = await window.veridian.controlPlane.getStatus()
-    set({ status })
-    if (status.signedIn) await get().loadWorkspaces()
-    else set({ workspaces: [], activeWorkspaceId: null })
-  },
-
-  loadWorkspaces: async () => {
+  load: async () => {
     try {
-      const workspaces = await window.veridian.workspaces.list()
+      const workspaces = await window.veridian.localWorkspaces.list()
       set({ workspaces })
     } catch (err) {
-      console.error('[workspaceStore] loadWorkspaces failed:', err)
+      console.error('[workspaceStore] load failed:', err)
     }
   },
 

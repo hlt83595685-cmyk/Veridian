@@ -2,8 +2,7 @@
 
 import type {
   Item, Creator, Collection, Tag, Attachment, ImportResult,
-  Workspace, WorkspaceMember, WorkspaceInvite, MemberRole, WorkspaceKind,
-  SyncBackendType, ControlPlaneStatus,
+  LocalWorkspace, LocalWorkspaceKind, GitHubRepoInfo,
 } from '../../shared/types'
 import type { DomainEvent } from '../../shared/events'
 
@@ -52,30 +51,16 @@ interface VeridianAPI {
     get: (key: string) => Promise<unknown>
     set: (key: string, value: unknown) => Promise<void>
     pickStoragePath: () => Promise<string | null>
-    notifyLocale: (locale: string) => void
   }
   pdf2md: {
     convertItem: (itemId: number) => Promise<{ error: string | null }>
   }
-  controlPlane: {
-    configure: (url: string, anonKey: string) => Promise<void>
-    getStatus: () => Promise<ControlPlaneStatus>
-    signIn: (email: string, password: string) => Promise<{ error: string | null }>
-    signUp: (email: string, password: string) => Promise<{ error: string | null }>
-    signOut: () => Promise<void>
-  }
-  workspaces: {
-    list: () => Promise<Workspace[]>
+  localWorkspaces: {
+    list: () => Promise<LocalWorkspace[]>
     create: (
-      name: string, kind: WorkspaceKind, backendType: SyncBackendType, config: Record<string, unknown>
-    ) => Promise<Workspace>
-    listMembers: (workspaceId: string) => Promise<WorkspaceMember[]>
-    updateMemberRole: (workspaceId: string, userId: string, role: MemberRole) => Promise<void>
-    removeMember: (workspaceId: string, userId: string) => Promise<void>
-    listInvites: (workspaceId: string) => Promise<WorkspaceInvite[]>
-    invite: (workspaceId: string, email: string, role: MemberRole) => Promise<WorkspaceInvite>
-    revokeInvite: (inviteId: string) => Promise<void>
-    acceptInvite: (token: string) => Promise<Workspace>
+      name: string, kind: LocalWorkspaceKind, repoOwner: string | null, repoName: string | null
+    ) => Promise<LocalWorkspace>
+    remove: (id: number) => Promise<void>
   }
   github: {
     setPat: (pat: string) => Promise<void>
@@ -85,6 +70,7 @@ interface VeridianAPI {
       code: 'ok_write' | 'ok_read' | 'no_pat' | 'invalid_url' | 'not_found' | 'http_error' | 'network'
       detail?: string
     }>
+    listRepos: () => Promise<GitHubRepoInfo[]>
   }
   onPdf2mdStatus: (cb: (e: {
     filename: string
@@ -94,12 +80,6 @@ interface VeridianAPI {
     pending: number
   }) => void) => void
   offPdf2mdStatus: () => void
-  onToolsOpen: (cb: (tab: string) => void) => void
-  offToolsOpen: () => void
-  onSettingsOpen: (cb: (tab: string) => void) => void
-  offSettingsOpen: () => void
-  onSetLocale: (cb: (locale: string) => void) => void
-  offSetLocale: () => void
   import: {
     openDialog: (collectionId?: number) => Promise<ImportResult>
   }

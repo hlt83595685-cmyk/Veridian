@@ -49,3 +49,9 @@ end;
 $$;
 
 grant execute on function public.create_workspace(text, workspace_kind, sync_backend, jsonb) to authenticated;
+
+-- PostgREST caches the database schema at startup; without this it won't
+-- see functions/tables created after it booted ("Could not find the
+-- function ... in the schema cache"). The NOTIFY asks a listening PostgREST
+-- to reload; `docker compose restart postgrest` works too.
+notify pgrst, 'reload schema';

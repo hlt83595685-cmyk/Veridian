@@ -7,7 +7,10 @@ import { DetailPane } from '../detail-panel/DetailPane'
 import { PdfReaderPane } from '../pdf-viewer/PdfReaderPane'
 import { MarkdownReaderPane } from '../pdf-viewer/MarkdownReaderPane'
 import { ImageGalleryPane } from '../pdf-viewer/ImageGalleryPane'
+import { SettingsPage } from '../pages/SettingsPage'
+import { ToolsPage } from '../pages/ToolsPage'
 import { useItemStore } from '../../stores/itemStore'
+import { useUiStore } from '../../stores/uiStore'
 
 export function MainLayout(): JSX.Element {
   const [sidebarWidth] = useState(240)
@@ -15,6 +18,7 @@ export function MainLayout(): JSX.Element {
   const selectedId = useItemStore((s) => s.selectedId)
   const viewerPath = useItemStore((s) => s.viewerPath)
   const viewerType = useItemStore((s) => s.viewerType)
+  const page = useUiStore((s) => s.page)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
@@ -26,13 +30,14 @@ export function MainLayout(): JSX.Element {
           width: sidebarWidth,
           flexShrink: 0,
           borderRight: '1px solid var(--separator)',
-          overflowY: 'auto',
+          overflow: 'hidden',
           background: 'var(--bg-sidebar)',
         }}>
           <CollectionPane />
         </aside>
 
-        {/* Center -- light card container per design guide */}
+        {/* Center -- light card container per design guide. Settings/Tools
+            take over the whole card as full pages (sidebar bottom icons). */}
         <main style={{
           flex: 1,
           overflow: 'hidden',
@@ -44,18 +49,22 @@ export function MainLayout(): JSX.Element {
           margin: '12px 16px 12px 12px',
           boxShadow: 'var(--shadow-sm)',
         }}>
-          {viewerPath
-            ? viewerType === 'markdown'
-              ? <MarkdownReaderPane />
-              : viewerType === 'gallery'
-                ? <ImageGalleryPane />
-                : <PdfReaderPane />
-            : <ItemListPane />
+          {page === 'settings'
+            ? <SettingsPage />
+            : page === 'tools'
+              ? <ToolsPage />
+              : viewerPath
+                ? viewerType === 'markdown'
+                  ? <MarkdownReaderPane />
+                  : viewerType === 'gallery'
+                    ? <ImageGalleryPane />
+                    : <PdfReaderPane />
+                : <ItemListPane />
           }
         </main>
 
-        {/* Right detail — hidden during PDF reading */}
-        {selectedId !== null && !viewerPath && (
+        {/* Right detail — hidden during PDF reading and on settings/tools pages */}
+        {page === 'library' && selectedId !== null && !viewerPath && (
           <aside style={{
             width: detailWidth,
             flexShrink: 0,

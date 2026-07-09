@@ -198,4 +198,23 @@ function runMigrations(db: Database.Database): void {
       INSERT INTO schema_version VALUES (3);
     `)
   }
+
+  if (current < 4) {
+    // Local-first workspaces: a workspace is a row here, optionally bound to
+    // a GitHub repository (kind='github'). Shared-workspace identity and
+    // permissions are GitHub's own PAT + repo-collaborator model; 'local'
+    // workspaces are private to this machine.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS workspaces (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT NOT NULL,
+        kind       TEXT NOT NULL DEFAULT 'local',
+        repo_owner TEXT,
+        repo_name  TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      );
+
+      INSERT INTO schema_version VALUES (4);
+    `)
+  }
 }

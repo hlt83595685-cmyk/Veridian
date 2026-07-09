@@ -30,9 +30,6 @@ type Pdf2mdProgressCb = (p: { state: string; message?: string; progress?: number
 const _domainEventCbs = new Set<DomainEventCb>()
 let _pdf2mdStatusCb: Pdf2mdStatusCb | null = null
 let _pdf2mdProgressCb: Pdf2mdProgressCb | null = null
-let _toolsOpenCb: ((tab: string) => void) | null = null
-let _settingsOpenCb: ((tab: string) => void) | null = null
-let _setLocaleCb: ((locale: string) => void) | null = null
 
 ipcRenderer.on('domain-event', (_ev, e: DomainEvent) => {
   for (const cb of _domainEventCbs) cb(e)
@@ -51,9 +48,6 @@ ipcRenderer.on('domain-event', (_ev, e: DomainEvent) => {
   }
 })
 ipcRenderer.on('tool:pdf2md:progress', (_ev, p) => { _pdf2mdProgressCb?.(p) })
-ipcRenderer.on('tools:open', (_ev, tab: string) => { _toolsOpenCb?.(tab) })
-ipcRenderer.on('settings:open', (_ev, tab: string) => { _settingsOpenCb?.(tab) })
-ipcRenderer.on('settings:setLocale', (_ev, locale: string) => { _setLocaleCb?.(locale) })
 
 const veridianAPI = {
   items: {
@@ -111,36 +105,21 @@ const veridianAPI = {
     get: (key: string) => call('settings:get', key),
     set: (key: string, value: unknown) => call('settings:set', key, value),
     pickStoragePath: () => call('settings:pickStoragePath'),
-    notifyLocale: (locale: string) => ipcRenderer.send('menu:setLocale', locale),
   },
   pdf2md: {
     convertItem: (itemId: number) => call('pdf2md:convertItem', itemId),
   },
-  controlPlane: {
-    configure: (url: string, anonKey: string) => call('controlPlane:configure', url, anonKey),
-    getStatus: () => call('controlPlane:getStatus'),
-    signIn: (email: string, password: string) => call('controlPlane:signIn', email, password),
-    signUp: (email: string, password: string) => call('controlPlane:signUp', email, password),
-    signOut: () => call('controlPlane:signOut'),
-  },
-  workspaces: {
-    list: () => call('workspaces:list'),
-    create: (name: string, kind: string, backendType: string, config: Record<string, unknown>) =>
-      call('workspaces:create', name, kind, backendType, config),
-    listMembers: (workspaceId: string) => call('workspaces:listMembers', workspaceId),
-    updateMemberRole: (workspaceId: string, userId: string, role: string) =>
-      call('workspaces:updateMemberRole', workspaceId, userId, role),
-    removeMember: (workspaceId: string, userId: string) => call('workspaces:removeMember', workspaceId, userId),
-    listInvites: (workspaceId: string) => call('workspaces:listInvites', workspaceId),
-    invite: (workspaceId: string, email: string, role: string) =>
-      call('workspaces:invite', workspaceId, email, role),
-    revokeInvite: (inviteId: string) => call('workspaces:revokeInvite', inviteId),
-    acceptInvite: (token: string) => call('workspaces:acceptInvite', token),
+  localWorkspaces: {
+    list: () => call('localWorkspaces:list'),
+    create: (name: string, kind: string, repoOwner: string | null, repoName: string | null) =>
+      call('localWorkspaces:create', name, kind, repoOwner, repoName),
+    remove: (id: number) => call('localWorkspaces:remove', id),
   },
   github: {
     setPat: (pat: string) => call('github:setPat', pat),
     getStatus: () => call('github:getStatus'),
     testRepo: (repoUrl: string) => call('github:testRepo', repoUrl),
+    listRepos: () => call('github:listRepos'),
   },
   // Domain-event stream: the renderer query cache subscribes here
   onDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.add(cb) },
@@ -148,13 +127,6 @@ const veridianAPI = {
   // pdf2md status (queue-level, single LED) -- legacy adapter over job.progress
   onPdf2mdStatus: (cb: Pdf2mdStatusCb) => { _pdf2mdStatusCb = cb },
   offPdf2mdStatus: () => { _pdf2mdStatusCb = null },
-  // menu-driven panels
-  onToolsOpen: (cb: (tab: string) => void) => { _toolsOpenCb = cb },
-  offToolsOpen: () => { _toolsOpenCb = null },
-  onSettingsOpen: (cb: (tab: string) => void) => { _settingsOpenCb = cb },
-  offSettingsOpen: () => { _settingsOpenCb = null },
-  onSetLocale: (cb: (locale: string) => void) => { _setLocaleCb = cb },
-  offSetLocale: () => { _setLocaleCb = null },
   tools: {
     openExternal: (url: string) => call('shell:openExternal', url),
     pickPdf: () => call('tool:pick-pdf'),
