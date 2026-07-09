@@ -92,6 +92,10 @@ export function initWorkspaceSyncService(): void {
     if (getActiveWorkspace().kind !== 'github') return
     switch (e.type) {
       case 'item.created':
+        // Bulk imports emit an empty id list ("unspecified set changed") --
+        // without this, nothing they created would ever be exported
+        if (e.ids.length === 0) exportAllItems = true
+        markDirty(e.ids); scheduleSync(); break
       case 'item.modified':
       case 'item.trashed':
       case 'item.restored':

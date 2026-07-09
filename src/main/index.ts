@@ -11,6 +11,24 @@ import { assertReadable } from './security/pathGuard'
 
 let mainWindow: BrowserWindow | null = null
 
+// Last line of defense: an unhandled rejection in the main process is FATAL
+// by default in modern Node/Electron -- any stray network error escaping a
+// background job (git push, CrossRef, MinerU) would silently kill the whole
+// app. Log to console + userData/crash.log and keep running instead.
+function logCrash(kind: string, err: unknown): void {
+  const detail = err instanceof Error ? (err.stack ?? err.message) : String(err)
+  console.error(`[FATAL:${kind}]`, detail)
+  try {
+    const { appendFileSync } = require('fs') as typeof import('fs')
+    appendFileSync(
+      join(app.getPath('userData'), 'crash.log'),
+      `${new Date().toISOString()} ${kind}: ${detail}\n\n`
+    )
+  } catch { /* logging must never throw */ }
+}
+process.on('uncaughtException', (err) => logCrash('uncaughtException', err))
+process.on('unhandledRejection', (reason) => logCrash('unhandledRejection', reason))
+
 // Dev runs from out/main, so resources/ sits two levels up; packaged Windows
 // builds take the icon from the exe itself and ignore a missing path here.
 const appIcon = join(__dirname, '../../resources/icon.ico')

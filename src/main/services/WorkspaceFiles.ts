@@ -140,6 +140,22 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
   }
 }
 
+/**
+ * Export any items the index db knows but the tree doesn't -- stranded local
+ * work (e.g. a crash before the debounce fired, or an old bug). Called on
+ * every activation BEFORE importAll so tree-as-truth can never silently
+ * discard local-only items. Returns how many were recovered.
+ */
+export function exportMissingItems(db: Database.Database, repoRoot: string): number {
+  const rows = db.prepare('SELECT id, key FROM items').all() as Array<{ id: number; key: string }>
+  const missing = rows.filter((r) => !existsSync(join(itemDir(repoRoot, r.key), 'item.json')))
+  if (missing.length > 0) {
+    exportCollections(db, repoRoot)
+    exportItems(db, repoRoot, missing.map((r) => r.id))
+  }
+  return missing.length
+}
+
 /** Remove papers/<key> dirs whose item no longer exists in the index db. */
 export function reconcileDeletions(db: Database.Database, repoRoot: string): void {
   const dir = papersDir(repoRoot)
@@ -186,6 +202,12 @@ export function importAll(db: Database.Database, repoRoot: string): void {
     const stale = (db.prepare('SELECT id, key FROM items').all() as Array<{ id: number; key: string }>)
       .filter((r) => !treeKeys.has(r.key))
     for (const r of stale) db.prepare('DELETE FROM items WHERE id = ?').run(r.id)
+
+    // items_fts is an external-content FTS5 table -- direct INSERT/UPDATE/
+    // DELETE on items doesn't maintain it, so rebuild after a bulk import or
+    // full-text search in this workspace would return stale/empty results.
+    try { db.prepare("INSERT INTO items_fts(items_fts) VALUES('rebuild')").run() }
+    catch (err) { console.warn('[WorkspaceFiles] FTS rebuild failed:', err) }
   })()
 }
 

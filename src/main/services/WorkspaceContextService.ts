@@ -12,8 +12,8 @@ import { mkdirSync } from 'fs'
 import { app } from 'electron'
 import { openWorkspaceDb, closeWorkspaceDb, getDb } from '../db'
 import { getWorkspace } from './LocalWorkspaceService'
-import { ensureClone } from './GitWorkspaceService'
-import { importAll } from './WorkspaceFiles'
+import { ensureClone, commitAll, sync } from './GitWorkspaceService'
+import { importAll, exportMissingItems } from './WorkspaceFiles'
 import { grantAccess } from '../security/pathGuard'
 import { emit } from '../core/Notifier'
 
@@ -70,7 +70,25 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
     await ensureClone(repoRoot, ws.repo_owner!, ws.repo_name!)
     grantAccess(repoRoot)
     openWorkspaceDb(join(base, 'index.db'))
-    importAll(getDb(), repoRoot)
+    const db = getDb()
+
+    // Self-healing activation, in this exact order:
+    // 1. Rescue stranded local items (index rows without a tree entry --
+    //    e.g. a crash before the sync debounce fired) into the tree and
+    //    commit, so step 3's tree-as-truth import can't discard them.
+    const recovered = exportMissingItems(db, repoRoot)
+    if (recovered > 0) {
+      console.log(`[WorkspaceContext] recovered ${recovered} stranded local item(s)`)
+      await commitAll(repoRoot, 'veridian: recover local changes')
+    }
+    // 2. Pull remote changes (best-effort -- offline activation still works
+    //    with the last-known tree; ensureClone alone never pulls an
+    //    already-existing clone, which previously left remote data invisible)
+    try { await sync(repoRoot) }
+    catch (err) { console.warn('[WorkspaceContext] initial sync failed (offline?):', (err as Error).message) }
+    // 3. Rebuild the index from the (now up-to-date) tree
+    importAll(db, repoRoot)
+
     active = { id, kind: 'github', repoRoot }
   }
   else {
