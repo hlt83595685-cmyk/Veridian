@@ -16,6 +16,7 @@ import * as Settings from '../services/SettingsService'
 import * as LocalWorkspaces from '../services/LocalWorkspaceService'
 import * as WorkspaceContext from '../services/WorkspaceContextService'
 import * as WorkspaceSync from '../services/WorkspaceSyncService'
+import * as WorkspaceFilesMod from '../services/WorkspaceFiles'
 import * as GitHub from '../services/GitHubService'
 import type { LocalWorkspaceKind } from '../../shared/types'
 import { manualConvertPdfToMd } from '../services/ConversionService'
@@ -185,11 +186,15 @@ export const handlers: Record<IpcChannel, Handler> = {
   // Local workspaces
   'localWorkspaces:list':   () => LocalWorkspaces.listWorkspaces(),
   'localWorkspaces:create': (_e, name: string, kind: LocalWorkspaceKind,
-    repoOwner: string | null, repoName: string | null) =>
-    LocalWorkspaces.createWorkspace(name, kind, repoOwner, repoName),
+    repoOwner: string | null, repoName: string | null, localPath: string | null) =>
+    LocalWorkspaces.createWorkspace(name, kind, repoOwner, repoName, localPath),
   'localWorkspaces:remove': (_e, id: number) => LocalWorkspaces.removeWorkspace(id),
   'workspace:setActive':    (_e, id: number | null) => WorkspaceContext.setActiveWorkspace(id),
   'workspace:syncNow':      () => WorkspaceSync.syncNow(),
+  'workspace:listRepoTree': () => {
+    const ctx = WorkspaceContext.getActiveWorkspace()
+    return ctx.repoRoot ? WorkspaceFilesMod.listRepoTree(ctx.repoRoot) : []
+  },
 
   // GitHub
   'github:setPat':    (_e, pat: string) => GitHub.setPat(pat),

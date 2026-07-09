@@ -107,10 +107,12 @@ export const contract = {
   'localWorkspaces:create': z.tuple([
     z.string().min(1).max(256), z.enum(['local', 'github']),
     z.string().max(256).nullable(), z.string().max(256).nullable(),
+    z.string().max(1024).nullable(),   // user-chosen local storage root
   ]),
   'localWorkspaces:remove': z.tuple([id]),
   'workspace:setActive':    z.tuple([id.nullable()]),
   'workspace:syncNow':      z.tuple([]),
+  'workspace:listRepoTree': z.tuple([]),
 
   // GitHub (data-plane credential, strictly per-device -- never synced)
   'github:setPat':    z.tuple([z.string().max(512)]),   // empty string clears

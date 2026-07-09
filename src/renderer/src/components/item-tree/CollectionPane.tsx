@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useCollectionStore } from '../../stores/collectionStore'
 import { useUiStore } from '../../stores/uiStore'
+import { useWorkspaceStore } from '../../stores/workspaceStore'
+import { RepoTreePane } from '../workspace/RepoTreePane'
 
 // ── SVG icons (inline, no external dep) ────────────────────────────────────
 
@@ -131,6 +133,7 @@ export function CollectionPane(): JSX.Element {
   const { t } = useTranslation('common')
   const { activeCollection, setActiveCollection } = useItemStore()
   const { collections, load, create, rename, remove } = useCollectionStore()
+  const { workspaces, activeWorkspaceId } = useWorkspaceStore()
 
   const [newName, setNewName] = useState('')
   const [adding, setAdding] = useState(false)
@@ -139,7 +142,15 @@ export function CollectionPane(): JSX.Element {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [collectionsOpen, setCollectionsOpen] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; colId: number } | null>(null)
+  const [sideTab, setSideTab] = useState<'collections' | 'repo'>('collections')
   const contextMenuRef = useRef<HTMLDivElement>(null)
+
+  const isGithubWs = workspaces.find((w) => w.id === activeWorkspaceId)?.kind === 'github'
+
+  // Leaving a github workspace removes the tab bar -- snap back to collections
+  useEffect(() => {
+    if (!isGithubWs && sideTab !== 'collections') setSideTab('collections')
+  }, [isGithubWs, sideTab])
 
   const trashFull = collections.length >= 0  // placeholder — real check is item count; always show normal icon for now
 
@@ -263,6 +274,35 @@ export function CollectionPane(): JSX.Element {
       onClick={() => setContextMenu(null)}
     >
     <div style={{ padding: '16px 12px 8px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+      {/* ── Sidebar tabs: collections vs repo files (github workspaces) ── */}
+      {isGithubWs && (
+        <div style={{
+          display: 'flex', gap: 4, marginBottom: 10, padding: 3,
+          borderRadius: 'var(--radius-md)', background: 'var(--muted-bg)',
+        }}>
+          {([['collections', t('sidebar.collectionsTab')], ['repo', t('sidebar.repoTab')]] as const).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setSideTab(id)}
+              style={{
+                flex: 1, height: 26, borderRadius: 7, border: 'none',
+                background: sideTab === id ? 'var(--surface)' : 'transparent',
+                color: sideTab === id ? 'var(--foreground)' : 'var(--muted)',
+                fontSize: 12, fontWeight: sideTab === id ? 600 : 500,
+                boxShadow: sideTab === id ? 'var(--shadow-xs)' : 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isGithubWs && sideTab === 'repo' ? (
+        <RepoTreePane />
+      ) : (
+      <>
       {/* ── My Library header ── */}
       <p style={{
         fontSize: 10, fontWeight: 700, color: 'var(--muted)',
@@ -412,6 +452,8 @@ export function CollectionPane(): JSX.Element {
             onClick={() => { remove(contextMenu.colId); setContextMenu(null) }}
           />
         </div>
+      )}
+      </>
       )}
     </div>
 

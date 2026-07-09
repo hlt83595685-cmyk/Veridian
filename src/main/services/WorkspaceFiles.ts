@@ -91,10 +91,21 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
       id: number; type: string; filename: string | null; path: string | null
       url: string | null; mime_type: string | null
     }>
+    // Canonical naming: locally-managed copies carry UUID filenames (import
+    // dedup) and conversion outputs inherit them -- ugly and meaningless in
+    // a shared repo. Name repo files after the item's PDF instead:
+    //   <original>.pdf / <original>.md / images/
+    const pdfStem = (() => {
+      const pdf = atts.find((a) => a.type === 'pdf' && a.filename)
+      return pdf?.filename?.replace(/\.pdf$/i, '') ?? null
+    })()
     for (const att of atts) {
       if (!att.path) continue
       if (att.path.startsWith(repoRoot)) continue
-      const name = att.filename ?? basename(att.path)
+      let name: string
+      if (att.type === 'imagedir') name = 'images'
+      else if (att.type === 'markdown') name = `${pdfStem ?? 'fulltext'}.md`
+      else name = att.filename ?? basename(att.path)
       const dest = uniquePath(files, name)
       try {
         if (att.type === 'imagedir') cpSync(att.path, dest, { recursive: true })
@@ -156,17 +167,28 @@ export function exportMissingItems(db: Database.Database, repoRoot: string): num
   return missing.length
 }
 
-/** Remove papers/<key> dirs whose item no longer exists in the index db. */
+/**
+ * Remove papers/<key> dirs for items the user EXPLICITLY deleted locally --
+ * driven by the tombstones table (written by ItemService.deleteItem/
+ * emptyTrash), never by "dir not in my index db". The old absence-based rule
+ * couldn't distinguish "I deleted this" from "a collaborator added this and
+ * I haven't pulled it into my index yet", and would push destructive commits
+ * that wiped other people's items. Applied tombstones are cleared so they
+ * don't accumulate.
+ */
 export function reconcileDeletions(db: Database.Database, repoRoot: string): void {
   const dir = papersDir(repoRoot)
   if (!existsSync(dir)) return
-  const known = new Set(
-    (db.prepare('SELECT key FROM items').all() as Array<{ key: string }>).map((r) => r.key)
-  )
-  for (const entry of readdirSync(dir)) {
-    if (!known.has(entry)) {
-      try { rmSync(join(dir, entry), { recursive: true, force: true }) } catch { /* ignore */ }
+  const tombs = db.prepare("SELECT key FROM tombstones WHERE object_type = 'item'")
+    .all() as Array<{ key: string }>
+  if (tombs.length === 0) return
+  const clear = db.prepare("DELETE FROM tombstones WHERE object_type = 'item' AND key = ?")
+  for (const { key } of tombs) {
+    const target = join(dir, key)
+    if (existsSync(target)) {
+      try { rmSync(target, { recursive: true, force: true }) } catch { /* ignore */ }
     }
+    clear.run(key)
   }
 }
 
@@ -183,8 +205,15 @@ export function importAll(db: Database.Database, repoRoot: string): void {
 
     const dir = papersDir(repoRoot)
     const treeKeys = new Set<string>()
+    // Locally-deleted items whose tombstone hasn't been applied/pushed yet
+    // must not be resurrected by an import that runs before the next export
+    const tombstoned = new Set(
+      (db.prepare("SELECT key FROM tombstones WHERE object_type = 'item'")
+        .all() as Array<{ key: string }>).map((r) => r.key)
+    )
     if (existsSync(dir)) {
       for (const entry of readdirSync(dir)) {
+        if (tombstoned.has(entry)) continue
         const jsonPath = join(dir, entry, 'item.json')
         if (!existsSync(jsonPath)) continue
         try {
@@ -329,6 +358,28 @@ function importItem(db: Database.Database, repoRoot: string, json: ItemJson): vo
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(itemId, a.type ?? 'other', a.filename, path, a.url ?? null, a.mime_type ?? null, size)
   }
+}
+
+// ── Repo tree (for the sidebar's repository-files tab) ───────────────────────
+
+export function listRepoTree(repoRoot: string): import('../../shared/types').RepoTreeNode[] {
+  const walk = (dir: string): import('../../shared/types').RepoTreeNode[] => {
+    let entries: string[] = []
+    try { entries = readdirSync(dir) } catch { return [] }
+    const nodes: import('../../shared/types').RepoTreeNode[] = []
+    for (const name of entries) {
+      if (name === '.git') continue
+      const abs = join(dir, name)
+      let isDir = false
+      try { isDir = statSync(abs).isDirectory() } catch { continue }
+      nodes.push(isDir
+        ? { name, absPath: abs, isDir: true, children: walk(abs) }
+        : { name, absPath: abs, isDir: false })
+    }
+    nodes.sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name))
+    return nodes
+  }
+  return walk(repoRoot)
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

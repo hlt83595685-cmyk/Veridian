@@ -65,9 +65,11 @@ export function autoConvertPdfToMd(itemId: number, pdfPath: string): void {
 }
 
 /**
- * Manual conversion from the context menu. If a .md already exists for this
- * PDF, appends a version suffix (-1, -2, ...). Returns an error code when the
- * item has no PDF attachment.
+ * Manual conversion from the context menu. Re-running overwrites the
+ * previous output IN PLACE (same .md path; registerAttachment dedupes the
+ * row) instead of stacking -1/-2 versioned copies -- repeat conversions of
+ * one PDF must not multiply files locally or in a synced workspace repo.
+ * Returns an error code when the item has no PDF attachment.
  */
 export function manualConvertPdfToMd(itemId: number): string | null {
   const attachments = listByItem(itemId)
@@ -77,22 +79,12 @@ export function manualConvertPdfToMd(itemId: number): string | null {
   if (!pdfAtt?.path) return 'no_pdf'
 
   const pdfPath = pdfAtt.path
-  const dir = dirname(pdfPath)
-  const stem = basename(pdfPath, '.pdf')
 
-  const baseMd = join(dir, `${stem}.md`)
-  let outputPath = baseMd
-  if (existsSync(baseMd) || attachments.some((a) => a.path === baseMd)) {
-    let version = 1
-    while (true) {
-      const candidate = join(dir, `${stem}-${version}.md`)
-      if (!existsSync(candidate) && !attachments.some((a) => a.path === candidate)) {
-        outputPath = candidate
-        break
-      }
-      version++
-    }
-  }
+  // Reuse the item's existing markdown output path if there is one
+  const existingMd = attachments.find(
+    (a) => a.path && (a.mime_type === 'text/markdown' || a.filename?.toLowerCase().endsWith('.md'))
+  )
+  const outputPath = existingMd?.path ?? join(dirname(pdfPath), `${basename(pdfPath, '.pdf')}.md`)
 
   enqueue<Pdf2mdPayload>('pdf2md', basename(pdfPath), { itemId, pdfPath, outputPath })
   return null

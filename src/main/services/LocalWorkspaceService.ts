@@ -28,16 +28,17 @@ export function createWorkspace(
   name: string,
   kind: LocalWorkspaceKind,
   repoOwner: string | null,
-  repoName: string | null
+  repoName: string | null,
+  localPath: string | null
 ): LocalWorkspace {
   if (kind === 'github' && (!repoOwner || !repoName)) {
     throw new Error('GitHub workspaces need a bound repository')
   }
   const db = getPersonalDb()
   const info = db.prepare(`
-    INSERT INTO workspaces (name, kind, repo_owner, repo_name)
-    VALUES (?, ?, ?, ?)
-  `).run(name.trim(), kind, kind === 'github' ? repoOwner : null, kind === 'github' ? repoName : null)
+    INSERT INTO workspaces (name, kind, repo_owner, repo_name, local_path)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(name.trim(), kind, kind === 'github' ? repoOwner : null, kind === 'github' ? repoName : null, localPath)
   const ws = db
     .prepare('SELECT * FROM workspaces WHERE id = ?')
     .get(info.lastInsertRowid) as LocalWorkspace

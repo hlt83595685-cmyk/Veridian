@@ -137,7 +137,10 @@ function ConnectRepoSection(): JSX.Element {
     setError(null)
     setInfo(null)
     try {
-      await window.veridian.localWorkspaces.create(repo.name, 'github', repo.owner, repo.name)
+      // First-time setup: let the user choose where the local copy lives
+      // (cancel = app default under userData)
+      const localPath = await window.veridian.tools.pickDir()
+      await window.veridian.localWorkspaces.create(repo.name, 'github', repo.owner, repo.name, localPath)
       await load()
       setInfo(t('workspace.connectRepo.connected', { name: repo.full_name }))
     } catch (err) {
@@ -241,13 +244,15 @@ function CreateSection(): JSX.Element {
     setBusy(true)
     setError(null)
     try {
+      // First-time setup: user-chosen local storage root (cancel = default)
+      const localPath = await window.veridian.tools.pickDir()
       if (kind === 'github') {
         const parsed = parseOwnerRepo(repoUrl)
         if (!parsed) { setError(t('workspace.github.invalidUrl')); return }
-        await window.veridian.localWorkspaces.create(name.trim(), 'github', parsed.owner, parsed.repo)
+        await window.veridian.localWorkspaces.create(name.trim(), 'github', parsed.owner, parsed.repo, localPath)
       }
       else {
-        await window.veridian.localWorkspaces.create(name.trim(), 'local', null, null)
+        await window.veridian.localWorkspaces.create(name.trim(), 'local', null, null, localPath)
       }
       setName(''); setRepoUrl(''); setTestResult(null)
       await load()

@@ -37,8 +37,12 @@ export function getActiveWorkspace(): ActiveWorkspace {
   return active
 }
 
-function workspaceBaseDir(id: number): string {
-  const dir = join(app.getPath('userData'), 'workspaces', String(id))
+function workspaceBaseDir(id: number, localPath: string | null): string {
+  // User-chosen storage root wins; app default otherwise. Either way the
+  // clone and index live together under this directory.
+  const dir = localPath && localPath.trim()
+    ? localPath
+    : join(app.getPath('userData'), 'workspaces', String(id))
   mkdirSync(dir, { recursive: true })
   return dir
 }
@@ -63,7 +67,8 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
   const ws = getWorkspace(id)
   if (!ws) throw new Error(`Workspace ${id} not found`)
 
-  const base = workspaceBaseDir(id)
+  const base = workspaceBaseDir(id, ws.local_path)
+  grantAccess(base)
 
   if (ws.kind === 'github') {
     const repoRoot = join(base, 'repo')

@@ -111,13 +111,14 @@ const veridianAPI = {
   },
   localWorkspaces: {
     list: () => call('localWorkspaces:list'),
-    create: (name: string, kind: string, repoOwner: string | null, repoName: string | null) =>
-      call('localWorkspaces:create', name, kind, repoOwner, repoName),
+    create: (name: string, kind: string, repoOwner: string | null, repoName: string | null, localPath: string | null) =>
+      call('localWorkspaces:create', name, kind, repoOwner, repoName, localPath),
     remove: (id: number) => call('localWorkspaces:remove', id),
   },
   workspace: {
     setActive: (id: number | null) => call('workspace:setActive', id),
     syncNow: () => call('workspace:syncNow'),
+    listRepoTree: () => call('workspace:listRepoTree'),
   },
   github: {
     setPat: (pat: string) => call('github:setPat', pat),

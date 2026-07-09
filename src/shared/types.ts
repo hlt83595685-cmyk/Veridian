@@ -96,7 +96,17 @@ export interface LocalWorkspace {
   kind: LocalWorkspaceKind
   repo_owner: string | null
   repo_name: string | null
+  /** User-chosen storage root for the clone + index; null = app default. */
+  local_path: string | null
   created_at: number
+}
+
+export interface RepoTreeNode {
+  name: string
+  /** Absolute path on this machine (inside the workspace clone). */
+  absPath: string
+  isDir: boolean
+  children?: RepoTreeNode[]
 }
 
 export interface GitHubRepoInfo {

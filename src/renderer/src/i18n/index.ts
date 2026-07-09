@@ -29,11 +29,14 @@ const zh = {
     title: '设置',
     storage: {
       title: '文件存储路径',
-      label: '附件默认保存位置',
+      label: '个人库附件默认保存位置',
       desc: '导入的 PDF 等附件将复制到此目录（留空则使用应用默认路径）',
       placeholder: '使用默认路径（AppData）',
       browse: '选择目录',
       current: '当前路径',
+      workspacesLabel: '工作空间本地存储位置',
+      workspacesDesc: '每个工作空间的仓库克隆与索引存放在以下目录（新建工作空间时选择，未选择则使用应用默认路径）',
+      workspaceDefaultPath: '应用默认路径（AppData/workspaces）',
     },
     language: {
       title: '语言 / Language',
@@ -132,6 +135,9 @@ const zh = {
   sidebar: {
     settings: '设置',
     tools: '工具',
+    collectionsTab: '分类',
+    repoTab: '仓库文件',
+    repoEmpty: '仓库为空',
   },
   page: {
     back: '返回文库',
@@ -212,11 +218,14 @@ const en = {
     title: 'Settings',
     storage: {
       title: 'File Storage Path',
-      label: 'Default attachment location',
+      label: 'Personal library attachment location',
       desc: 'Imported PDFs and attachments will be copied here (leave empty to use the default app path)',
       placeholder: 'Use default path (AppData)',
       browse: 'Browse',
       current: 'Current path',
+      workspacesLabel: 'Workspace storage locations',
+      workspacesDesc: 'Each workspace stores its repository clone and index under the directory below (chosen at creation; app default when unset)',
+      workspaceDefaultPath: 'App default (AppData/workspaces)',
     },
     language: {
       title: 'Language / 语言',
@@ -315,6 +324,9 @@ const en = {
   sidebar: {
     settings: 'Settings',
     tools: 'Tools',
+    collectionsTab: 'Collections',
+    repoTab: 'Repo Files',
+    repoEmpty: 'Repository is empty',
   },
   page: {
     back: 'Back to Library',

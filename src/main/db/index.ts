@@ -252,4 +252,14 @@ function runMigrations(db: Database.Database): void {
       INSERT INTO schema_version VALUES (4);
     `)
   }
+
+  if (current < 5) {
+    // User-chosen local storage root for a workspace's clone + index
+    // (defaults to userData/workspaces/<id> when NULL)
+    const cols = (db.pragma('table_info(workspaces)') as { name: string }[]).map((c) => c.name)
+    if (!cols.includes('local_path')) {
+      db.exec(`ALTER TABLE workspaces ADD COLUMN local_path TEXT`)
+    }
+    db.exec(`INSERT INTO schema_version VALUES (5)`)
+  }
 }

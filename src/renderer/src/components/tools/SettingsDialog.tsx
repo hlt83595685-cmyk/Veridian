@@ -116,11 +116,13 @@ export function SettingsDialog({ initialTab = 'storage', onClose }: Props): JSX.
 export function StorageTab(): JSX.Element {
   const { t } = useTranslation('common')
   const [storagePath, setStoragePath] = useState<string>('')
+  const [workspaces, setWorkspaces] = useState<Array<{ id: number; name: string; kind: string; local_path: string | null }>>([])
 
   useEffect(() => {
     window.veridian.settings.get('storage.path').then((v) => {
       if (typeof v === 'string') setStoragePath(v)
     })
+    window.veridian.localWorkspaces.list().then(setWorkspaces).catch(() => {})
   }, [])
 
   const browse = async (): Promise<void> => {
@@ -161,6 +163,34 @@ export function StorageTab(): JSX.Element {
           </div>
         )}
       </Section>
+
+      {workspaces.length > 0 && (
+        <Section label={t('settings.storage.workspacesLabel')}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+            {t('settings.storage.workspacesDesc')}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {workspaces.map((w) => (
+              <div key={w.id} style={{
+                padding: '7px 10px', borderRadius: 8,
+                border: '1px solid var(--border)', background: 'var(--surface)',
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--foreground)' }}>
+                  {w.name} <span style={{ color: 'var(--muted)', fontWeight: 400 }}>
+                    · {w.kind === 'github' ? 'GitHub' : t('workspace.kindLocal')}
+                  </span>
+                </div>
+                <div style={{
+                  fontSize: 11, color: 'var(--muted)', marginTop: 2,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {w.local_path || t('settings.storage.workspaceDefaultPath')}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
     </div>
   )
 }

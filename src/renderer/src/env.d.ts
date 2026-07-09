@@ -2,7 +2,7 @@
 
 import type {
   Item, Creator, Collection, Tag, Attachment, ImportResult,
-  LocalWorkspace, LocalWorkspaceKind, GitHubRepoInfo,
+  LocalWorkspace, LocalWorkspaceKind, GitHubRepoInfo, RepoTreeNode,
 } from '../../shared/types'
 import type { DomainEvent } from '../../shared/events'
 
@@ -58,13 +58,15 @@ interface VeridianAPI {
   localWorkspaces: {
     list: () => Promise<LocalWorkspace[]>
     create: (
-      name: string, kind: LocalWorkspaceKind, repoOwner: string | null, repoName: string | null
+      name: string, kind: LocalWorkspaceKind, repoOwner: string | null, repoName: string | null,
+      localPath: string | null
     ) => Promise<LocalWorkspace>
     remove: (id: number) => Promise<void>
   }
   workspace: {
     setActive: (id: number | null) => Promise<{ id: number | null; kind: string; repoRoot: string | null }>
     syncNow: () => Promise<void>
+    listRepoTree: () => Promise<RepoTreeNode[]>
   }
   github: {
     setPat: (pat: string) => Promise<void>

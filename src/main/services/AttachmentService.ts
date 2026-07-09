@@ -26,8 +26,22 @@ export function addAttachment(itemId: number, srcPath: string): Attachment {
   return att
 }
 
-// Register an existing file (conversion output) without copying
+function findByPath(itemId: number, path: string): Attachment | undefined {
+  return getDb()
+    .prepare('SELECT * FROM attachments WHERE item_id = ? AND path = ?')
+    .get(itemId, path) as Attachment | undefined
+}
+
+// Register an existing file (conversion output) without copying. Re-running
+// a conversion overwrites the same output path -- dedupe on (item, path) so
+// repeat runs update the file in place instead of stacking duplicate rows,
+// but still emit so the UI and workspace export pick up the new content.
 export function registerAttachment(itemId: number, filePath: string): Attachment {
+  const existing = findByPath(itemId, filePath)
+  if (existing) {
+    emit({ type: 'attachment.changed', itemIds: [itemId] })
+    return existing
+  }
   const att = repoRegister(itemId, filePath)
   appendOp('attachment', att.id, 'create', { itemId, path: att.path })
   emit({ type: 'attachment.changed', itemIds: [itemId] })
@@ -35,6 +49,11 @@ export function registerAttachment(itemId: number, filePath: string): Attachment
 }
 
 export function registerAttachmentDir(itemId: number, dirPath: string, displayName: string): Attachment {
+  const existing = findByPath(itemId, dirPath)
+  if (existing) {
+    emit({ type: 'attachment.changed', itemIds: [itemId] })
+    return existing
+  }
   const att = repoRegisterDir(itemId, dirPath, displayName)
   appendOp('attachment', att.id, 'create', { itemId, path: att.path, kind: 'imagedir' })
   emit({ type: 'attachment.changed', itemIds: [itemId] })
