@@ -73,10 +73,13 @@ export function initWorkspaceSyncService(): void {
     }
 
     ctx.progress('导出更改...')
+    console.log('[WorkspaceSync] export start')
     await exportAndCommit(activeCtx.repoRoot)
+    console.log('[WorkspaceSync] export+commit done')
 
     ctx.progress('与 GitHub 同步中...')
     const { pulled } = await sync(activeCtx.repoRoot)
+    console.log('[WorkspaceSync] network sync done')
 
     if (pulled) {
       ctx.progress('导入远端更改...')
