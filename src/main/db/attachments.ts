@@ -106,13 +106,22 @@ export function getAttachmentPath(id: number): string | null {
   return row?.path ?? null
 }
 
+const MAX_PDF_BYTES = 50 * 1024 * 1024
+
 // Download a PDF from a URL and save as attachment for itemId
 export async function addAttachmentFromUrl(itemId: number, url: string): Promise<Attachment | null> {
   try {
     const resp = await net.fetch(url)
     if (!resp.ok) return null
+    // Reject oversized downloads before buffering when the server declares a
+    // length; the post-buffer check below covers chunked responses.
+    const declared = Number(resp.headers.get('content-length'))
+    if (Number.isFinite(declared) && declared > MAX_PDF_BYTES) return null
     const buf = Buffer.from(await resp.arrayBuffer())
-    if (buf.length < 1024) return null  // too small to be a real PDF
+    if (buf.length < 1024 || buf.length > MAX_PDF_BYTES) return null
+    // Anything without the PDF magic bytes (e.g. an HTML error page served
+    // with status 200) must not be stored as a .pdf attachment.
+    if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') return null
 
     const dir = attachmentsDir()
     const destName = `${randomUUID()}.pdf`

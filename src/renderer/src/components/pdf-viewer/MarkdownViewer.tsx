@@ -4,8 +4,29 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import 'katex/dist/katex.min.css'
 import { dirname, join } from 'path-browserify'
+
+// rehypeRaw renders raw HTML embedded in .md files -- and our .md files come
+// from untrusted sources (MinerU cloud output, collaborator repos synced from
+// GitHub). Sanitize between raw and katex: strips scripts/event handlers but
+// keeps the math classes rehype-katex needs and language- classes on code.
+const sanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    // NOTE: sanitize uses only the FIRST spec per attribute name, so these
+    // REPLACE the defaults (append would be silently ignored).
+    code: [['className', /^language-./, 'math-inline', 'math-display']],
+    span: [['className', 'math', 'math-inline', 'math-display']],
+    div: [['className', 'math', 'math-display']],
+  },
+  protocols: {
+    ...defaultSchema.protocols,
+    src: [...(defaultSchema.protocols?.src ?? []), 'veridian-file'],
+  },
+}
 
 interface Props {
   filePath: string
@@ -133,7 +154,7 @@ export function MarkdownViewer({ filePath }: Props): JSX.Element {
     }}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex, rehypeRaw]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
         components={{
           // Load local images via IPC → blob URL (bypasses all CSP/protocol issues)
           img({ src, alt }) {

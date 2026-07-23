@@ -1,7 +1,7 @@
 // Veridian Connector — service worker
 'use strict'
 
-const API = 'http://127.0.0.1:23119'
+const API = 'http://127.0.0.1:23120'
 
 async function apiGet(path) {
   const r = await fetch(`${API}${path}`, { signal: AbortSignal.timeout(3000) })

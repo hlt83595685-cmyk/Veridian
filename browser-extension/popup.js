@@ -40,7 +40,7 @@
   const ping = await send('PING')
   setStatus(ping?.online)
   if (!ping?.online) {
-    showError('请先启动 Veridian 桌面应用（端口 23119）')
+    showError('请先启动 Veridian 桌面应用（端口 23120）')
     return
   }
 
