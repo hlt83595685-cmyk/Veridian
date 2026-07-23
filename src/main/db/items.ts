@@ -167,10 +167,16 @@ export function emptyTrash(libraryId = 1): number {
 }
 
 export function searchItems(query: string): Item[] {
+  // FTS5 MATCH has its own query syntax -- raw input containing `"`, `(`,
+  // `AND` etc. throws a syntax error. Quote every term (phrase-prefix form
+  // `"term"*`) so any user input is safe and still prefix-matches.
+  const terms = query.split(/\s+/).filter(Boolean)
+  if (terms.length === 0) return []
+  const safe = terms.map((t) => `"${t.replace(/"/g, '""')}"*`).join(' ')
   return getDb().prepare(`
     SELECT i.* FROM items i
     JOIN items_fts ON items_fts.rowid = i.id
     WHERE items_fts MATCH ? AND i.deleted = 0
     ORDER BY rank
-  `).all(query) as Item[]
+  `).all(safe) as Item[]
 }

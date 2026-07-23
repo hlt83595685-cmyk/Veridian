@@ -7,25 +7,53 @@ import { addAttachmentFromUrl } from '../services/AttachmentService'
 import { fetchCrossRefByDoi, searchCrossRefByTitle, CROSSREF_TYPE_MAP } from '../crossref'
 import { setTagsForItem } from '../services/TagService'
 import { autoConvertPdfToMd } from '../services/ConversionService'
+import { emit } from '../core/Notifier'
 
-const PORT = 23119
+// 23120, NOT 23119: 23119 is Zotero's connector port -- squatting on it makes
+// the two apps silently steal each other's browser-extension traffic.
+const PORT = 23120
+const MAX_BODY_BYTES = 1024 * 1024
 let server: http.Server | null = null
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+// Any web page can fetch() 127.0.0.1, so the Origin header is the only thing
+// separating our browser extension (chrome-extension://...) from a drive-by
+// website (http/https origin). Extension origins get CORS headers echoed back;
+// web origins are rejected outright; no Origin (curl, native) passes through.
+function corsFor(req: http.IncomingMessage): Record<string, string> | 'forbidden' {
+  const origin = req.headers.origin
+  if (!origin) return {}
+  if (/^(chrome|moz|safari-web)-extension:\/\//.test(origin)) {
+    return {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      Vary: 'Origin',
+    }
+  }
+  return 'forbidden'
 }
 
-function json(res: http.ServerResponse, status: number, data: unknown): void {
-  res.writeHead(status, { ...CORS_HEADERS, 'Content-Type': 'application/json' })
+function json(
+  res: http.ServerResponse, status: number, data: unknown,
+  cors: Record<string, string> = {}
+): void {
+  // The oversized-body path destroys the socket mid-request; writing the 413
+  // to a dead connection must not throw into the request handler.
+  if (res.destroyed || res.headersSent) return
+  res.writeHead(status, { ...cors, 'Content-Type': 'application/json' })
   res.end(JSON.stringify(data))
 }
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let body = ''
-    req.on('data', (chunk) => (body += chunk))
+    req.on('data', (chunk) => {
+      body += chunk
+      if (body.length > MAX_BODY_BYTES) {
+        req.destroy()
+        reject(new Error('body_too_large'))
+      }
+    })
     req.on('end', () => resolve(body))
     req.on('error', reject)
   })
@@ -103,7 +131,7 @@ async function enrich(input: Partial<EnrichedItem>): Promise<EnrichedItem> {
     type:      type      ?? 'journalArticle',
     title:     title     ?? null,
     abstract:  abstract  ?? null,
-    year:      year ? Number(year) : null,
+    year:      year && Number.isFinite(Number(year)) ? Number(year) : null,
     doi:       doi       ?? null,
     url:       url       ?? null,
     journal:   journal   ?? null,
@@ -123,8 +151,15 @@ async function enrich(input: Partial<EnrichedItem>): Promise<EnrichedItem> {
 
 export function startLocalServer(): void {
   server = http.createServer(async (req, res) => {
+    const cors = corsFor(req)
+    if (cors === 'forbidden') {
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'origin not allowed' }))
+      return
+    }
+
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, CORS_HEADERS)
+      res.writeHead(204, cors)
       res.end()
       return
     }
@@ -134,19 +169,19 @@ export function startLocalServer(): void {
     try {
       // GET /ping
       if (req.method === 'GET' && url === '/ping') {
-        return json(res, 200, { ok: true, app: 'Veridian' })
+        return json(res, 200, { ok: true, app: 'Veridian' }, cors)
       }
 
       // GET /collections
       if (req.method === 'GET' && url === '/collections') {
-        return json(res, 200, { collections: getAllCollections() })
+        return json(res, 200, { collections: getAllCollections() }, cors)
       }
 
       // POST /preview — CrossRef lookup, return enriched metadata (no save)
       if (req.method === 'POST' && url === '/preview') {
         const body = JSON.parse(await readBody(req))
         const item = await enrich(body)
-        return json(res, 200, item)
+        return json(res, 200, item, cors)
       }
 
       // POST /save — enrich + persist
@@ -197,19 +232,29 @@ export function startLocalServer(): void {
           }).catch(() => {})
         }
 
-        return json(res, 201, { success: true, item: saved })
+        return json(res, 201, { success: true, item: saved }, cors)
       }
 
-      json(res, 404, { error: 'not found', url })
+      json(res, 404, { error: 'not found', url }, cors)
     } catch (err) {
       console.error('[server] error:', err)
-      json(res, 500, { error: String(err) })
+      const tooLarge = err instanceof Error && err.message === 'body_too_large'
+      json(res, tooLarge ? 413 : 500, { error: tooLarge ? 'body too large' : String(err) }, cors)
     }
   })
 
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
       console.warn(`[Veridian] Port ${PORT} already in use — server disabled`)
+      // Surface in the status bar instead of failing silently -- delayed so
+      // the BrowserWindow exists by the time the event is broadcast.
+      setTimeout(() => emit({
+        type: 'job.progress',
+        job: {
+          id: 'local-server', type: 'server', label: 'Connector',
+          state: 'error', message: `端口 ${PORT} 被占用，浏览器扩展连接器不可用`, pending: 0,
+        },
+      }), 3000)
     } else {
       console.error('[Veridian] Server error:', err)
     }

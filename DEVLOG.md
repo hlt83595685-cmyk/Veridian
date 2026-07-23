@@ -1,5 +1,46 @@
 # Veridian 开发日志
 
+## 2026-07-24 — 安全与健壮性加固（代码审查后修复）
+
+针对《Project Plan/代码问题清单与修复方案.md》列出的问题逐条修复，均为边界处收口，
+不涉及架构变更。所有改动经端到端实测验证（非仅类型检查）。
+
+### 安全类
+- **本地连接器服务器加固**（`main/server/index.ts`）
+  - 按 `Origin` 鉴别来源：浏览器扩展来源回显 CORS，普通网页来源一律 **403**，
+    无 Origin 的原生请求放行。堵住"任意网页可注入条目 / 触发任意 URL 下载 /
+    消耗 MinerU 配额"的漏洞（原先 `Access-Control-Allow-Origin: *` 且无鉴权）。
+  - 请求体 **1MB 上限**，超限 `destroy` 并返回 413（防内存撑爆）。
+- **PAT 不再对渲染层暴露**（`main/ipc/handlers.ts`）：`settings:get` 拒绝返回
+  `github.pat` / `controlPlane.session`；UI 本就只依赖 `github:getStatus` 的 `hasPat`。
+- **settings 写入白名单**（`main/ipc/handlers.ts`）：`settings:set` 仅允许 pdf2md 相关键；
+  `storage.path` 只能清空，真实路径必须经原生对话框（`settings:pickStoragePath`），
+  避免渲染层把文件白名单扩到任意目录。
+- **Markdown XSS 收口**（`renderer/.../MarkdownViewer.tsx`）：`rehype-raw` 之后接入
+  `rehype-sanitize`（顺序 raw → sanitize → katex）。.md 来源不可信（MinerU 输出、
+  GitHub 协作仓库同步文件），sanitize 剥离 `<script>` / `onerror` / `javascript:` 等，
+  同时保留 KaTeX 所需 class、代码块 `language-*`、`veridian-file://` 图片协议。
+- **openExternal 协议校验**（`handlers.ts` + `main/index.ts`）：仅放行 http/https。
+
+### 正确性 / 健壮性
+- **连接器端口 23119 → 23120**（server + 扩展 manifest/background/popup + 文档）：
+  23119 是 Zotero connector 端口，共存时会互相截流量；改独立端口，且被占用时
+  经状态栏提示而非静默禁用。
+- **FTS5 搜索转义**（`main/db/items.ts`）：用户输入按词包成 `"term"*` 短语前缀，
+  含 `"` `(` `AND` 等特殊字符不再抛语法错误。
+- **URL 下载附件校验**（`main/db/attachments.ts`）：校验 `%PDF-` 魔数 + 50MB 上限
+  （含 content-length 预检），HTML 错误页不再被存成 .pdf。
+- **CrossRef year 防 NaN**（`server/index.ts`）：非有限数值写入 null。
+
+### 文档
+- `CLAUDE.md`：修正 IPC 路径（`ipc/gateway.ts` + `handlers.ts`）、扩展目录名
+  （`browser-extension/`）、端口号。
+
+### 依赖
+- 新增 `rehype-sanitize`。
+
+---
+
 ## 2026-06-09 — Phase 0 完成：项目脚手架
 
 ### 完成内容

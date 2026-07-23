@@ -18,7 +18,7 @@ src/
     sync/        -- GitHub sync logic (Phase 4)
     server/      -- Local HTTP connector (localhost:23120)
     plugin-host/ -- Plugin sandbox manager (Phase 5)
-    ipc.ts       -- IPC handler registration
+    ipc/         -- gateway.ts (zod-validated channel registration) + handlers.ts
     index.ts     -- App entry point
   renderer/      -- React UI (Chromium sandbox)
     index.html
@@ -34,7 +34,7 @@ src/
       styles/         -- globals.css (Tailwind + CSS vars)
   preload/       -- contextBridge API surface (window.veridian)
   shared/        -- Types shared between main and renderer
-extension/       -- Browser extension (MV3, Phase 3)
+browser-extension/ -- Browser extension (MV3, Phase 3)
 plugins/         -- Example plugins (Phase 5)
 ```
 
@@ -61,7 +61,7 @@ npm test           # Vitest unit tests
 ## Architecture Rules
 
 - Renderer never accesses Node.js APIs directly — only via `window.veridian.*`
-- All privileged operations go through IPC handlers in `src/main/ipc.ts`
+- All privileged operations go through IPC handlers in `src/main/ipc/handlers.ts` (registered via `gateway.ts`)
 - State lives in Zustand stores; no prop drilling beyond 2 levels
 - i18n keys live in `src/renderer/src/i18n/locales/{zh,en}/common.json`
 

@@ -32,6 +32,19 @@ function ownerWindow(event: IpcMainInvokeEvent): BrowserWindow | undefined {
 
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'])
 
+// Secrets the renderer must never read back: it has no UI need for either
+// (github:getStatus already reports hasPat), and blocking them here means a
+// compromised renderer cannot exfiltrate the PAT. The MinerU token stays
+// readable -- the Tools page legitimately prefills its input with it.
+const RENDERER_BLOCKED_SETTINGS = new Set(['github.pat', 'controlPlane.session'])
+
+// Keys the renderer may write. Everything else -- notably storage.path, which
+// widens the pathGuard whitelist -- must go through a dedicated channel
+// (settings:pickStoragePath) so the value is always a user-picked directory.
+const RENDERER_WRITABLE_SETTINGS = new Set([
+  'tool.pdf2md.enabled', 'tool.pdf2md.mode', 'tool.pdf2md.apiToken',
+])
+
 function collectImages(dir: string): string[] {
   const out: string[] = []
   try {
@@ -136,8 +149,15 @@ export const handlers: Record<IpcChannel, Handler> = {
   'pdfjs:workerPath': () => require.resolve('pdfjs-dist/build/pdf.worker.min.mjs'),
 
   // Settings
-  'settings:get': (_e, key: string) => Settings.getSetting(key),
-  'settings:set': (_e, key: string, value: unknown) => Settings.setSetting(key, value),
+  'settings:get': (_e, key: string) =>
+    RENDERER_BLOCKED_SETTINGS.has(key) ? null : Settings.getSetting(key),
+  'settings:set': (_e, key: string, value: unknown) => {
+    if (RENDERER_WRITABLE_SETTINGS.has(key)) return Settings.setSetting(key, value)
+    // storage.path may only be CLEARED from the renderer; setting a real path
+    // happens via the native dialog in settings:pickStoragePath.
+    if (key === 'storage.path' && value === '') return Settings.setSetting(key, value)
+    throw new Error(`Setting '${key}' cannot be written from the renderer`)
+  },
   'settings:pickStoragePath': async (e) => {
     const result = await dialog.showOpenDialog(ownerWindow(e)!, {
       title: '选择文件存储目录',
@@ -148,8 +168,12 @@ export const handlers: Record<IpcChannel, Handler> = {
     return result.filePaths[0]
   },
 
-  // Tools / conversion
-  'shell:openExternal': (_e, url: string) => shell.openExternal(url),
+  // Tools / conversion -- only web URLs; file:// or custom schemes from a
+  // compromised renderer must not reach the OS shell.
+  'shell:openExternal': (_e, url: string) => {
+    if (!/^https?:\/\//i.test(url)) throw new Error('Only http/https URLs can be opened')
+    shell.openExternal(url)
+  },
   'tool:pick-pdf': async (e) => {
     const result = await dialog.showOpenDialog(ownerWindow(e)!, {
       title: '选择 PDF 文件',
