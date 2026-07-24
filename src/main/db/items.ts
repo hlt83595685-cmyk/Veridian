@@ -25,6 +25,29 @@ export interface Item {
   version: number
 }
 
+/**
+ * Canonical DOI form for duplicate detection: strip resolver prefixes
+ * (https://doi.org/, doi:) and lowercase. DOIs are case-insensitive per the
+ * spec; the same paper arrives as "10.1234/X" from a PDF and
+ * "https://doi.org/10.1234/x" from a browser page.
+ */
+export function normalizeDoi(doi: string): string {
+  return doi.trim()
+    .replace(/^https?:\/\/(dx\.)?doi\.org\//i, '')
+    .replace(/^doi:\s*/i, '')
+    .toLowerCase()
+}
+
+/** Duplicate check: active (non-trashed) item with the same normalized DOI. */
+export function findItemByDoi(doi: string): Item | undefined {
+  const norm = normalizeDoi(doi)
+  if (!norm) return undefined
+  const candidates = getDb()
+    .prepare('SELECT * FROM items WHERE doi IS NOT NULL AND deleted = 0')
+    .all() as Item[]
+  return candidates.find((it) => it.doi && normalizeDoi(it.doi) === norm)
+}
+
 export function getAllItems(libraryId = 1): Item[] {
   return getDb()
     .prepare('SELECT * FROM items WHERE library_id = ? AND deleted = 0 ORDER BY updated_at DESC')

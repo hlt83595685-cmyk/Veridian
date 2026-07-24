@@ -5,6 +5,8 @@ import {
   addAttachmentFromUrl as repoAddFromUrl,
   type Attachment,
 } from '../db/attachments'
+import { statSync } from 'fs'
+import { basename } from 'path'
 import { getDb } from '../db'
 import { appendOp } from '../db/oplog'
 import { emit } from '../core/Notifier'
@@ -32,30 +34,56 @@ function findByPath(itemId: number, path: string): Attachment | undefined {
     .get(itemId, path) as Attachment | undefined
 }
 
+// Conversion outputs are singletons per item: an item has AT MOST one
+// markdown attachment and one imagedir. Path-based dedupe alone is not
+// enough -- after a workspace sync relocates the attachment row into the
+// repo, a re-conversion writes to a NEW local path and would insert a second
+// row (which the exporter then dumps into the repo as foo-1.md / images-1).
+// So: if a row of the same type exists anywhere, repoint it instead.
+function findByType(itemId: number, type: string): Attachment | undefined {
+  return getDb()
+    .prepare('SELECT * FROM attachments WHERE item_id = ? AND type = ? ORDER BY id')
+    .get(itemId, type) as Attachment | undefined
+}
+
+function repointRow(att: Attachment, newPath: string, filename: string): Attachment {
+  let size: number | null = null
+  try { size = statSync(newPath).isDirectory() ? null : statSync(newPath).size } catch { /* ignore */ }
+  getDb().prepare('UPDATE attachments SET path = ?, filename = ?, size = ? WHERE id = ?')
+    .run(newPath, filename, size, att.id)
+  appendOp('attachment', att.id, 'modify', { itemId: att.item_id, path: newPath })
+  return { ...att, path: newPath, filename, size }
+}
+
 // Register an existing file (conversion output) without copying. Re-running
-// a conversion overwrites the same output path -- dedupe on (item, path) so
-// repeat runs update the file in place instead of stacking duplicate rows,
-// but still emit so the UI and workspace export pick up the new content.
+// a conversion updates the item's single markdown row in place instead of
+// stacking duplicate rows; still emits so the UI and workspace export pick
+// up the new content.
 export function registerAttachment(itemId: number, filePath: string): Attachment {
-  const existing = findByPath(itemId, filePath)
+  const isMd = filePath.toLowerCase().endsWith('.md')
+  const existing = isMd ? findByType(itemId, 'markdown') : findByPath(itemId, filePath)
+  let att: Attachment
   if (existing) {
-    emit({ type: 'attachment.changed', itemIds: [itemId] })
-    return existing
+    att = existing.path === filePath
+      ? existing
+      : repointRow(existing, filePath, basename(filePath))
+  } else {
+    att = repoRegister(itemId, filePath)
+    appendOp('attachment', att.id, 'create', { itemId, path: att.path })
   }
-  const att = repoRegister(itemId, filePath)
-  appendOp('attachment', att.id, 'create', { itemId, path: att.path })
   emit({ type: 'attachment.changed', itemIds: [itemId] })
   return att
 }
 
 export function registerAttachmentDir(itemId: number, dirPath: string, displayName: string): Attachment {
-  const existing = findByPath(itemId, dirPath)
+  const existing = findByType(itemId, 'imagedir')
+  let att: Attachment
   if (existing) {
-    emit({ type: 'attachment.changed', itemIds: [itemId] })
-    return existing
+    att = existing.path === dirPath ? existing : repointRow(existing, dirPath, displayName)
+  } else {
+    att = repoRegisterDir(itemId, dirPath, displayName)
+    appendOp('attachment', att.id, 'create', { itemId, path: att.path, kind: 'imagedir' })
   }
-  const att = repoRegisterDir(itemId, dirPath, displayName)
-  appendOp('attachment', att.id, 'create', { itemId, path: att.path, kind: 'imagedir' })
   emit({ type: 'attachment.changed', itemIds: [itemId] })
   return att
 }

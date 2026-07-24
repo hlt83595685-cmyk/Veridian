@@ -102,14 +102,25 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
     for (const att of atts) {
       if (!att.path) continue
       if (att.path.startsWith(repoRoot)) continue
+      // Conversion outputs (markdown/imagedir) are singletons per item with
+      // CANONICAL names -- a re-conversion must overwrite the previous repo
+      // copy, never stack foo-1.md / images-1 next to it. Only real user
+      // files (PDFs etc.) get uniquePath collision handling.
+      const isConversion = att.type === 'imagedir' || att.type === 'markdown'
       let name: string
       if (att.type === 'imagedir') name = 'images'
       else if (att.type === 'markdown') name = `${pdfStem ?? 'fulltext'}.md`
       else name = att.filename ?? basename(att.path)
-      const dest = uniquePath(files, name)
+      const dest = isConversion ? join(files, name) : uniquePath(files, name)
       try {
-        if (att.type === 'imagedir') cpSync(att.path, dest, { recursive: true })
-        else copyFileSync(att.path, dest)
+        if (att.type === 'imagedir') {
+          // cpSync onto an existing dir MERGES old and new contents -- stale
+          // images from the previous conversion would survive. Clean first.
+          if (existsSync(dest)) rmSync(dest, { recursive: true, force: true })
+          cpSync(att.path, dest, { recursive: true })
+        } else {
+          copyFileSync(att.path, dest)   // plain overwrite for files
+        }
         db.prepare('UPDATE attachments SET path = ?, filename = ? WHERE id = ?')
           .run(dest, basename(dest), att.id)
         att.path = dest

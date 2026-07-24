@@ -1,5 +1,44 @@
 # Veridian 开发日志
 
+## 2026-07-24 — 重复文献检测合并 + 转换附件堆积修复（v0.1.2）
+
+同步设计审查（见对话记录）发现的两个数据完整性问题，均在软件端修复后再同步——
+GitHub 仓库只做存储，不承担业务逻辑。
+
+### 重复文献检测（导入查重，之前完全没有）
+两道闸，全部在创建条目**之前**拦截：
+1. **文件 MD5 精确匹配**（`db/attachments.ts`）：PDF 入库时计算 MD5 存入 `md5` 列
+   （schema v1 就有此列，此前从未使用，零迁移）。`importPDF` 入口先查
+   `findItemIdByMd5`——同一文件第二次导入直接跳过（可选加入目标分类）。
+2. **DOI 归一化匹配**（`db/items.ts` `normalizeDoi`/`findItemByDoi`）：剥离
+   `https://doi.org/`、`doi:` 前缀并小写后比对。命中时**合并而非新建**：
+   已有条目无 PDF 附件则把本次文件附上并触发转换（对应"扩展先存网页、
+   后补 PDF"的常见流程）。浏览器扩展 `/save` 同样查重，重复保存返回
+   `duplicated: true` + 原条目，不再产生第二个 `papers/<key>/` 目录。
+
+### 转换附件堆积修复（重转 markdown 不再产生 foo-1.md / images-1）
+根因链：workspace 同步把附件行 relocate 进 repo（copy 而非 move）→ 本地旧输出
+文件仍在 → `autoConvertPdfToMd` 的"已转换"判断用路径相等而路径已变 → 注册出
+第二条 markdown 行 → 导出时 `uniquePath` 避让出 `foo-1.md`。三处配合修复：
+- `ConversionService.autoConvertPdfToMd`：改按**类型**判断已转换（存在 markdown
+  附件即跳过），不再依赖路径相等。
+- `AttachmentService.registerAttachment/registerAttachmentDir`：markdown/imagedir
+  是每条目**单例**——已有同类型行时改指(repoint)该行到新路径，绝不插第二行。
+- `WorkspaceFiles.exportItems`：转换类附件用**固定名覆盖**搬运（md 直接覆盖、
+  imagedir 先删后拷防新旧图片合并残留）；`uniquePath` 只留给真正的用户文件（PDF 等）。
+
+### 验证
+- typecheck（node+web）相对基线零新增错误。
+- 端到端实测（dev + 本地连接器）：同一 DOI 连续 `/save` 两次，第二次带
+  `https://doi.org/` 前缀 + 全大写，返回 `duplicated: true` 且条目 id 不变。
+- 测试数据已从 dev 库清理。
+
+### 遗留
+- BibTeX / CSL-JSON 批量导入路径暂未接 DOI 查重（入口在 `importer.ts`，
+  后续版本补）。
+
+---
+
 ## 2026-07-24 — 安全与健壮性加固（代码审查后修复）
 
 针对《Project Plan/代码问题清单与修复方案.md》列出的问题逐条修复，均为边界处收口，

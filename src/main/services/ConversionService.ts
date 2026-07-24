@@ -54,7 +54,11 @@ export function autoConvertPdfToMd(itemId: number, pdfPath: string): void {
   const mdPath = join(dirname(pdfPath), `${basename(pdfPath, '.pdf')}.md`)
   const existing = listByItem(itemId)
 
-  if (existing.some((a) => a.path === mdPath)) return
+  // "Already converted" must be judged by TYPE, not path equality: after a
+  // workspace sync relocates the markdown row into the repo its path no
+  // longer matches mdPath, and the old check would re-convert (and stack a
+  // second markdown attachment) on every subsequent import touching the item.
+  if (existing.some((a) => a.type === 'markdown')) return
   if (existsSync(mdPath)) {
     grantAccess(mdPath)
     registerAttachment(itemId, mdPath)

@@ -1,5 +1,6 @@
 import http from 'http'
 import { createItem } from '../services/ItemService'
+import { findItemByDoi } from '../db/items'
 import { setCreatorsForItem } from '../services/CreatorService'
 import { getAllCollections } from '../db/collections'
 import { addItemToCollection } from '../services/CollectionService'
@@ -189,6 +190,19 @@ export function startLocalServer(): void {
         const body = JSON.parse(await readBody(req))
         const { collectionId, ...rest } = body
         const item = await enrich(rest)
+
+        // Dedup: the library already has this DOI -- don't create a second
+        // item (and a second papers/<key> dir in synced workspaces). Saving
+        // the same page twice from the extension is the most common path here.
+        if (item.doi) {
+          const existing = findItemByDoi(item.doi)
+          if (existing) {
+            if (collectionId) {
+              try { addItemToCollection(Number(collectionId), existing.id) } catch { /* ok */ }
+            }
+            return json(res, 200, { success: true, duplicated: true, item: existing }, cors)
+          }
+        }
 
         const saved = createItem({
           type:      item.type,

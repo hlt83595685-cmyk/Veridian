@@ -1,12 +1,30 @@
 import { readFileSync } from 'fs'
 import { basename } from 'path'
-import { createItem } from './db/items'
+import { createItem, findItemByDoi } from './db/items'
 import { setCreatorsForItem } from './db/creators'
-import { addAttachment } from './db/attachments'
+import { addAttachment, fileMd5, findItemIdByMd5, getAttachmentsByItem } from './db/attachments'
 import { addItemToCollection } from './db/collections'
 import { setTagsForItem } from './db/tags'
 import { fetchCrossRefByDoi, searchCrossRefByTitle, CROSSREF_TYPE_MAP, type CrossRefWork } from './crossref'
 import { autoConvertPdfToMd } from './services/ConversionService'
+import { emit } from './core/Notifier'
+
+/**
+ * Duplicate handling shared by both import branches. Returns the number of
+ * NEW items created (0 for duplicates -- the repo must not grow a second
+ * papers/<key> dir for the same paper).
+ *
+ * DOI hit on an item without a PDF = merge: attach this file to it. That is
+ * the common "saved via browser extension first, imported the PDF later"
+ * flow, and the whole point of doing dedup app-side before anything syncs.
+ */
+function mergeIntoExisting(existingId: number, filePath: string): void {
+  const hasPdf = getAttachmentsByItem(existingId).some((a) => a.type === 'pdf')
+  if (hasPdf) return
+  addAttachment(existingId, filePath)
+  emit({ type: 'attachment.changed', itemIds: [existingId] })
+  autoConvertPdfToMd(existingId, filePath)
+}
 
 // ── PDF text extraction via pdf-parse ───────────────────────────────────────
 
@@ -127,6 +145,18 @@ function splitKeywords(raw: string): string[] {
 // ── Main export ──────────────────────────────────────────────────────────────
 
 export async function importPDF(filePath: string, collectionId?: number): Promise<number> {
+  // Dedup gate 1 -- exact file: this byte-identical PDF is already attached
+  // to an active item. Cheapest check, catches "imported the same file twice".
+  const md5 = fileMd5(filePath)
+  if (md5) {
+    const owner = findItemIdByMd5(md5)
+    if (owner !== null) {
+      console.log(`[pdfImporter] duplicate file (md5=${md5.slice(0, 8)}…) already on item ${owner} -- skipping`)
+      if (collectionId) { try { addItemToCollection(collectionId, owner) } catch { /* already in */ } }
+      return 0
+    }
+  }
+
   let text: string
   try {
     text = await extractPdfText(filePath)
@@ -158,6 +188,20 @@ export async function importPDF(filePath: string, collectionId?: number): Promis
     console.log('[pdfImporter] No DOI match, trying CrossRef title search...')
     work = await searchCrossRefByTitle(localMeta.title)
     console.log(`[pdfImporter] CrossRef title search: ${work ? 'OK' : 'no match'}`)
+  }
+
+  // Dedup gate 2 -- DOI: the library already has this paper (possibly saved
+  // via the browser extension, or imported from BibTeX). Never create a
+  // second item; merge the PDF into the existing one if it has none.
+  const effectiveDoi = work?.DOI ?? doi
+  if (effectiveDoi) {
+    const existing = findItemByDoi(effectiveDoi)
+    if (existing) {
+      console.log(`[pdfImporter] duplicate DOI ${effectiveDoi} -> item ${existing.id} ("${existing.title}") -- merging instead of creating`)
+      mergeIntoExisting(existing.id, filePath)
+      if (collectionId) { try { addItemToCollection(collectionId, existing.id) } catch { /* already in */ } }
+      return 0
+    }
   }
 
   if (work) {

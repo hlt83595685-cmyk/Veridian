@@ -1,6 +1,6 @@
-import { copyFileSync, mkdirSync, statSync, unlinkSync, writeFileSync } from 'fs'
+import { copyFileSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { join, basename, extname } from 'path'
-import { randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { app, net } from 'electron'
 import { getDb } from './index'
 
@@ -13,6 +13,27 @@ export interface Attachment {
   url: string | null
   mime_type: string | null
   size: number | null
+  md5: string | null
+}
+
+/** Content hash for duplicate detection (schema has carried md5 since v1). */
+export function fileMd5(filePath: string): string | null {
+  try { return createHash('md5').update(readFileSync(filePath)).digest('hex') }
+  catch { return null }
+}
+
+/**
+ * Duplicate check: does any active item already hold a file with this hash?
+ * Returns the owning item id, or null.
+ */
+export function findItemIdByMd5(md5: string): number | null {
+  const row = getDb().prepare(`
+    SELECT a.item_id FROM attachments a
+    JOIN items i ON i.id = a.item_id
+    WHERE a.md5 = ? AND i.deleted = 0
+    LIMIT 1
+  `).get(md5) as { item_id: number } | undefined
+  return row?.item_id ?? null
 }
 
 function attachmentsDir(): string {
@@ -43,9 +64,9 @@ export function addAttachment(itemId: number, srcPath: string): Attachment {
   const type = ext === '.pdf' ? 'pdf' : 'other'
 
   db.prepare(`
-    INSERT INTO attachments (item_id, type, filename, path, mime_type, size)
-    VALUES (@item_id, @type, @filename, @path, @mime_type, @size)
-  `).run({ item_id: itemId, type, filename, path: destPath, mime_type: mime, size })
+    INSERT INTO attachments (item_id, type, filename, path, mime_type, size, md5)
+    VALUES (@item_id, @type, @filename, @path, @mime_type, @size, @md5)
+  `).run({ item_id: itemId, type, filename, path: destPath, mime_type: mime, size, md5: fileMd5(destPath) })
 
   const id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id
   return db.prepare('SELECT * FROM attachments WHERE id = ?').get(id) as Attachment
@@ -134,9 +155,13 @@ export async function addAttachmentFromUrl(itemId: number, url: string): Promise
 
     const db = getDb()
     db.prepare(`
-      INSERT INTO attachments (item_id, type, filename, path, mime_type, size)
-      VALUES (@item_id, @type, @filename, @path, @mime_type, @size)
-    `).run({ item_id: itemId, type: 'pdf', filename, path: destPath, mime_type: 'application/pdf', size: buf.length })
+      INSERT INTO attachments (item_id, type, filename, path, mime_type, size, md5)
+      VALUES (@item_id, @type, @filename, @path, @mime_type, @size, @md5)
+    `).run({
+      item_id: itemId, type: 'pdf', filename, path: destPath,
+      mime_type: 'application/pdf', size: buf.length,
+      md5: createHash('md5').update(buf).digest('hex'),
+    })
 
     const id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id
     return db.prepare('SELECT * FROM attachments WHERE id = ?').get(id) as Attachment
