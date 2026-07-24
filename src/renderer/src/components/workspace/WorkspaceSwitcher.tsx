@@ -12,15 +12,24 @@ export function WorkspaceSwitcher(): JSX.Element {
   const { workspaces, activeWorkspaceId, switching, switchError, load, setActiveWorkspace } = useWorkspaceStore()
   const [open, setOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [identity, setIdentity] = useState<{ authed: boolean; login: string | null; avatarUrl: string | null }>(
+    { authed: false, login: null, avatarUrl: null }
+  )
   const rootRef = useRef<HTMLDivElement>(null)
 
   const activeWs = workspaces.find((w) => w.id === activeWorkspaceId)
 
   useEffect(() => {
     load()
+    const refreshIdentity = (): void => {
+      window.veridian.github.getStatus().then((s) =>
+        setIdentity({ authed: s.authed, login: s.login, avatarUrl: s.avatarUrl }))
+    }
+    refreshIdentity()
     // workspace.changed events (create/remove from the dialog) refresh the list
     const onEvent = (e: { type: string }): void => {
       if (e.type === 'workspace.changed') load()
+      if (e.type === 'github.authChanged') refreshIdentity()
     }
     window.veridian.onDomainEvent(onEvent)
     return () => window.veridian.offDomainEvent(onEvent)
@@ -70,6 +79,20 @@ export function WorkspaceSwitcher(): JSX.Element {
           borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-lg)', padding: 4,
         }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '7px 12px', fontSize: 12, color: 'var(--muted)',
+            borderBottom: '1px solid var(--separator)', marginBottom: 4,
+          }}>
+            {identity.authed && identity.avatarUrl ? (
+              <>
+                <img src={identity.avatarUrl} alt="" width={18} height={18} style={{ borderRadius: '50%' }} />
+                <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{identity.login}</span>
+              </>
+            ) : (
+              <span>{t('workspace.github.notConnected')}</span>
+            )}
+          </div>
           <Row
             label={t('workspace.personalLibrary')}
             active={activeWorkspaceId === null}

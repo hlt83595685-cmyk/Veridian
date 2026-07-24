@@ -9,38 +9,43 @@ import { useTranslation } from 'react-i18next'
 // for a possible future cloud-account mode.)
 export function WorkspaceSettingsTab(): JSX.Element {
   const { t } = useTranslation('common')
-  const [ghStatus, setGhStatus] = useState<{ hasPat: boolean; login: string | null; error: string | null }>(
-    { hasPat: false, login: null, error: null }
+  const [status, setStatus] = useState<{ authed: boolean; login: string | null; avatarUrl: string | null; error: string | null }>(
+    { authed: false, login: null, avatarUrl: null, error: null }
   )
-  const [pat, setPat] = useState('')
+  const [pending, setPending] = useState<{ userCode: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
   const refresh = async (): Promise<void> => {
-    setGhStatus(await window.veridian.github.getStatus())
+    setStatus(await window.veridian.github.getStatus())
   }
 
-  useEffect(() => { refresh() }, [])
+  useEffect(() => {
+    refresh()
+    const onEvent = (e: { type: string }): void => {
+      if (e.type === 'github.authChanged') { setPending(null); setBusy(false); refresh() }
+    }
+    window.veridian.onDomainEvent(onEvent)
+    return () => window.veridian.offDomainEvent(onEvent)
+  }, [])
 
-  const save = async (): Promise<void> => {
-    if (!pat.trim()) return
+  const login = async (): Promise<void> => {
     setBusy(true)
     try {
-      await window.veridian.github.setPat(pat.trim())
-      setPat('')
-      await refresh()
-    } finally {
+      const { userCode } = await window.veridian.github.loginStart()
+      setPending({ userCode })
+    } catch {
       setBusy(false)
     }
   }
 
-  const clear = async (): Promise<void> => {
-    setBusy(true)
-    try {
-      await window.veridian.github.setPat('')
-      await refresh()
-    } finally {
-      setBusy(false)
-    }
+  const cancelLogin = async (): Promise<void> => {
+    await window.veridian.github.loginCancel()
+    setPending(null); setBusy(false)
+  }
+
+  const logout = async (): Promise<void> => {
+    await window.veridian.github.logout()
+    await refresh()
   }
 
   return (
@@ -50,37 +55,48 @@ export function WorkspaceSettingsTab(): JSX.Element {
           {t('workspace.github.desc')}
         </div>
 
-        {ghStatus.hasPat && ghStatus.login ? (
+        {status.authed && status.login ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-green)' }}>
-              {t('workspace.github.connectedAs', { login: ghStatus.login })}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {status.avatarUrl && (
+                <img src={status.avatarUrl} alt="" width={22} height={22}
+                  style={{ borderRadius: '50%' }} />
+              )}
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-green)' }}>
+                {t('workspace.github.connectedAs', { login: status.login })}
+              </span>
             </span>
-            <button onClick={clear} disabled={busy} style={secondaryBtnStyle}>
-              {t('workspace.github.clear')}
+            <button onClick={logout} style={secondaryBtnStyle}>
+              {t('workspace.github.logout')}
+            </button>
+          </div>
+        ) : pending ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--foreground)' }}>
+              {t('workspace.github.deviceHint')}
+            </div>
+            <div style={{
+              fontSize: 22, fontWeight: 700, letterSpacing: '0.15em',
+              fontFamily: 'ui-monospace, monospace', color: 'var(--primary)',
+              padding: '8px 12px', background: 'var(--surface)', borderRadius: 8,
+              textAlign: 'center', userSelect: 'all',
+            }}>
+              {pending.userCode}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+              {t('workspace.github.deviceWaiting')}
+            </div>
+            <button onClick={cancelLogin} style={secondaryBtnStyle}>
+              {t('workspace.github.cancel')}
             </button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <input
-              value={pat}
-              onChange={(e) => setPat(e.target.value)}
-              placeholder={t('workspace.github.patPlaceholder')}
-              type="password"
-              style={inputStyle}
-            />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <button onClick={save} disabled={busy} style={primaryBtnStyle}>
-                {t('workspace.github.save')}
-              </button>
-              <button
-                onClick={() => window.veridian.tools.openExternal('https://github.com/settings/personal-access-tokens/new')}
-                style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: 12, cursor: 'pointer' }}
-              >
-                {t('workspace.github.openTokenPage')}
-              </button>
-            </div>
-            {ghStatus.hasPat && ghStatus.error && (
-              <div style={{ fontSize: 12, color: 'var(--accent)' }}>{ghStatus.error}</div>
+            <button onClick={login} disabled={busy} style={primaryBtnStyle}>
+              {t('workspace.github.loginButton')}
+            </button>
+            {status.error && (
+              <div style={{ fontSize: 12, color: 'var(--accent)' }}>{status.error}</div>
             )}
           </div>
         )}
@@ -108,12 +124,6 @@ function Section({ label, children }: { label: string; children: React.ReactNode
       </div>
     </div>
   )
-}
-
-const inputStyle: React.CSSProperties = {
-  height: 32, padding: '0 10px', borderRadius: 8,
-  border: '1px solid var(--border)', background: 'var(--surface)',
-  fontSize: 12, color: 'var(--foreground)',
 }
 
 const primaryBtnStyle: React.CSSProperties = {

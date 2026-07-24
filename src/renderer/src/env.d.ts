@@ -69,8 +69,10 @@ interface VeridianAPI {
     listRepoTree: () => Promise<RepoTreeNode[]>
   }
   github: {
-    setPat: (pat: string) => Promise<void>
-    getStatus: () => Promise<{ hasPat: boolean; login: string | null; error: string | null }>
+    loginStart: () => Promise<{ userCode: string; verificationUri: string }>
+    loginCancel: () => Promise<void>
+    logout: () => Promise<void>
+    getStatus: () => Promise<{ authed: boolean; login: string | null; avatarUrl: string | null; error: string | null }>
     testRepo: (repoUrl: string) => Promise<{
       ok: boolean
       code: 'ok_write' | 'ok_read' | 'no_pat' | 'invalid_url' | 'not_found' | 'http_error' | 'network'
