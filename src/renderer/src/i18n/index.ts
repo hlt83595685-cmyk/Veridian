@@ -69,6 +69,7 @@ const zh = {
   },
   item: {
     untitled: '（无标题）',
+    conversionFailed: '转换失败，未同步',
     emptyTitle: '暂无文献',
     empty: '暂无文献，点击「添加条目」开始',
     listHeader: '共 {{count}} 篇文献',
@@ -260,6 +261,7 @@ const en = {
   },
   item: {
     untitled: '(Untitled)',
+    conversionFailed: 'Conversion failed — not synced',
     emptyTitle: 'No References',
     empty: 'No items yet. Click "Add Item" to get started.',
     listHeader: '{{count}} item(s)',

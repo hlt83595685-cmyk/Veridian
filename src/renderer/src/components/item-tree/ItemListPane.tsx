@@ -110,6 +110,19 @@ function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu }: {
           whiteSpace: 'nowrap',
           lineHeight: 1.4,
         }}>
+          {item.conversion_failed === 1 && (
+            <span
+              title={t('item.conversionFailed')}
+              style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 16, height: 16, borderRadius: '50%',
+                background: '#e5484d', color: '#fff', fontSize: 11, fontWeight: 800,
+                marginRight: 6, verticalAlign: 'middle', flexShrink: 0,
+              }}
+            >
+              !
+            </span>
+          )}
           {item.title || t('item.untitled')}
         </p>
         {item.tags && item.tags.length > 0 && (
