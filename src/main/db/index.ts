@@ -272,4 +272,13 @@ function runMigrations(db: Database.Database): void {
     }
     db.exec(`INSERT INTO schema_version VALUES (6)`)
   }
+  if (current < 7) {
+    // Local-only flag: pdf2md conversion failed for this item. Kept out of
+    // item.json -- a failed item isn't synced, so collaborators never see it.
+    const cols = (db.pragma('table_info(items)') as { name: string }[]).map((c) => c.name)
+    if (!cols.includes('conversion_failed')) {
+      db.exec(`ALTER TABLE items ADD COLUMN conversion_failed INTEGER NOT NULL DEFAULT 0`)
+    }
+    db.exec(`INSERT INTO schema_version VALUES (7)`)
+  }
 }

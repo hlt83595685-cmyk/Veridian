@@ -25,6 +25,7 @@ export interface Item {
   updated_at: number
   version: number
   added_by: string | null
+  conversion_failed: number
 }
 
 /**
@@ -156,6 +157,11 @@ export function createItem(data: Partial<Item>): Item {
     added_by: getAttribution(),
   })
   return getDb().prepare('SELECT * FROM items WHERE key = ?').get(key) as Item
+}
+
+export function setConversionFailed(itemId: number, failed: boolean): void {
+  getDb().prepare('UPDATE items SET conversion_failed = ? WHERE id = ?')
+    .run(failed ? 1 : 0, itemId)
 }
 
 export function updateItem(id: number, data: Partial<Item>): void {

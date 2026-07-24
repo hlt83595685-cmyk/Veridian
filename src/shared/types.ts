@@ -21,6 +21,7 @@ export interface Item {
   updated_at: number
   version: number
   added_by: string | null
+  conversion_failed: number
   tags?: string[]  // populated by getAllItemsWithTags
 }
 
