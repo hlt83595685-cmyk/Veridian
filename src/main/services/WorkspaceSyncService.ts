@@ -10,6 +10,7 @@ import { getDb } from '../db'
 import { getActiveWorkspace, setFlushHook } from './WorkspaceContextService'
 import { exportItems, exportCollections, reconcileDeletions, importAll } from './WorkspaceFiles'
 import { commitAll, sync } from './GitWorkspaceService'
+import { hasPendingConversions, setOnConversionsIdle } from './ConversionService'
 
 const DEBOUNCE_MS = 3000
 
@@ -32,9 +33,14 @@ function markDirty(ids: number[]): void {
 /** Export pending changes to the working tree and commit. Returns commit made. */
 async function exportAndCommit(repoRoot: string): Promise<boolean> {
   const db = getDb()
-  const ids = exportAllItems
+  const failed = new Set(
+    (db.prepare('SELECT id FROM items WHERE conversion_failed = 1').all() as Array<{ id: number }>)
+      .map((r) => r.id)
+  )
+  const rawIds = exportAllItems
     ? (db.prepare('SELECT id FROM items').all() as Array<{ id: number }>).map((r) => r.id)
     : [...dirtyItems]
+  const ids = rawIds.filter((id) => !failed.has(id))
   dirtyItems = new Set()
   const doCollections = collectionsDirty || exportAllItems
   collectionsDirty = false
@@ -48,6 +54,10 @@ async function exportAndCommit(repoRoot: string): Promise<boolean> {
 }
 
 function scheduleSync(): void {
+  // Hold sync while a pdf2md conversion is in flight so the PDF and its
+  // converted attachments commit together (one commit, not two). The idle
+  // hook re-invokes scheduleSync when conversions settle.
+  if (hasPendingConversions()) return
   if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
     debounceTimer = null
@@ -87,6 +97,9 @@ export function initWorkspaceSyncService(): void {
       emit({ type: 'workspace.dataRefreshed' })
     }
   }, { concurrency: 1, maxAttempts: 2 })
+
+  // When all in-flight conversions finish, run the sync that was held back.
+  setOnConversionsIdle(() => scheduleSync())
 
   // Every data mutation while a github workspace is active marks work for
   // the next debounce window. Import runs via direct SQL (WorkspaceFiles)
