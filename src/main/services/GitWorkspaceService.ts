@@ -12,7 +12,7 @@ import { appendFileSync, existsSync, mkdirSync } from 'fs'
 import * as fs from 'fs'
 import git from 'isomorphic-git'
 import http from 'isomorphic-git/http/node'
-import { getPat, getStatus } from './GitHubService'
+import { getGitHubToken, getStatus } from './GitHubService'
 
 function breadcrumb(dir: string, msg: string): void {
   console.log(`[git] ${msg}`)
@@ -22,10 +22,10 @@ function breadcrumb(dir: string, msg: string): void {
 }
 
 function onAuth(): { username: string; password: string } {
-  const pat = getPat()
-  if (!pat) throw new Error('no_pat')
-  // GitHub accepts a PAT over basic auth with this fixed username
-  return { username: 'x-access-token', password: pat }
+  const token = getGitHubToken()
+  if (!token) throw new Error('no_auth')
+  // GitHub accepts a token over basic auth with this fixed username
+  return { username: 'x-access-token', password: token }
 }
 
 // Author identity is cached after one lookup -- the commit path must not
