@@ -40,6 +40,7 @@ interface ItemJson {
   deleted: number
   updated_at: number
   version: number
+  added_by: string | null
   creators: Array<{
     first_name: string | null; last_name: string; orcid: string | null
     role: string; position: number
@@ -152,6 +153,7 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
       publisher: item.publisher, volume: item.volume, issue: item.issue,
       pages: item.pages, isbn: item.isbn, language: item.language, extra: item.extra,
       deleted: item.deleted, updated_at: item.updated_at, version: item.version,
+      added_by: item.added_by,
       creators, tags, collections,
       attachments: atts.map((a) => ({
         filename: a.filename, type: a.type, mime_type: a.mime_type,

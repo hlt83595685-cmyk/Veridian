@@ -262,4 +262,14 @@ function runMigrations(db: Database.Database): void {
     }
     db.exec(`INSERT INTO schema_version VALUES (5)`)
   }
+
+  if (current < 6) {
+    // Contributor attribution: who added each item (GitHub login). Nullable --
+    // personal/local workspaces and pre-existing rows have none.
+    const cols = (db.pragma('table_info(items)') as { name: string }[]).map((c) => c.name)
+    if (!cols.includes('added_by')) {
+      db.exec(`ALTER TABLE items ADD COLUMN added_by TEXT`)
+    }
+    db.exec(`INSERT INTO schema_version VALUES (6)`)
+  }
 }

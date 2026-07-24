@@ -20,6 +20,7 @@ export interface Item {
   created_at: number
   updated_at: number
   version: number
+  added_by: string | null
   tags?: string[]  // populated by getAllItemsWithTags
 }
 
