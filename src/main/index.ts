@@ -7,6 +7,7 @@ import { startLocalServer, stopLocalServer } from './server'
 import { registerIpcGateway } from './ipc/gateway'
 import { initConversionService } from './services/ConversionService'
 import { initWorkspaceSyncService } from './services/WorkspaceSyncService'
+import { initAutoUpdater } from './services/UpdateService'
 import { assertReadable } from './security/pathGuard'
 
 let mainWindow: BrowserWindow | null = null
@@ -116,6 +117,10 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
 
   createWindow()
+
+  // Check GitHub Releases for a newer version and, if found, download + prompt.
+  // No-op in dev; failures are swallowed so this never blocks startup.
+  initAutoUpdater()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
