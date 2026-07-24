@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto'
 import { getDb } from './index'
+import { getAttribution } from '../services/attribution'
 
 export interface Item {
   id: number
@@ -23,6 +24,7 @@ export interface Item {
   created_at: number
   updated_at: number
   version: number
+  added_by: string | null
 }
 
 /**
@@ -126,11 +128,11 @@ export function createItem(data: Partial<Item>): Item {
     INSERT INTO items (
       key, type, title, abstract, year, doi, url,
       journal, publisher, volume, issue, pages, isbn, language, extra,
-      library_id, created_at, updated_at, deleted
+      library_id, created_at, updated_at, deleted, added_by
     ) VALUES (
       @key, @type, @title, @abstract, @year, @doi, @url,
       @journal, @publisher, @volume, @issue, @pages, @isbn, @language, @extra,
-      @library_id, @created_at, @updated_at, 0
+      @library_id, @created_at, @updated_at, 0, @added_by
     )
   `).run({
     key,
@@ -151,6 +153,7 @@ export function createItem(data: Partial<Item>): Item {
     library_id: data.library_id ?? 1,
     created_at: now,
     updated_at: now,
+    added_by: getAttribution(),
   })
   return getDb().prepare('SELECT * FROM items WHERE key = ?').get(key) as Item
 }
