@@ -16,6 +16,8 @@ import { ensureClone, commitAll, sync } from './GitWorkspaceService'
 import { importAll, exportMissingItems } from './WorkspaceFiles'
 import { grantAccess } from '../security/pathGuard'
 import { emit } from '../core/Notifier'
+import { getStatus } from './GitHubService'
+import { setAttribution } from './attribution'
 
 export interface ActiveWorkspace {
   id: number | null            // null = personal library
@@ -60,6 +62,7 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
   if (id === null) {
     closeWorkspaceDb()
     active = { id: null, kind: 'personal', repoRoot: null }
+    setAttribution(null)
     emit({ type: 'workspace.dataRefreshed' })
     return active
   }
@@ -100,6 +103,16 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
     // Local/private workspace: its own isolated database, no git involved
     openWorkspaceDb(join(base, 'index.db'))
     active = { id, kind: 'local', repoRoot: null }
+  }
+
+  // Attribution follows the active workspace: github -> current GitHub login,
+  // anything else -> null. A github workspace can only be activated after auth
+  // succeeds, so the login is available here.
+  if (active.kind === 'github') {
+    const s = await getStatus().catch(() => null)
+    setAttribution(s?.login ?? null)
+  } else {
+    setAttribution(null)
   }
 
   emit({ type: 'workspace.dataRefreshed' })

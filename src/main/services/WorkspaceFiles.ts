@@ -295,6 +295,7 @@ function importItem(db: Database.Database, repoRoot: string, json: ItemJson): vo
     isbn: json.isbn ?? null, language: json.language ?? null, extra: json.extra ?? null,
     deleted: json.deleted ?? 0, updated_at: json.updated_at ?? Math.floor(Date.now() / 1000),
     version: json.version ?? 0,
+    added_by: json.added_by ?? null,
   }
 
   let itemId: number
@@ -303,7 +304,7 @@ function importItem(db: Database.Database, repoRoot: string, json: ItemJson): vo
       UPDATE items SET type=@type, title=@title, abstract=@abstract, year=@year,
         doi=@doi, url=@url, journal=@journal, publisher=@publisher, volume=@volume,
         issue=@issue, pages=@pages, isbn=@isbn, language=@language, extra=@extra,
-        deleted=@deleted, updated_at=@updated_at, version=@version
+        deleted=@deleted, updated_at=@updated_at, version=@version, added_by=@added_by
       WHERE key=@key
     `).run(fields)
     itemId = existing.id
@@ -311,10 +312,10 @@ function importItem(db: Database.Database, repoRoot: string, json: ItemJson): vo
     const info = db.prepare(`
       INSERT INTO items (key, type, title, abstract, year, doi, url, journal, publisher,
         volume, issue, pages, isbn, language, extra, deleted, library_id,
-        created_at, updated_at, version)
+        created_at, updated_at, version, added_by)
       VALUES (@key, @type, @title, @abstract, @year, @doi, @url, @journal, @publisher,
         @volume, @issue, @pages, @isbn, @language, @extra, @deleted, 1,
-        @updated_at, @updated_at, @version)
+        @updated_at, @updated_at, @version, @added_by)
     `).run(fields)
     itemId = Number(info.lastInsertRowid)
   }
