@@ -32,6 +32,26 @@ npm run package -- --publish always     # 打包并自动上传到 GitHub Releas
 - **完整链路（检测→下载→安装→重启）无法在开发环境验证**，须打包发布真实 Release
   后、用已安装的旧版本实测。
 
+### v0.1.1 首发记录 + 踩坑
+
+首次实际发布验证：`v0.1.1` 已发布，`GET /repos/.../releases/latest`（未认证请求，等同
+electron-updater 客户端的实际检查方式）确认返回 v0.1.1 且 `latest.yml` / 安装包 /
+blockmap 三个文件齐全 —— 发布链路端到端验证通过。
+
+遇到的问题及修复：
+- **`v0.1.0` 早期 Release 冲突**：仓库里已有一个手动发布过的 `v0.1.0`
+  （2026-07-10，Phase 0 时期），与本次构建版本号相同，导致 `--publish always`
+  整体跳过。**每次发布前必须递增版本号**（`npm version patch`），不能是巧合，
+  这条规则从一开始就是必须的。
+- **重复草稿 bug**：electron-builder 默认对多产物分别触发发布钩子，实测在同一个
+  tag（v0.1.1）下建了两个重复的 draft Release，文件被拆散到两边（一个只有
+  blockmap，另一个只有 exe+latest.yml）。手动核对、删除空壳草稿、补传缺失文件、
+  合并到一个完整 Release 后再发布。**已通过 `build.publish[0].releaseType: "release"`
+  规避**：跳过 draft 中间态，直接创建正式 Release，后续发布不会再拆分。
+- **默认行为调整**：`build.publish` 加了 `releaseType: "release"`——原本
+  electron-builder 默认先建草稿等人工点发布，现在改为 `--publish always` 直接
+  正式发布，不再需要每次手动确认（更贴合本项目"全自动检测→更新"的设计目标）。
+
 ---
 
 ## 2026-06-09 — Phase 0 完成：项目脚手架

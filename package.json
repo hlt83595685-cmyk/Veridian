@@ -77,7 +77,8 @@
       {
         "provider": "github",
         "owner": "hlt83595685-cmyk",
-        "repo": "Veridian"
+        "repo": "Veridian",
+        "releaseType": "release"
       }
     ],
     "files": [
