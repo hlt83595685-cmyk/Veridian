@@ -18,6 +18,7 @@ import * as WorkspaceContext from '../services/WorkspaceContextService'
 import * as WorkspaceSync from '../services/WorkspaceSyncService'
 import * as WorkspaceFilesMod from '../services/WorkspaceFiles'
 import * as GitHub from '../services/GitHubService'
+import { startDeviceLogin, cancelDeviceLogin } from '../services/OAuthService'
 import type { LocalWorkspaceKind } from '../../shared/types'
 import { manualConvertPdfToMd } from '../services/ConversionService'
 import { convertPdfToMarkdown } from '../mineruApi'
@@ -36,7 +37,7 @@ const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.
 // (github:getStatus already reports hasPat), and blocking them here means a
 // compromised renderer cannot exfiltrate the PAT. The MinerU token stays
 // readable -- the Tools page legitimately prefills its input with it.
-const RENDERER_BLOCKED_SETTINGS = new Set(['github.pat', 'controlPlane.session'])
+const RENDERER_BLOCKED_SETTINGS = new Set(['github.oauthToken', 'controlPlane.session'])
 
 // Keys the renderer may write. Everything else -- notably storage.path, which
 // widens the pathGuard whitelist -- must go through a dedicated channel
@@ -220,9 +221,11 @@ export const handlers: Record<IpcChannel, Handler> = {
     return ctx.repoRoot ? WorkspaceFilesMod.listRepoTree(ctx.repoRoot) : []
   },
 
-  // GitHub
-  'github:setPat':    (_e, pat: string) => GitHub.setPat(pat),
-  'github:getStatus': () => GitHub.getStatus(),
-  'github:testRepo':  (_e, repoUrl: string) => GitHub.testRepoAccess(repoUrl),
-  'github:listRepos': () => GitHub.listRepos(),
+  // GitHub OAuth
+  'github:loginStart':  () => startDeviceLogin(),
+  'github:loginCancel': () => { cancelDeviceLogin() },
+  'github:logout':      () => GitHub.clearGitHubToken(),
+  'github:getStatus':   () => GitHub.getStatus(),
+  'github:testRepo':    (_e, repoUrl: string) => GitHub.testRepoAccess(repoUrl),
+  'github:listRepos':   () => GitHub.listRepos(),
 }

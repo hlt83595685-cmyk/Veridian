@@ -30,5 +30,6 @@ export type DomainEvent =
   // pull imported remote changes) -- every cached query is stale.
   | { type: 'workspace.dataRefreshed' }
   | { type: 'controlPlane.changed' }
+  | { type: 'github.authChanged' }
 
 export type DomainEventType = DomainEvent['type']

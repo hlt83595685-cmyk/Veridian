@@ -114,11 +114,13 @@ export const contract = {
   'workspace:syncNow':      z.tuple([]),
   'workspace:listRepoTree': z.tuple([]),
 
-  // GitHub (data-plane credential, strictly per-device -- never synced)
-  'github:setPat':    z.tuple([z.string().max(512)]),   // empty string clears
-  'github:getStatus': z.tuple([]),
-  'github:testRepo':  z.tuple([z.string().min(1).max(512)]),
-  'github:listRepos': z.tuple([]),
+  // GitHub OAuth (data-plane credential, strictly per-device -- never synced)
+  'github:loginStart':  z.tuple([]),
+  'github:loginCancel': z.tuple([]),
+  'github:logout':      z.tuple([]),
+  'github:getStatus':   z.tuple([]),
+  'github:testRepo':    z.tuple([z.string().min(1).max(512)]),
+  'github:listRepos':   z.tuple([]),
 } as const
 
 export type IpcChannel = keyof typeof contract

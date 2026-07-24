@@ -121,7 +121,9 @@ const veridianAPI = {
     listRepoTree: () => call('workspace:listRepoTree'),
   },
   github: {
-    setPat: (pat: string) => call('github:setPat', pat),
+    loginStart: () => call<{ userCode: string; verificationUri: string }>('github:loginStart'),
+    loginCancel: () => call('github:loginCancel'),
+    logout: () => call('github:logout'),
     getStatus: () => call('github:getStatus'),
     testRepo: (repoUrl: string) => call('github:testRepo', repoUrl),
     listRepos: () => call('github:listRepos'),
