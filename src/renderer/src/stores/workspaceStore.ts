@@ -38,7 +38,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       set({ activeWorkspaceId: id })
     } catch (err) {
       const msg = (err as Error).message
-      set({ switchError: msg === 'no_pat' ? 'no_pat' : msg })
+      set({ switchError: msg === 'no_pat' || msg === 'no_auth' ? 'no_pat' : msg })
       console.error('[workspaceStore] switch failed:', err)
     } finally {
       set({ switching: false })
