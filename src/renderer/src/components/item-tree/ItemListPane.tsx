@@ -18,6 +18,54 @@ const TYPE_ICON: Record<string, string> = {
   preprint:        '📝',
 }
 
+// Small round GitHub avatar for the item's contributor. Loads the locally
+// cached avatar via veridian-file://; falls back to a colored initial when
+// there's no cached image (offline, unknown user, or no attribution).
+function ContributorAvatar({ login, size = 18 }: { login: string; size?: number }): JSX.Element {
+  const [path, setPath] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    window.veridian.github.avatarPath(login)
+      .then((p) => { if (alive) p ? setPath(p) : setFailed(true) })
+      .catch(() => { if (alive) setFailed(true) })
+    return () => { alive = false }
+  }, [login])
+
+  const dim = { width: size, height: size, borderRadius: '50%', flexShrink: 0 }
+
+  if (path && !failed) {
+    const encoded = path.replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/')
+    return (
+      <img
+        src={`veridian-file:///${encoded}`}
+        alt={login}
+        title={login}
+        style={{ ...dim, objectFit: 'cover' }}
+        onError={() => setFailed(true)}
+      />
+    )
+  }
+
+  // Fallback: colored initial. Hue derived from the login so it's stable.
+  let hash = 0
+  for (let i = 0; i < login.length; i++) hash = (hash * 31 + login.charCodeAt(i)) | 0
+  const hue = Math.abs(hash) % 360
+  return (
+    <span
+      title={login}
+      style={{
+        ...dim, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        background: `hsl(${hue}, 55%, 55%)`, color: '#fff',
+        fontSize: size * 0.55, fontWeight: 700, textTransform: 'uppercase',
+      }}
+    >
+      {login.charAt(0)}
+    </span>
+  )
+}
+
 function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu }: {
   item: Item
   selected: boolean
@@ -46,7 +94,10 @@ function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu }: {
         userSelect: 'none',
       }}
     >
-      <span style={{ fontSize: 18, marginTop: 1, flexShrink: 0 }}>{icon}</span>
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        <span style={{ fontSize: 18, marginTop: 1 }}>{icon}</span>
+        {item.added_by && <ContributorAvatar login={item.added_by} />}
+      </span>
       {/* Title + tags */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{
