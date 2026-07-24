@@ -29,5 +29,18 @@
     },
     "attachmentsPlaceholder": "No attachments",
     "notesPlaceholder": "No notes"
+  },
+  "workspace": {
+    "github": {
+      "title": "GitHub Account",
+      "desc": "Sign in to create collaborative workspaces and sync with GitHub repositories.",
+      "loginButton": "Sign in with GitHub",
+      "deviceHint": "The GitHub authorization page has opened and the code is copied to your clipboard. Paste it and authorize:",
+      "deviceWaiting": "Waiting for authorization… this page updates automatically.",
+      "cancel": "Cancel",
+      "logout": "Sign out",
+      "connectedAs": "Signed in as {{login}}",
+      "notConnected": "Not connected to GitHub · click to sign in"
+    }
   }
 }

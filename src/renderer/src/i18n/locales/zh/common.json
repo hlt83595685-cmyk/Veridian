@@ -29,5 +29,18 @@
     },
     "attachmentsPlaceholder": "暂无附件",
     "notesPlaceholder": "暂无笔记"
+  },
+  "workspace": {
+    "github": {
+      "title": "GitHub 账号",
+      "desc": "登录后即可创建协作工作空间，并与 GitHub 仓库同步。",
+      "loginButton": "用 GitHub 登录",
+      "deviceHint": "浏览器已打开 GitHub 授权页，验证码已复制到剪贴板，请粘贴并授权：",
+      "deviceWaiting": "等待授权中…完成后本页会自动更新。",
+      "cancel": "取消",
+      "logout": "退出登录",
+      "connectedAs": "已登录：{{login}}",
+      "notConnected": "未连接 GitHub · 点此登录"
+    }
   }
 }
