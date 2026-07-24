@@ -57,8 +57,46 @@ interface ItemJson {
 }
 
 const papersDir = (repoRoot: string): string => join(repoRoot, 'papers')
-const itemDir = (repoRoot: string, key: string): string => join(papersDir(repoRoot), key)
-const filesDir = (repoRoot: string, key: string): string => join(itemDir(repoRoot, key), 'files')
+
+const WIN_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
+
+/** Filesystem-safe folder name derived from an item title. */
+export function sanitizeTitle(title: string | null): string {
+  let s = (title ?? '').normalize('NFC')
+  s = s.replace(/[\\/:*?"<>|]/g, ' ')   // Windows-illegal chars
+  s = s.replace(/\p{Cc}/gu, ' ')        // control chars (Unicode Control category)
+  s = s.replace(/\s+/g, ' ').trim()
+  s = s.replace(/^[.\s]+/, '').replace(/[.\s]+$/, '')
+  if (s.length > 100) s = s.slice(0, 100).trim()
+  if (!s) return 'untitled'
+  if (WIN_RESERVED.test(s)) s = '_' + s
+  return s
+}
+
+/** `base` if free, else base-2, base-3, ... not in `taken`. */
+export function uniqueDirName(base: string, taken: Set<string>): string {
+  if (!taken.has(base)) return base
+  for (let i = 2; ; i++) {
+    const cand = `${base}-${i}`
+    if (!taken.has(cand)) return cand
+  }
+}
+
+/** Map item key -> its current folder name by scanning each papers/<dir>/item.json. */
+function scanKeyToDir(repoRoot: string): Map<string, string> {
+  const map = new Map<string, string>()
+  const dir = papersDir(repoRoot)
+  if (!existsSync(dir)) return map
+  for (const entry of readdirSync(dir)) {
+    const jsonPath = join(dir, entry, 'item.json')
+    if (!existsSync(jsonPath)) continue
+    try {
+      const j = JSON.parse(readFileSync(jsonPath, 'utf-8')) as { key?: string }
+      if (j.key) map.set(j.key, entry)
+    } catch { /* skip unparseable */ }
+  }
+  return map
+}
 
 // ── Export: index db -> working tree ─────────────────────────────────────────
 
@@ -78,13 +116,24 @@ export function exportCollections(db: Database.Database, repoRoot: string): void
  * updates attachments.path via direct SQL -- no events, no loops.
  */
 export function exportItems(db: Database.Database, repoRoot: string, itemIds: number[]): void {
+  const keyToDir = scanKeyToDir(repoRoot)
+  const taken = new Set(keyToDir.values())
+
   for (const id of itemIds) {
     const item = db.prepare('SELECT * FROM items WHERE id = ?').get(id) as
-      (Omit<ItemJson, 'creators' | 'tags' | 'collections' | 'attachments'> & { id: number }) | undefined
+      (Omit<ItemJson, 'creators' | 'tags' | 'collections' | 'attachments'> & { id: number; title: string | null }) | undefined
     if (!item) continue   // deleted since being marked dirty -- reconcileDeletions handles the dir
 
-    const dir = itemDir(repoRoot, item.key)
-    const files = filesDir(repoRoot, item.key)
+    // Folder name: reuse the item's existing folder (found by key), else make
+    // a fresh sanitized-title folder, deduped against current folder names.
+    let dirName = keyToDir.get(item.key)
+    if (!dirName) {
+      dirName = uniqueDirName(sanitizeTitle(item.title), taken)
+      taken.add(dirName)
+      keyToDir.set(item.key, dirName)
+    }
+    const dir = join(papersDir(repoRoot), dirName)
+    const files = join(dir, 'files')
     mkdirSync(files, { recursive: true })
 
     // Relocate out-of-repo attachment payloads into the item's files/ dir
@@ -171,8 +220,10 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
  * discard local-only items. Returns how many were recovered.
  */
 export function exportMissingItems(db: Database.Database, repoRoot: string): number {
-  const rows = db.prepare('SELECT id, key FROM items').all() as Array<{ id: number; key: string }>
-  const missing = rows.filter((r) => !existsSync(join(itemDir(repoRoot, r.key), 'item.json')))
+  const keyToDir = scanKeyToDir(repoRoot)
+  const rows = db.prepare('SELECT id, key FROM items WHERE conversion_failed = 0')
+    .all() as Array<{ id: number; key: string }>
+  const missing = rows.filter((r) => !keyToDir.has(r.key))
   if (missing.length > 0) {
     exportCollections(db, repoRoot)
     exportItems(db, repoRoot, missing.map((r) => r.id))
@@ -195,11 +246,15 @@ export function reconcileDeletions(db: Database.Database, repoRoot: string): voi
   const tombs = db.prepare("SELECT key FROM tombstones WHERE object_type = 'item'")
     .all() as Array<{ key: string }>
   if (tombs.length === 0) return
+  const keyToDir = scanKeyToDir(repoRoot)
   const clear = db.prepare("DELETE FROM tombstones WHERE object_type = 'item' AND key = ?")
   for (const { key } of tombs) {
-    const target = join(dir, key)
-    if (existsSync(target)) {
-      try { rmSync(target, { recursive: true, force: true }) } catch { /* ignore */ }
+    const dirName = keyToDir.get(key)
+    if (dirName) {
+      const target = join(dir, dirName)
+      if (existsSync(target)) {
+        try { rmSync(target, { recursive: true, force: true }) } catch { /* ignore */ }
+      }
     }
     clear.run(key)
   }
@@ -226,14 +281,14 @@ export function importAll(db: Database.Database, repoRoot: string): void {
     )
     if (existsSync(dir)) {
       for (const entry of readdirSync(dir)) {
-        if (tombstoned.has(entry)) continue
         const jsonPath = join(dir, entry, 'item.json')
         if (!existsSync(jsonPath)) continue
         try {
           const json = JSON.parse(readFileSync(jsonPath, 'utf-8')) as ItemJson
-          if (json.key !== entry) json.key = entry   // dir name wins on mismatch
-          importItem(db, repoRoot, json)
-          treeKeys.add(entry)
+          if (!json.key) continue                 // no identity -> skip
+          if (tombstoned.has(json.key)) continue  // locally-deleted, not yet pushed
+          importItem(db, repoRoot, json, entry)   // pass the folder name
+          treeKeys.add(json.key)
         } catch (err) {
           console.warn(`[WorkspaceFiles] skipping unparseable ${jsonPath}:`, err)
         }
@@ -284,7 +339,7 @@ function importCollections(db: Database.Database, repoRoot: string): void {
   }
 }
 
-function importItem(db: Database.Database, repoRoot: string, json: ItemJson): void {
+function importItem(db: Database.Database, repoRoot: string, json: ItemJson, dirName: string): void {
   const existing = db.prepare('SELECT id FROM items WHERE key = ?').get(json.key) as { id: number } | undefined
 
   const fields = {
@@ -355,7 +410,7 @@ function importItem(db: Database.Database, repoRoot: string, json: ItemJson): vo
 
   // Attachments: rows point at the working-tree files
   db.prepare('DELETE FROM attachments WHERE item_id = ?').run(itemId)
-  const files = filesDir(repoRoot, json.key)
+  const files = join(papersDir(repoRoot), dirName, 'files')
   for (const a of json.attachments ?? []) {
     let path: string | null = null
     let size: number | null = null
