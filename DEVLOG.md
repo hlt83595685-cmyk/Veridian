@@ -37,6 +37,17 @@ GitHub 仓库只做存储，不承担业务逻辑。
 - BibTeX / CSL-JSON 批量导入路径暂未接 DOI 查重（入口在 `importer.ts`，
   后续版本补）。
 
+### v0.1.2 发布记录
+- 已发布至 GitHub Releases；客户端视角验证：`/releases/latest` → v0.1.2，
+  `releases/download/v0.1.2/latest.yml` 内容正确（version/sha512/size）。
+  装有 v0.1.1 的机器启动后应收到更新提示。
+- **electron-builder 重复 release bug 复发**：`releaseType: "release"` 并没有
+  根治——这是发布器对多产物并发上传的竞态（同 tag 建了两个 release，文件被
+  拆散），v0.1.1、v0.1.2 连续两次复现。本次同样手动合并（补传 blockmap、删除
+  只含 blockmap 的空壳）。**每次 `--publish always` 之后必须核查**：
+  `GET /releases` 确认该 tag 只有一个 release 且 exe/latest.yml/blockmap 三件齐全。
+  根治方向（后续）：`--publish never` 打包后用脚本自行创建 release + 上传三件套。
+
 ---
 
 ## 2026-07-24 — 安全与健壮性加固（代码审查后修复）
