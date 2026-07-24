@@ -41,6 +41,60 @@
 
 ---
 
+## 2026-07-24 — 自动更新（零成本方案）
+
+基于 `electron-updater` + GitHub Releases 实现在线更新，无需自建服务器、无需代码
+签名证书，成本为零。
+
+### 交互流程
+1. 每次启动后台静默检查 GitHub Releases（`main` 进程，`initAutoUpdater()`）
+2. 发现更高版本 → 后台差量下载（NSIS blockmap，只下变化的块）
+3. 下载完成 → 弹原生对话框「发现新版本 vX.X.X，是否立即更新」
+4. 用户点「立即更新」→ `quitAndInstall(false, true)`：退出 → 安装 → 自动重启
+5. 用户点「稍后」/ 检查失败（离线、GitHub 不可达）→ 静默忽略，绝不阻塞启动
+6. 开发环境（`is.dev`）跳过检查——dev 无 latest.yml，检查必然报错
+
+### 改动
+- 新增 `src/main/services/UpdateService.ts`：更新逻辑与对话框
+- `src/main/index.ts`：`app.whenReady` 内 `createWindow()` 后调用 `initAutoUpdater()`
+- `package.json`：`build.publish` 指向 GitHub 仓库；新增依赖 `electron-updater`
+
+### 发布流程（开发者侧）
+```
+npm version patch                      # 递增版本号（0.1.0 -> 0.1.1），必须每次递增
+set GH_TOKEN=<有 repo 权限的 PAT>       # electron-builder 上传 Release 用
+npm run package -- --publish always     # 打包并自动上传到 GitHub Releases
+```
+仓库需为 **public**（客户端拉取 Release 无需 token）；否则客户端要内置 token，不安全。
+
+### 前提 / 限制
+- **未做代码签名**：Windows 首次安装/更新会有 SmartScreen「未知发布者」提示，
+  点「仍要运行」即可，不影响更新功能。日后可用 SignPath.io 的 OSS 免费计划消除。
+- **完整链路（检测→下载→安装→重启）无法在开发环境验证**，须打包发布真实 Release
+  后、用已安装的旧版本实测。
+
+### v0.1.1 首发记录 + 踩坑
+
+首次实际发布验证：`v0.1.1` 已发布，`GET /repos/.../releases/latest`（未认证请求，等同
+electron-updater 客户端的实际检查方式）确认返回 v0.1.1 且 `latest.yml` / 安装包 /
+blockmap 三个文件齐全 —— 发布链路端到端验证通过。
+
+遇到的问题及修复：
+- **`v0.1.0` 早期 Release 冲突**：仓库里已有一个手动发布过的 `v0.1.0`
+  （2026-07-10，Phase 0 时期），与本次构建版本号相同，导致 `--publish always`
+  整体跳过。**每次发布前必须递增版本号**（`npm version patch`），不能是巧合，
+  这条规则从一开始就是必须的。
+- **重复草稿 bug**：electron-builder 默认对多产物分别触发发布钩子，实测在同一个
+  tag（v0.1.1）下建了两个重复的 draft Release，文件被拆散到两边（一个只有
+  blockmap，另一个只有 exe+latest.yml）。手动核对、删除空壳草稿、补传缺失文件、
+  合并到一个完整 Release 后再发布。**已通过 `build.publish[0].releaseType: "release"`
+  规避**：跳过 draft 中间态，直接创建正式 Release，后续发布不会再拆分。
+- **默认行为调整**：`build.publish` 加了 `releaseType: "release"`——原本
+  electron-builder 默认先建草稿等人工点发布，现在改为 `--publish always` 直接
+  正式发布，不再需要每次手动确认（更贴合本项目"全自动检测→更新"的设计目标）。
+
+---
+
 ## 2026-06-09 — Phase 0 完成：项目脚手架
 
 ### 完成内容

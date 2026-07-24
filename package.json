@@ -1,7 +1,7 @@
 {
   "name": "veridian",
   "productName": "Veridian",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A modern reference management application",
   "main": "./out/main/index.js",
   "private": true,
@@ -22,6 +22,7 @@
     "better-sqlite3": "^11.9.1",
     "citeproc": "^2.4.62",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.9",
     "i18next": "^24.2.3",
     "isomorphic-git": "^1.38.6",
     "katex": "^0.17.0",
@@ -73,6 +74,14 @@
       "buildResources": "resources",
       "output": "dist"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "hlt83595685-cmyk",
+        "repo": "Veridian",
+        "releaseType": "release"
+      }
+    ],
     "files": [
       "out/**/*"
     ],
