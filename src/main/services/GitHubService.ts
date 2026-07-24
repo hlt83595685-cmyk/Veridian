@@ -6,44 +6,51 @@
 import { getSetting, setSetting } from './SettingsService'
 import { emit } from '../core/Notifier'
 
-const PAT_KEY = 'github.pat'
+const TOKEN_KEY = 'github.oauthToken'
 
-const API_HEADERS = (pat: string): Record<string, string> => ({
-  Authorization: `Bearer ${pat}`,
+const API_HEADERS = (token: string): Record<string, string> => ({
+  Authorization: `Bearer ${token}`,
   Accept: 'application/vnd.github+json',
   'X-GitHub-Api-Version': '2022-11-28',
-  'User-Agent': 'Veridian',   // required by the GitHub API
+  'User-Agent': 'Veridian',
 })
 
-export function getPat(): string {
-  const v = getSetting(PAT_KEY)
+/** The single credential accessor. Everything downstream (git onAuth, API
+ *  calls, commit author) reads the current token from here. */
+export function getGitHubToken(): string {
+  const v = getSetting(TOKEN_KEY)
   return typeof v === 'string' ? v : ''
 }
 
-export function setPat(pat: string): void {
-  setSetting(PAT_KEY, pat)
-  emit({ type: 'settings.changed', keys: [PAT_KEY] })
+export function setGitHubToken(token: string): void {
+  setSetting(TOKEN_KEY, token)
+  emit({ type: 'github.authChanged' })
+}
+
+export function clearGitHubToken(): void {
+  setSetting(TOKEN_KEY, '')
+  emit({ type: 'github.authChanged' })
 }
 
 export interface GitHubStatus {
-  hasPat: boolean
+  authed: boolean
   login: string | null
+  avatarUrl: string | null
   error: string | null
 }
 
-/** Validates the stored PAT by asking GitHub who it belongs to. */
 export async function getStatus(): Promise<GitHubStatus> {
-  const pat = getPat()
-  if (!pat) return { hasPat: false, login: null, error: null }
+  const token = getGitHubToken()
+  if (!token) return { authed: false, login: null, avatarUrl: null, error: null }
   try {
     const res = await fetch('https://api.github.com/user', {
-      headers: API_HEADERS(pat), signal: AbortSignal.timeout(10_000),
+      headers: API_HEADERS(token), signal: AbortSignal.timeout(10_000),
     })
-    if (!res.ok) return { hasPat: true, login: null, error: `GitHub HTTP ${res.status}` }
-    const user = (await res.json()) as { login?: string }
-    return { hasPat: true, login: user.login ?? null, error: null }
+    if (!res.ok) return { authed: false, login: null, avatarUrl: null, error: `GitHub HTTP ${res.status}` }
+    const user = (await res.json()) as { login?: string; avatar_url?: string }
+    return { authed: true, login: user.login ?? null, avatarUrl: user.avatar_url ?? null, error: null }
   } catch (err) {
-    return { hasPat: true, login: null, error: (err as Error).message }
+    return { authed: false, login: null, avatarUrl: null, error: (err as Error).message }
   }
 }
 
@@ -54,11 +61,11 @@ export async function getStatus(): Promise<GitHubStatus> {
  * list is usually short and exact.
  */
 export async function listRepos(): Promise<import('../../shared/types').GitHubRepoInfo[]> {
-  const pat = getPat()
-  if (!pat) throw new Error('no_pat')
+  const token = getGitHubToken()
+  if (!token) throw new Error('no_pat')
   const res = await fetch(
     'https://api.github.com/user/repos?per_page=100&sort=updated',
-    { headers: API_HEADERS(pat), signal: AbortSignal.timeout(15_000) }
+    { headers: API_HEADERS(token), signal: AbortSignal.timeout(15_000) }
   )
   if (!res.ok) throw new Error(`GitHub HTTP ${res.status}`)
   const repos = (await res.json()) as Array<{
@@ -98,15 +105,15 @@ export interface RepoAccessResult {
  * which, and neither do we.
  */
 export async function testRepoAccess(repoUrl: string): Promise<RepoAccessResult> {
-  const pat = getPat()
-  if (!pat) return { ok: false, code: 'no_pat' }
+  const token = getGitHubToken()
+  if (!token) return { ok: false, code: 'no_pat' }
 
   const parsed = parseRepoUrl(repoUrl)
   if (!parsed) return { ok: false, code: 'invalid_url' }
 
   try {
     const res = await fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.repo}`, {
-      headers: API_HEADERS(pat), signal: AbortSignal.timeout(10_000),
+      headers: API_HEADERS(token), signal: AbortSignal.timeout(10_000),
     })
     if (res.status === 404) return { ok: false, code: 'not_found' }
     if (!res.ok) return { ok: false, code: 'http_error', detail: `HTTP ${res.status}` }
