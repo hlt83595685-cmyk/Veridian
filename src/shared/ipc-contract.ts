@@ -121,6 +121,7 @@ export const contract = {
   'github:getStatus':   z.tuple([]),
   'github:testRepo':    z.tuple([z.string().min(1).max(512)]),
   'github:listRepos':   z.tuple([]),
+  'github:avatarPath':  z.tuple([z.string().min(1).max(64)]),
 } as const
 
 export type IpcChannel = keyof typeof contract

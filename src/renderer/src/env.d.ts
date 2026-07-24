@@ -79,6 +79,7 @@ interface VeridianAPI {
       detail?: string
     }>
     listRepos: () => Promise<GitHubRepoInfo[]>
+    avatarPath: (login: string) => Promise<string | null>
   }
   onPdf2mdStatus: (cb: (e: {
     filename: string

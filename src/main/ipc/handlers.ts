@@ -19,6 +19,7 @@ import * as WorkspaceSync from '../services/WorkspaceSyncService'
 import * as WorkspaceFilesMod from '../services/WorkspaceFiles'
 import * as GitHub from '../services/GitHubService'
 import { startDeviceLogin, cancelDeviceLogin } from '../services/OAuthService'
+import { getAvatarPath } from '../services/AvatarService'
 import type { LocalWorkspaceKind } from '../../shared/types'
 import { manualConvertPdfToMd } from '../services/ConversionService'
 import { convertPdfToMarkdown } from '../mineruApi'
@@ -228,4 +229,5 @@ export const handlers: Record<IpcChannel, Handler> = {
   'github:getStatus':   () => GitHub.getStatus(),
   'github:testRepo':    (_e, repoUrl: string) => GitHub.testRepoAccess(repoUrl),
   'github:listRepos':   () => GitHub.listRepos(),
+  'github:avatarPath':  (_e, login: string) => getAvatarPath(login),
 }

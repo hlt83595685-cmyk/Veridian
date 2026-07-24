@@ -127,6 +127,7 @@ const veridianAPI = {
     getStatus: () => call('github:getStatus'),
     testRepo: (repoUrl: string) => call('github:testRepo', repoUrl),
     listRepos: () => call('github:listRepos'),
+    avatarPath: (login: string) => call<string | null>('github:avatarPath', login),
   },
   // Domain-event stream: the renderer query cache subscribes here
   onDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.add(cb) },
