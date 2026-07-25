@@ -1,5 +1,44 @@
 # Veridian 开发日志
 
+## 2026-07-26 — 对话模型新增 Claude（订阅令牌）预设
+
+用户问能否用 Claude 订阅账号额度。查证 Anthropic 开发者政策：第三方应用做
+"一键登录 Claude / 共享额度"是明确禁止的（"does not allow third-party
+developers to offer claude.ai login or share rate limits"），但官方文档
+（[authentication#generate-a-long-lived-token]
+(https://code.claude.com/docs/en/authentication#generate-a-long-lived-token)）
+本身写明 `claude setup-token` 生成的一年期 OAuth 令牌就是给"CI 流水线、
+脚本或其他无法交互式浏览器登录的环境"用的，用户可以自己生成、贴到任何
+想用的地方——这条路径是合规的，区别只在于"App 帮你登录"（禁止）vs
+"你自己生成令牌，手动粘贴"（官方文档写明的用法）。所以选择了后者：不做
+登录按钮，只做一个预设 + 令牌粘贴框。
+
+**实现**：Anthropic 的 Messages API（`/v1/messages`）跟现有的 OpenAI 兼容
+协议（`/v1/chat/completions`）线格式不同（system 是独立字段不是消息、工具
+定义叫 `input_schema` 不是 `parameters`、SSE 事件类型也不同），新增
+`src/main/knowledge/anthropicClient.ts` 单独实现，`providers.ts` 的
+`chatStream` 按 `preset === 'claude-subscription'` 分流（动态 import，
+避免两个文件间的运行时循环依赖）。请求头用
+`Authorization: Bearer <token>` + `anthropic-beta: oauth-2025-04-20`——
+后者是 Claude Code 自己客户端认证 OAuth 令牌时用的头，参考了社区逆向项目
+（如 `weidwonder/claude_agent_sdk_oauth_demo`）的实现，**没有真实令牌
+测试过实际调用**，只保证协议转换层（消息格式、工具格式互转）用单测
+验证正确（6 个用例：system 拆分、tool_calls→tool_use 块、tool 结果→
+tool_result 块、并行工具调用合并进同一个 user turn、非法 JSON 参数不炸、
+parameters→input_schema 改名）。
+
+Anthropic 不提供 embedding 接口，所以这个预设只加在"对话模型"，不出现在
+"Embedding 模型"的预设列表里。
+
+**UI**：`KnowledgeSettingsTab` 对话模型预设新增"Claude（订阅令牌）"，选中后
+API 地址自动锁定为 `https://api.anthropic.com`（只读，协议决定的不给改）、
+模型名默认 `claude-sonnet-4-5`，API Key 栏位标签换成"订阅令牌"并显示
+`claude setup-token` 使用引导。CDP 远程驱动真实 dev 实例验证：选中预设后
+上述字段渲染符合预期。
+
+**未验证**：真实令牌的端到端调用（用户目前没有生成令牌）——如果用了发现
+`anthropic-beta` 头不对或事件解析有问题，需要用真实令牌抓包核对再修。
+
 ## 2026-07-26 — 知识库 + AI Agent + RAG（第一期：问答）
 
 按此前提交的设计方案（`docs/superpowers/specs/2026-07-26-knowledge-rag-design.md`）

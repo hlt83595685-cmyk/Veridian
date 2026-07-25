@@ -13,6 +13,7 @@ const CHAT_PRESETS: Preset[] = [
 	{ id: 'zhipu', label: '智谱 GLM', baseURL: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-plus' },
 	{ id: 'moonshot', label: 'Kimi (Moonshot)', baseURL: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
 	{ id: 'openai', label: 'OpenAI', baseURL: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+	{ id: 'claude-subscription', label: 'Claude（订阅令牌）', baseURL: 'https://api.anthropic.com', model: 'claude-sonnet-4-5' },
 ]
 
 const EMBEDDING_PRESETS: Preset[] = [
@@ -149,7 +150,14 @@ export function KnowledgeSettingsTab(): JSX.Element {
 				onApiKey={(v) => { setChat((s) => ({ ...s, apiKey: v })); void saveField('knowledge.chat.apiKey', v) }}
 				onTest={() => void test('chat')}
 				testState={testState.which === 'chat' ? testState.result : null}
+				lockBaseUrl={chat.preset === 'claude-subscription'}
+				apiKeyLabel={chat.preset === 'claude-subscription' ? t('settings.knowledge.subscriptionToken') : undefined}
 				t={t}
+				extra={chat.preset === 'claude-subscription' && (
+					<div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.6, background: 'var(--muted-bg)', borderRadius: 8, padding: '8px 10px' }}>
+						{t('settings.knowledge.claudeTokenHint')}
+					</div>
+				)}
 			/>
 
 			<ProviderSection
@@ -217,10 +225,12 @@ function ProviderSection(props: {
 	onTest: () => void
 	testState: string | null
 	disabled?: boolean
+	lockBaseUrl?: boolean
+	apiKeyLabel?: string
 	extra?: React.ReactNode
 	t: (key: string, opts?: Record<string, unknown>) => string
 }): JSX.Element {
-	const { title, desc, presets, state, onPreset, onBaseURL, onModel, onApiKey, onTest, testState, disabled, extra, t } = props
+	const { title, desc, presets, state, onPreset, onBaseURL, onModel, onApiKey, onTest, testState, disabled, lockBaseUrl, apiKeyLabel, extra, t } = props
 	return (
 		<Section label={title}>
 			<div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{desc}</div>
@@ -232,12 +242,18 @@ function ProviderSection(props: {
 					</select>
 				</Field>
 				<Field label={t('settings.knowledge.baseUrl')}>
-					<input value={state.baseURL} onChange={(e) => onBaseURL(e.target.value)} style={inputStyle} placeholder="https://api.example.com/v1" />
+					<input
+						value={state.baseURL}
+						onChange={(e) => onBaseURL(e.target.value)}
+						style={{ ...inputStyle, ...(lockBaseUrl ? { opacity: 0.6 } : {}) }}
+						placeholder="https://api.example.com/v1"
+						readOnly={lockBaseUrl}
+					/>
 				</Field>
 				<Field label={t('settings.knowledge.model')}>
 					<input value={state.model} onChange={(e) => onModel(e.target.value)} style={inputStyle} />
 				</Field>
-				<Field label={t('settings.knowledge.apiKey')}>
+				<Field label={apiKeyLabel ?? t('settings.knowledge.apiKey')}>
 					<input
 						type="password"
 						value={state.apiKey}

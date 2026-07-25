@@ -7,6 +7,7 @@ export interface ProviderConfig {
 	baseURL: string   // e.g. https://api.deepseek.com/v1
 	model: string
 	apiKey: string
+	preset: string    // '' = custom OpenAI-compatible; 'claude-subscription' routes to anthropicClient
 }
 
 function str(v: unknown): string {
@@ -14,17 +15,24 @@ function str(v: unknown): string {
 }
 
 export function getChatConfig(): ProviderConfig | null {
-	const cfg = {
-		baseURL: str(getSetting('knowledge.chat.baseURL')).replace(/\/+$/, ''),
-		model: str(getSetting('knowledge.chat.model')),
-		apiKey: str(getSetting('knowledge.chat.apiKey')),
-	}
+	const preset = str(getSetting('knowledge.chat.preset'))
+	// The Claude preset's endpoint/version are fixed by the protocol, not
+	// user-editable -- only the pasted setup-token varies.
+	const cfg: ProviderConfig = preset === 'claude-subscription'
+		? { preset, baseURL: 'https://api.anthropic.com', model: str(getSetting('knowledge.chat.model')) || 'claude-sonnet-4-5', apiKey: str(getSetting('knowledge.chat.apiKey')) }
+		: {
+			preset,
+			baseURL: str(getSetting('knowledge.chat.baseURL')).replace(/\/+$/, ''),
+			model: str(getSetting('knowledge.chat.model')),
+			apiKey: str(getSetting('knowledge.chat.apiKey')),
+		}
 	return cfg.baseURL && cfg.model && cfg.apiKey ? cfg : null
 }
 
 export function getEmbeddingConfig(): ProviderConfig | null {
 	const reuse = getSetting('knowledge.embedding.reuseChatKey') === true
-	const cfg = {
+	const cfg: ProviderConfig = {
+		preset: str(getSetting('knowledge.embedding.preset')),
 		baseURL: str(getSetting('knowledge.embedding.baseURL')).replace(/\/+$/, ''),
 		model: str(getSetting('knowledge.embedding.model')),
 		apiKey: reuse ? str(getSetting('knowledge.chat.apiKey')) : str(getSetting('knowledge.embedding.apiKey')),
@@ -86,6 +94,20 @@ export interface ChatResult {
  * fully assembled message.
  */
 export async function chatStream(
+	cfg: ProviderConfig,
+	messages: ChatMessage[],
+	tools: ToolDef[],
+	onDelta: (text: string) => void,
+	signal: AbortSignal
+): Promise<ChatResult> {
+	if (cfg.preset === 'claude-subscription') {
+		const { anthropicChatStream } = await import('./anthropicClient')
+		return anthropicChatStream(cfg, messages, tools, onDelta, signal)
+	}
+	return openaiChatStream(cfg, messages, tools, onDelta, signal)
+}
+
+async function openaiChatStream(
 	cfg: ProviderConfig,
 	messages: ChatMessage[],
 	tools: ToolDef[],
