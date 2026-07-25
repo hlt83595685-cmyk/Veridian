@@ -1,6 +1,31 @@
 # Veridian 开发日志
 
-## 2026-07-25 — 工具栏手动同步按钮
+## 2026-07-25 — 会话状态恢复（当前工作空间 + 阅读器）
+
+上次关闭软件时的工作空间和阅读器打开状态，下次启动自动恢复。范围经用户
+确认限定为这两项（不含选中条目/分类/搜索词/窗口大小——`viewerPath` 一旦
+设置会让 `MainLayout` 整体切到阅读器视图、隐藏列表和详情面板，这两块状态
+天然独立，互不依赖）。
+
+**存储**：复用 `SettingsService`（明文 JSON，无需加密）两个独立 key：
+- `session.workspaceId`：由**主进程自己**在 `WorkspaceContextService
+  .setActiveWorkspace` 每次切换成功后直接写入（包括切回个人库写 null）——
+  不经 IPC，因为主进程本来就是这个状态的权威来源。
+- `session.viewer`：`{ type, path, filename } | null`，渲染层专属状态
+  （zustand `itemStore`），新增专用 IPC `session:saveViewer` 写入——沿用
+  安全加固时定下的原则，不擅自放宽通用 `settings:set` 白名单。
+
+**恢复时机**：`App.tsx` 新增一个启动期一次性 effect：读
+`session.workspaceId` → 有值调 `setActiveWorkspace`（复用现成的 clone/pull
+容错逻辑）；读 `session.viewer` → 类型守卫校验后调对应的
+`openPdf/openMarkdown/openGallery`。
+
+**容错**：整个恢复过程包在 try/catch 里——存的工作空间被删了、文件被移走了，
+都只是静默失败回落到默认状态（个人库、无阅读器），不影响应用正常启动。
+
+**验证**：typecheck（node 基线 4 / web 0）、34 测试通过、build 成功、dev
+模式冷启动无报错。**未做**：真实"退出→重启→确认状态还原"的完整回归测试
+（需要真实的历史会话状态，留给用户下次重启时自然验证）。
 
 新增 `SyncButton`（`src/renderer/src/components/layout/SyncButton.tsx`），
 放在工具栏工作空间切换器右侧（左侧区域）。

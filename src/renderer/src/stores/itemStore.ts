@@ -58,12 +58,27 @@ export const useItemStore = create<ItemStore>((set) => ({
   setSelectedId: (id) => set({ selectedId: id }),
   setActiveCollection: (id) => {
     set({ activeCollection: id, selectedId: null, viewerPath: null, yearSort: 'none' })
+    window.veridian.session.saveViewer(null)
     setTimeout(() => useItemStore.getState().loadItems(), 0)
   },
   setSearchQuery: (q) => set({ searchQuery: q }),
   toggleYearSort: () => set((s) => ({ yearSort: s.yearSort === 'desc' ? 'none' : 'desc' })),
-  openPdf: (path, filename) => set({ viewerPath: path, viewerFilename: filename, viewerType: 'pdf' }),
-  openMarkdown: (path, filename) => set({ viewerPath: path, viewerFilename: filename, viewerType: 'markdown' }),
-  openGallery: (dirPath, name) => set({ viewerPath: dirPath, viewerFilename: name, viewerType: 'gallery' }),
-  closePdf: () => set({ viewerPath: null, viewerFilename: null }),
+  // Each open action also persists itself for session restore -- next launch
+  // reopens whichever reader (if any) was showing when the app quit.
+  openPdf: (path, filename) => {
+    set({ viewerPath: path, viewerFilename: filename, viewerType: 'pdf' })
+    window.veridian.session.saveViewer({ type: 'pdf', path, filename })
+  },
+  openMarkdown: (path, filename) => {
+    set({ viewerPath: path, viewerFilename: filename, viewerType: 'markdown' })
+    window.veridian.session.saveViewer({ type: 'markdown', path, filename })
+  },
+  openGallery: (dirPath, name) => {
+    set({ viewerPath: dirPath, viewerFilename: name, viewerType: 'gallery' })
+    window.veridian.session.saveViewer({ type: 'gallery', path: dirPath, filename: name })
+  },
+  closePdf: () => {
+    set({ viewerPath: null, viewerFilename: null })
+    window.veridian.session.saveViewer(null)
+  },
 }))

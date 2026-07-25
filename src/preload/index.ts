@@ -106,6 +106,10 @@ const veridianAPI = {
     set: (key: string, value: unknown) => call('settings:set', key, value),
     pickStoragePath: () => call('settings:pickStoragePath'),
   },
+  session: {
+    saveViewer: (viewer: { type: 'pdf' | 'markdown' | 'gallery'; path: string; filename: string } | null) =>
+      call('session:saveViewer', viewer),
+  },
   pdf2md: {
     convertItem: (itemId: number) => call('pdf2md:convertItem', itemId),
   },

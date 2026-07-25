@@ -170,6 +170,12 @@ export const handlers: Record<IpcChannel, Handler> = {
     return result.filePaths[0]
   },
 
+  // Session restore: which reader (if any) was open, so next launch can
+  // reopen it. workspaceId's counterpart is persisted by the main process
+  // itself in WorkspaceContextService -- this one is renderer-owned state.
+  'session:saveViewer': (_e, viewer: { type: string; path: string; filename: string } | null) =>
+    Settings.setSetting('session.viewer', viewer),
+
   // Tools / conversion -- only web URLs; file:// or custom schemes from a
   // compromised renderer must not reach the OS shell.
   'shell:openExternal': (_e, url: string) => {

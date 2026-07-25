@@ -3,8 +3,22 @@ import { MainLayout } from './components/layout/MainLayout'
 import { useItemStore } from './stores/itemStore'
 import { useCollectionStore } from './stores/collectionStore'
 import { useStatusStore } from './stores/statusStore'
+import { useWorkspaceStore } from './stores/workspaceStore'
 import { wireDomainEvents } from './data/queryCache'
 import './i18n'
+
+interface SavedViewer {
+  type: 'pdf' | 'markdown' | 'gallery'
+  path: string
+  filename: string
+}
+
+function isSavedViewer(v: unknown): v is SavedViewer {
+  if (!v || typeof v !== 'object') return false
+  const o = v as Record<string, unknown>
+  return (o.type === 'pdf' || o.type === 'markdown' || o.type === 'gallery')
+    && typeof o.path === 'string' && typeof o.filename === 'string'
+}
 
 export default function App(): JSX.Element {
   const { loadItems, selectedId, setSelectedId } = useItemStore()
@@ -34,6 +48,26 @@ export default function App(): JSX.Element {
     })
     loadItems()
   }, [loadItems])
+
+  // Session restore: reopen the workspace and reader that were active when
+  // the app last quit. Runs once at startup; any failure (workspace since
+  // deleted, file since moved) is caught and swallowed -- the app just falls
+  // back to the personal library with no reader open, same as a fresh install.
+  useEffect(() => {
+    if (!window.veridian) return
+    void (async () => {
+      const workspaceId = await window.veridian.settings.get('session.workspaceId')
+      if (typeof workspaceId === 'number') {
+        await useWorkspaceStore.getState().setActiveWorkspace(workspaceId)
+      }
+      const viewer = await window.veridian.settings.get('session.viewer')
+      if (isSavedViewer(viewer)) {
+        if (viewer.type === 'pdf') useItemStore.getState().openPdf(viewer.path, viewer.filename)
+        else if (viewer.type === 'markdown') useItemStore.getState().openMarkdown(viewer.path, viewer.filename)
+        else useItemStore.getState().openGallery(viewer.path, viewer.filename)
+      }
+    })().catch((err) => console.error('[App] session restore failed:', err))
+  }, [])
 
   // Global pdf2md status feed
   useEffect(() => {

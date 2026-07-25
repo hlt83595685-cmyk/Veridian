@@ -52,6 +52,9 @@ interface VeridianAPI {
     set: (key: string, value: unknown) => Promise<void>
     pickStoragePath: () => Promise<string | null>
   }
+  session: {
+    saveViewer: (viewer: { type: 'pdf' | 'markdown' | 'gallery'; path: string; filename: string } | null) => Promise<void>
+  }
   pdf2md: {
     convertItem: (itemId: number) => Promise<{ error: string | null }>
   }

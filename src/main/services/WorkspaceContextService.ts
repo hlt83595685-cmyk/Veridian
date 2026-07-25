@@ -18,6 +18,7 @@ import { grantAccess } from '../security/pathGuard'
 import { emit } from '../core/Notifier'
 import { getStatus } from './GitHubService'
 import { setAttribution } from './attribution'
+import { setSetting } from './SettingsService'
 
 export interface ActiveWorkspace {
   id: number | null            // null = personal library
@@ -63,6 +64,7 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
     closeWorkspaceDb()
     active = { id: null, kind: 'personal', repoRoot: null }
     setAttribution(null)
+    setSetting('session.workspaceId', null)
     emit({ type: 'workspace.dataRefreshed' })
     return active
   }
@@ -115,6 +117,7 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
     setAttribution(null)
   }
 
+  setSetting('session.workspaceId', id)
   emit({ type: 'workspace.dataRefreshed' })
   return active
 }

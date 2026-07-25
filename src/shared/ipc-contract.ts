@@ -93,6 +93,18 @@ export const contract = {
   'settings:set':             z.tuple([z.string().max(128), z.unknown()]),
   'settings:pickStoragePath': z.tuple([]),
 
+  // Session restore -- workspaceId is persisted by the main process itself
+  // (WorkspaceContextService); the viewer (which file/type was open) is
+  // renderer-only state, so it needs this dedicated write channel rather
+  // than widening the generic settings:set whitelist.
+  'session:saveViewer': z.tuple([
+    z.object({
+      type: z.enum(['pdf', 'markdown', 'gallery']),
+      path: z.string().max(4096),
+      filename: z.string().max(512),
+    }).nullable(),
+  ]),
+
   // Tools / conversion
   'shell:openExternal': z.tuple([z.string().url().max(2048)]),
   'tool:pick-pdf':      z.tuple([]),
