@@ -230,4 +230,9 @@ export const handlers: Record<IpcChannel, Handler> = {
   'github:testRepo':    (_e, repoUrl: string) => GitHub.testRepoAccess(repoUrl),
   'github:listRepos':   () => GitHub.listRepos(),
   'github:avatarPath':  (_e, login: string) => getAvatarPath(login),
+  'github:inviteCollaborator': (_e, owner: string, repo: string, username: string) =>
+    GitHub.inviteCollaborator(owner, repo, username),
+  'github:listInvitations':   () => GitHub.listInvitations(),
+  'github:acceptInvitation':  (_e, id: number) => GitHub.acceptInvitation(id),
+  'github:declineInvitation': (_e, id: number) => GitHub.declineInvitation(id),
 }

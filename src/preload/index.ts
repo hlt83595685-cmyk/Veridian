@@ -128,6 +128,14 @@ const veridianAPI = {
     testRepo: (repoUrl: string) => call('github:testRepo', repoUrl),
     listRepos: () => call('github:listRepos'),
     avatarPath: (login: string) => call<string | null>('github:avatarPath', login),
+    inviteCollaborator: (owner: string, repo: string, username: string) =>
+      call<{ ok: boolean; alreadyCollaborator?: boolean; code?: string; detail?: string }>(
+        'github:inviteCollaborator', owner, repo, username),
+    listInvitations: () => call<Array<{
+      id: number; repoOwner: string; repoName: string; repoFullName: string; inviterLogin: string
+    }>>('github:listInvitations'),
+    acceptInvitation: (id: number) => call('github:acceptInvitation', id),
+    declineInvitation: (id: number) => call('github:declineInvitation', id),
   },
   // Domain-event stream: the renderer query cache subscribes here
   onDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.add(cb) },

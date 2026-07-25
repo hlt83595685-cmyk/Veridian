@@ -122,6 +122,12 @@ export const contract = {
   'github:testRepo':    z.tuple([z.string().min(1).max(512)]),
   'github:listRepos':   z.tuple([]),
   'github:avatarPath':  z.tuple([z.string().min(1).max(64)]),
+  'github:inviteCollaborator': z.tuple([
+    z.string().min(1).max(256), z.string().min(1).max(256), z.string().min(1).max(64),
+  ]),
+  'github:listInvitations':    z.tuple([]),
+  'github:acceptInvitation':   z.tuple([z.number().int().positive()]),
+  'github:declineInvitation':  z.tuple([z.number().int().positive()]),
 } as const
 
 export type IpcChannel = keyof typeof contract

@@ -80,6 +80,14 @@ interface VeridianAPI {
     }>
     listRepos: () => Promise<GitHubRepoInfo[]>
     avatarPath: (login: string) => Promise<string | null>
+    inviteCollaborator: (owner: string, repo: string, username: string) => Promise<{
+      ok: boolean; alreadyCollaborator?: boolean; code?: string; detail?: string
+    }>
+    listInvitations: () => Promise<Array<{
+      id: number; repoOwner: string; repoName: string; repoFullName: string; inviterLogin: string
+    }>>
+    acceptInvitation: (id: number) => Promise<void>
+    declineInvitation: (id: number) => Promise<void>
   }
   onPdf2mdStatus: (cb: (e: {
     filename: string
