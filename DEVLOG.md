@@ -1,5 +1,21 @@
 # Veridian 开发日志
 
+## 2026-07-25 — v0.1.4 发版
+
+内容：工具栏手动同步按钮（含 CSS 环形 spinner）、会话恢复（工作空间 +
+阅读器状态）、查看协作空间成员、浏览器扩展中英文切换 + 工作空间显示、
+扩展新图标。
+
+**发版新坑**：首次 `--publish always` 失败，GitHub 422 "Published releases
+must have a valid tag"——`releaseType: "release"`（非 draft）要求 tag 必须
+**先存在于远端**。此前几版恰好都是 tag 先推的，这次先跑了发布才建 tag。
+流程固定为：bump version → commit → push main → **push tag** → publish。
+失败的那次构建还留下了旧版 latest.yml（18:55 的 0.1.3 残留），但重跑
+electron-builder 全量重新打包后自然覆盖，无需手工修复。
+
+**验证**：本次无重复 Release；匿名 `/releases/latest` 返回 v0.1.4；
+latest.yml 的 version/sha512/size 与实际上传的 exe 逐一核对一致。
+
 ## 2026-07-25 — 浏览器扩展中英文切换 + 工作空间显示
 
 扩展弹窗（`popup.js`/`popup.html`）此前完全没有 i18n（硬编码中文）也不知道
