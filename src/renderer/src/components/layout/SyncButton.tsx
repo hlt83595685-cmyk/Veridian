@@ -49,8 +49,14 @@ export function SyncButton(): JSX.Element | null {
         cursor: syncing ? 'default' : 'pointer',
       }}
     >
+      {/* Fixed-size square box + flex-centered glyph: an inline-block sized
+          only by font metrics has asymmetric ascent/descent padding, so
+          rotate() spins it around an off-center point. A known square box
+          makes the box's center (= transform-origin: 50% 50%) coincide with
+          the glyph's visual center. */}
       <span style={{
-        display: 'inline-block',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: 16, height: 16, lineHeight: 1,
         animation: syncing ? 'spin 1s linear infinite' : 'none',
       }}>
         ⟳
