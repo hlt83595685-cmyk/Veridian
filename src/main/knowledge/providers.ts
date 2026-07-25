@@ -183,20 +183,33 @@ async function openaiChatStream(
 	return { content, toolCalls, finishReason }
 }
 
-/** Settings-page connectivity test. Returns null on success, error text otherwise. */
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+/** 429/529 (overloaded) are transient -- Anthropic and most OpenAI-compatible vendors return them under load. */
+function isTransient(err: unknown): boolean {
+	const msg = err instanceof Error ? err.message : String(err)
+	return /\b(429|529)\b/.test(msg)
+}
+
+/** Settings-page connectivity test. Returns null on success, error text otherwise. Retries transient 429/529 twice with backoff. */
 export async function testProvider(which: 'chat' | 'embedding'): Promise<string | null> {
-	try {
-		if (which === 'embedding') {
-			const cfg = getEmbeddingConfig()
+	const attempts = 3
+	for (let i = 0; i < attempts; i++) {
+		try {
+			if (which === 'embedding') {
+				const cfg = getEmbeddingConfig()
+				if (!cfg) return 'not configured'
+				const [v] = await embedBatch(cfg, ['ping'])
+				return v.length > 0 ? null : 'empty embedding'
+			}
+			const cfg = getChatConfig()
 			if (!cfg) return 'not configured'
-			const [v] = await embedBatch(cfg, ['ping'])
-			return v.length > 0 ? null : 'empty embedding'
+			const r = await chatStream(cfg, [{ role: 'user', content: 'Say "ok".' }], [], () => {}, new AbortController().signal)
+			return r.content ? null : 'empty response'
+		} catch (err) {
+			if (i < attempts - 1 && isTransient(err)) { await sleep(1500 * (i + 1)); continue }
+			return (err as Error).message
 		}
-		const cfg = getChatConfig()
-		if (!cfg) return 'not configured'
-		const r = await chatStream(cfg, [{ role: 'user', content: 'Say "ok".' }], [], () => {}, new AbortController().signal)
-		return r.content ? null : 'empty response'
-	} catch (err) {
-		return (err as Error).message
 	}
+	return 'unreachable'
 }
