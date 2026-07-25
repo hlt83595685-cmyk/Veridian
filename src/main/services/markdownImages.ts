@@ -10,8 +10,9 @@ export interface ImageRename {
 }
 
 export interface RenamePlan {
-  content: string          // markdown with refs rewritten to images/figN.ext
-  renames: ImageRename[]   // apply these to the images dir (order-safe via two-phase)
+  content: string           // markdown with refs rewritten to images/figN.ext
+  renames: ImageRename[]    // apply these to the images dir (order-safe via two-phase)
+  unreferenced: string[]    // basenames present in availableImages but never referenced -- delete these
 }
 
 // Markdown ![alt](path "title") and HTML <img src="path">
@@ -32,6 +33,10 @@ function basenameOf(ref: string): string {
  * Scan `md` for image references whose basenames exist in `availableImages`
  * (basenames of files in the images dir). Assign fig1..figN by first
  * appearance, rewrite refs to `images/figN.ext`, and return the file renames.
+ * Any available image never referenced by the markdown (cover thumbnails,
+ * duplicate page captures MinerU sometimes emits, etc.) is reported in
+ * `unreferenced` so the caller can delete it -- only images the document
+ * actually uses are kept.
  */
 export function planImageRenames(md: string, availableImages: string[]): RenamePlan {
   const available = new Set(availableImages)
@@ -66,5 +71,7 @@ export function planImageRenames(md: string, availableImages: string[]): RenameP
     .filter(([from, to]) => from !== to)
     .map(([from, to]) => ({ from, to }))
 
-  return { content, renames }
+  const unreferenced = availableImages.filter((f) => !mapping.has(f))
+
+  return { content, renames, unreferenced }
 }

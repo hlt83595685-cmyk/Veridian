@@ -46,7 +46,15 @@ function normalizeImages(mdPath: string, imagesDir: string): void {
       try { return statSync(join(imagesDir, f)).isFile() } catch { return false }
     })
     const md = readFileSync(mdPath, 'utf-8')
-    const { content, renames } = planImageRenames(md, files)
+    const { content, renames, unreferenced } = planImageRenames(md, files)
+
+    // Images the document never references (cover thumbnails, duplicate page
+    // captures MinerU sometimes emits) don't get a fig name -- delete them so
+    // only images actually used by the markdown ship to the repo.
+    for (const name of unreferenced) {
+      try { rmSync(join(imagesDir, name), { force: true }) } catch { /* ignore */ }
+    }
+
     if (renames.length === 0) return
     // Phase 1: move all sources out of the way; Phase 2: settle final names.
     const temps: Array<{ tmp: string; to: string }> = []

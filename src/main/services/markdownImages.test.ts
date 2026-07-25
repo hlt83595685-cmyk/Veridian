@@ -68,4 +68,24 @@ describe('planImageRenames', () => {
       { from: 'fig1.png', to: 'fig2.png' },
     ])
   })
+
+  it('reports images that are never referenced', () => {
+    const md = '![](images/used.png)'
+    const { unreferenced } = planImageRenames(md, ['used.png', 'orphan1.png', 'orphan2.jpg'])
+    expect(unreferenced.sort()).toEqual(['orphan1.png', 'orphan2.jpg'])
+  })
+
+  it('unreferenced is empty when all provided images are referenced', () => {
+    const md = '![](images/a.png) ![](images/b.png)'
+    const { unreferenced } = planImageRenames(md, ['a.png', 'b.png'])
+    expect(unreferenced).toEqual([])
+  })
+
+  it('does not count a missing referenced file as making an unrelated image referenced', () => {
+    // md references gone.png (not on disk) and here.png (on disk); orphan.png
+    // is on disk but never referenced -- must still be reported as unreferenced
+    const md = '![](images/gone.png) ![](images/here.png)'
+    const { unreferenced } = planImageRenames(md, ['here.png', 'orphan.png'])
+    expect(unreferenced).toEqual(['orphan.png'])
+  })
 })
