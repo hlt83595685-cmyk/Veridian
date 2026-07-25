@@ -102,7 +102,15 @@ export async function anthropicChatStream(
 		signal,
 	})
 	if (!resp.ok || !resp.body) {
-		throw new Error(`anthropic ${resp.status}: ${(await resp.text()).slice(0, 300)}`)
+		const body = (await resp.text()).slice(0, 300)
+		// On 429s Anthropic's error body is often just {"message":"Error"} with
+		// no detail -- the useful info (which limit, when it resets) lives in
+		// these response headers instead.
+		const rl = [...resp.headers.entries()]
+			.filter(([k]) => k.startsWith('anthropic-ratelimit-') || k === 'retry-after')
+			.map(([k, v]) => `${k}=${v}`)
+			.join(' ')
+		throw new Error(`anthropic ${resp.status}: ${body}${rl ? ` [${rl}]` : ''}`)
 	}
 
 	let content = ''
