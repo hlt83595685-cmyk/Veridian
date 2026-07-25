@@ -121,25 +121,35 @@ export function WorkspaceSwitcher(): JSX.Element {
             )}
           </div>
           {invitations.length > 0 && (
-            <div style={{ padding: '4px 8px 8px', borderBottom: '1px solid var(--separator)', marginBottom: 4 }}>
+            <div style={{
+              padding: '4px 8px 8px', borderBottom: '1px solid var(--separator)', marginBottom: 4,
+              display: 'flex', flexDirection: 'column', gap: 6,
+            }}>
+              {/* Each invitation is its own tinted card -- a plain text row
+                  here would blend into the workspace list right below it,
+                  and multiple pending invitations would run together with
+                  no separation. */}
               {invitations.map((inv) => (
                 <div key={inv.id} style={{
-                  display: 'flex', flexDirection: 'column', gap: 4,
-                  padding: '6px 4px', fontSize: 12,
+                  background: 'var(--primary-light)', borderRadius: 10,
+                  padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6,
                 }}>
-                  <span style={{ color: 'var(--foreground)' }}>
-                    {t('workspace.invite.receivedFrom', { login: inv.inviterLogin, repo: inv.repoFullName })}
+                  <span style={{ fontSize: 11, color: 'var(--foreground-2)' }}>
+                    {t('workspace.invite.receivedFrom', { login: inv.inviterLogin })}
                   </span>
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
+                    {inv.repoFullName}
+                  </span>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
                     <button
                       onClick={() => respondInvitation(inv.id, true)}
-                      style={{ ...primaryBtnStyle, height: 24, padding: '0 10px', fontSize: 11 }}
+                      style={{ ...primaryBtnStyle, flex: 1, height: 26, padding: '0 10px', fontSize: 11 }}
                     >
                       {t('workspace.invite.accept')}
                     </button>
                     <button
                       onClick={() => respondInvitation(inv.id, false)}
-                      style={{ ...secondaryBtnStyle, height: 24, padding: '0 10px', fontSize: 11 }}
+                      style={{ ...secondaryBtnStyle, flex: 1, height: 26, padding: '0 10px', fontSize: 11 }}
                     >
                       {t('workspace.invite.decline')}
                     </button>

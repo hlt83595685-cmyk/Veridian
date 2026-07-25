@@ -70,9 +70,13 @@ export function WorkspaceDialog({ onClose }: Props): JSX.Element {
 
 // ── Existing workspaces ───────────────────────────────────────────────────────
 
-function InviteRow({ owner, repo }: { owner: string; repo: string }): JSX.Element {
+// Full-width form (input + send + cancel + result message) shown BELOW the
+// workspace's name/kind line once "邀请协作者" is clicked. Kept as its own
+// component -- not a collapsed/expanded toggle in place -- so the parent can
+// hide the delete button and give the form the whole row's width instead of
+// squeezing input+send+cancel+delete into one cramped line.
+function InviteForm({ owner, repo, onClose }: { owner: string; repo: string; onClose: () => void }): JSX.Element {
   const { t } = useTranslation('common')
-  const [open, setOpen] = useState(false)
   const [username, setUsername] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -100,27 +104,21 @@ function InviteRow({ owner, repo }: { owner: string; repo: string }): JSX.Elemen
     }
   }
 
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} style={{ ...secondaryBtnStyle, height: 28 }}>
-        {t('workspace.invite.button')}
-      </button>
-    )
-  }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', gap: 6 }}>
         <input
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           placeholder={t('workspace.invite.usernamePlaceholder')}
-          style={{ ...inputStyle, flex: 1, height: 28 }}
+          style={{ ...inputStyle, flex: 1, height: 30 }}
         />
-        <button onClick={submit} disabled={busy || !username.trim()} style={{ ...primaryBtnStyle, height: 28, padding: '0 10px', fontSize: 12 }}>
+        <button onClick={submit} disabled={busy || !username.trim()} style={{ ...primaryBtnStyle, height: 30, padding: '0 14px', fontSize: 12 }}>
           {t('workspace.invite.send')}
         </button>
-        <button onClick={() => { setOpen(false); setMsg(null) }} style={{ ...secondaryBtnStyle, height: 28, padding: '0 10px', fontSize: 12 }}>
+        {/* Plain/transparent, not the same filled style as delete -- these two
+            must not read as visually interchangeable actions. */}
+        <button onClick={onClose} style={{ ...secondaryBtnStyle, height: 30, padding: '0 14px', fontSize: 12, background: 'transparent', color: 'var(--muted)' }}>
           {t('workspace.invite.cancel')}
         </button>
       </div>
@@ -136,6 +134,9 @@ function InviteRow({ owner, repo }: { owner: string; repo: string }): JSX.Elemen
 function WorkspaceList({ workspaces }: { workspaces: LocalWorkspace[] }): JSX.Element {
   const { t } = useTranslation('common')
   const { load, activeWorkspaceId, setActiveWorkspace } = useWorkspaceStore()
+  // Only one row's invite form open at a time -- opening another closes the
+  // previous one, which also keeps this simple (single piece of state).
+  const [inviteOpenId, setInviteOpenId] = useState<number | null>(null)
 
   const remove = async (id: number): Promise<void> => {
     if (activeWorkspaceId === id) await setActiveWorkspace(null)
@@ -149,32 +150,44 @@ function WorkspaceList({ workspaces }: { workspaces: LocalWorkspace[] }): JSX.El
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {workspaces.map((w) => (
-        <div key={w.id} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '10px 12px', borderRadius: 10,
-          border: '1px solid var(--border)', background: 'var(--surface-2)',
-        }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>{w.name}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-              {w.kind === 'github'
-                ? `GitHub · ${w.repo_owner}/${w.repo_name}`
-                : t('workspace.kindLocal')}
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {w.kind === 'github' && w.repo_owner && w.repo_name && (
-                <InviteRow owner={w.repo_owner} repo={w.repo_name} />
+      {workspaces.map((w) => {
+        const inviteOpen = inviteOpenId === w.id
+        return (
+          <div key={w.id} style={{
+            display: 'flex', flexDirection: 'column', gap: 8,
+            padding: '10px 12px', borderRadius: 10,
+            border: '1px solid var(--border)', background: 'var(--surface-2)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>{w.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  {w.kind === 'github'
+                    ? `GitHub · ${w.repo_owner}/${w.repo_name}`
+                    : t('workspace.kindLocal')}
+                </div>
+              </div>
+              {/* Delete steps aside while inviting -- it must never sit right
+                  next to a "cancel" button that looks nearly identical. */}
+              {!inviteOpen && (
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  {w.kind === 'github' && w.repo_owner && w.repo_name && (
+                    <button onClick={() => setInviteOpenId(w.id)} style={{ ...secondaryBtnStyle, height: 28 }}>
+                      {t('workspace.invite.button')}
+                    </button>
+                  )}
+                  <button onClick={() => remove(w.id)} style={{ ...secondaryBtnStyle, height: 28, color: 'var(--accent)' }}>
+                    {t('workspace.deleteWs')}
+                  </button>
+                </div>
               )}
-              <button onClick={() => remove(w.id)} style={{ ...secondaryBtnStyle, height: 28, color: 'var(--accent)' }}>
-                {t('workspace.deleteWs')}
-              </button>
             </div>
+            {inviteOpen && w.repo_owner && w.repo_name && (
+              <InviteForm owner={w.repo_owner} repo={w.repo_name} onClose={() => setInviteOpenId(null)} />
+            )}
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
