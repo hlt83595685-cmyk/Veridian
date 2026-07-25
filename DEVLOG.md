@@ -1,5 +1,72 @@
 # Veridian 开发日志
 
+## 2026-07-26 — 知识库 + AI Agent + RAG（第一期：问答）
+
+按此前提交的设计方案（`docs/superpowers/specs/2026-07-26-knowledge-rag-design.md`）
+实现第一期：混合检索 + 工具循环 Agent 问答，不含自动生成每篇笔记（用户明确
+只要问答）；embedding 和对话模型全部走云端 OpenAI 兼容 API（用户明确本地
+推理先不考虑）；索引与对话记录仅本地，不随协作空间同步。
+
+**新模块** `src/main/knowledge/`：
+- `chunker.ts` —— Full.md 按标题层级切段 + 超长段落滑窗（15% overlap），
+  纯函数，不含 I/O，8 个单测覆盖代码块内 `#` 不误判为标题等边界情况。
+- `db.ts` —— 独立 `knowledge.db`（位置由 `knowledge.storagePath` 设置项
+  决定，默认 `userData/knowledge/`），`sqlite-vec` 的 vec0 虚拟表懒建
+  （首次 embedding 成功后才知道维度，写入 meta 表锁定模型+维度；换模型
+  维度不匹配则拒绝写入，提示用户走"重建索引"）。
+- `indexer.ts` —— 域事件驱动：`attachment.changed`（转换出 Full.md）/
+  `workspace.dataRefreshed`（切换协作空间）/ 设置变更 三类事件防抖后
+  触发扫描。两阶段：chunks+FTS5 先建（不需要联网，永远可用）→ embedding
+  批量调用（32 条/批，失败的 chunk 标记待重试，不阻塞 FTS 检索）。
+- `search.ts` —— 混合检索：FTS5 BM25 top-30 + 向量 KNN top-30，
+  Reciprocal Rank Fusion 融合取 top-8（RRF 只看排名不看分数，绕开两路
+  分数空间不兼容的问题）。`sqlite-vec` 不可用时自动降级为纯 JS 余弦
+  相似度扫描 BLOB 向量。
+- `providers.ts` —— OpenAI 兼容 HTTP 客户端，一份实现覆盖 DeepSeek/
+  智谱/Kimi/OpenAI/自定义，对话和 embedding 分两组独立配置（同厂商可
+  勾选复用 key）。`chatStream` 手写 SSE 逐行解析，支持流式 content +
+  流式 tool_calls（按 index 累积分片参数）。
+- `agent.ts` —— 工具循环（`search_library`/`get_item_info`/
+  `read_context`，最多 8 轮），系统提示词要求内联 `[^item_key:seq]`
+  引用标记；流式 delta 和状态通过新增域事件
+  `knowledge.chatDelta`/`knowledge.chatState` 推给渲染层，IPC 调用本身
+  只返回 conversation id（避免长连接阻塞 invoke）。
+
+**新增域事件**：`knowledge.indexChanged`、`knowledge.chatDelta`、
+`knowledge.chatState`（见 `shared/events.ts`）。
+
+**IPC**：`knowledge:ask/stop/listConversations/getMessages/
+deleteConversation/rebuildIndex/indexStatus/pickStoragePath/
+testProvider` 九个通道，走既定的 contract → handlers → preload →
+env.d.ts 四处同步模式。`knowledge:pickStoragePath` 迁移目录时先
+`renameSync`，跨盘失败则退化为拷贝+删除。
+
+**UI**：设置页新增"AI 知识库" tab（存储路径 + 对话/embedding 两组
+Provider 配置 + 索引状态 + 重建按钮）；工具栏新增"AI 助手"按钮，走
+`uiStore` 既有的整页切换模式（同 设置/工具 页一致，非弹窗）新开一个
+`knowledge` page；聊天面板左侧会话历史、右侧消息流，引用标记渲染为
+可点击 chip（复用 `openMarkdown` 跳转到原文，实现上是把
+`[^KEY:seq]` 重写成 `[[n]](veridian-cite://KEY/seq)` 交给
+`ReactMarkdown` 的 `a` 组件拦截渲染，没有另写解析器）。中英文 i18n
+全覆盖。
+
+**验证**：sqlite-vec 冒烟测试通过（Electron 环境内 `vec_version()`/
+KNN 插入查询/FTS5 均正常）；51 个单测通过（新增 17 个：chunker 8 +
+search/RRF 6 + citations 3）；typecheck 无新增错误（node 基线 4，
+web 0）；`npm run build` 成功。**真实环境端到端验证**：用
+`electron-vite dev --remote-debugging-port` 起真实 dev 实例，CDP 远程
+驱动点击（而非本 session 之前用的 mock-HTML 截图法——那套在这次环境
+下 `capturePage()`/`executeJavaScript()` 都不可靠，改用真实运行的
+应用 + CDP + 页面自身 console/DOM 回读）：
+- 状态栏 "AI index — done"，设置页显示"已索引 7 / 7 篇文献，399 个
+  片段待生成向量"（未配置 embedding key 时的预期状态：FTS5 已建好，
+  向量待补）；
+- 直接查询真实 `knowledge.db`：399 个 chunk 来自用户库里 7 篇真实
+  文献，标题层级正确保留；FTS5 关键词检索 "SAT" 正确命中对应论文；
+- AI 助手面板正确显示"问答范围：Ref-dataset-test"（当前协作空间名）
+  和"尚未配置对话模型"引导文案（未配置对话 key 时的预期降级状态）。
+- 未验证：实际 LLM 问答往返（没有可用的 API key，用户后续自行配置）。
+
 ## 2026-07-25 — v0.1.4 发版
 
 内容：工具栏手动同步按钮（含 CSS 环形 spinner）、会话恢复（工作空间 +

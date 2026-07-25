@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
+import { useUiStore } from '../../stores/uiStore'
 import { WorkspaceSwitcher } from '../workspace/WorkspaceSwitcher'
 import { SyncButton } from './SyncButton'
 import logoUrl from '../../assets/logo.png'
@@ -8,6 +9,7 @@ import logoUrl from '../../assets/logo.png'
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation('common')
   const { searchQuery, setSearchQuery, loadItems, activeCollection } = useItemStore()
+  const setPage = useUiStore((s) => s.setPage)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const activeColId = activeCollection.startsWith('col:')
@@ -100,6 +102,29 @@ export function Toolbar(): JSX.Element {
       </div>
 
       <div style={{ flex: 1 }} />
+
+      {/* AI assistant (secondary) */}
+      <button
+        onClick={() => setPage('knowledge')}
+        className="btn-secondary"
+        style={{
+          height: 38,
+          padding: '0 16px',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border)',
+          background: 'var(--surface)',
+          color: 'var(--foreground-2)',
+          fontSize: 14,
+          fontWeight: 500,
+          boxShadow: 'var(--shadow-sm)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <span style={{ fontSize: 14 }}>✦</span>
+        {t('toolbar.aiAssistant')}
+      </button>
 
       {/* Import (secondary) */}
       <button

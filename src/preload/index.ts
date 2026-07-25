@@ -144,6 +144,23 @@ const veridianAPI = {
       call<{ ok: boolean; collaborators?: Array<{ login: string; avatarUrl: string; role: string }>; code?: string; detail?: string }>(
         'github:listCollaborators', owner, repo),
   },
+  knowledge: {
+    ask: (question: string, conversationId: number | null) =>
+      call<number>('knowledge:ask', question, conversationId),
+    stop: (conversationId: number) => call('knowledge:stop', conversationId),
+    listConversations: () =>
+      call<Array<{ id: number; title: string; created_at: number }>>('knowledge:listConversations'),
+    getMessages: (conversationId: number) =>
+      call<Array<{ id: number; conversation_id: number; role: string; content: string; citations: string; created_at: number }>>(
+        'knowledge:getMessages', conversationId),
+    deleteConversation: (conversationId: number) => call('knowledge:deleteConversation', conversationId),
+    rebuildIndex: () => call('knowledge:rebuildIndex'),
+    indexStatus: () =>
+      call<{ items: number; indexedItems: number; pendingChunks: number; totalChunks: number; embeddingModel: string | null; vecAvailable: boolean }>(
+        'knowledge:indexStatus'),
+    pickStoragePath: () => call<string | null>('knowledge:pickStoragePath'),
+    testProvider: (which: 'chat' | 'embedding') => call<string | null>('knowledge:testProvider', which),
+  },
   // Domain-event stream: the renderer query cache subscribes here
   onDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.add(cb) },
   offDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.delete(cb) },

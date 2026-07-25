@@ -9,6 +9,7 @@ import { MarkdownReaderPane } from '../pdf-viewer/MarkdownReaderPane'
 import { ImageGalleryPane } from '../pdf-viewer/ImageGalleryPane'
 import { SettingsPage } from '../pages/SettingsPage'
 import { ToolsPage } from '../pages/ToolsPage'
+import { KnowledgePage } from '../knowledge/KnowledgePage'
 import { useItemStore } from '../../stores/itemStore'
 import { useUiStore } from '../../stores/uiStore'
 
@@ -53,7 +54,9 @@ export function MainLayout(): JSX.Element {
             ? <SettingsPage />
             : page === 'tools'
               ? <ToolsPage />
-              : viewerPath
+              : page === 'knowledge'
+                ? <KnowledgePage />
+                : viewerPath
                 ? viewerType === 'markdown'
                   ? <MarkdownReaderPane />
                   : viewerType === 'gallery'

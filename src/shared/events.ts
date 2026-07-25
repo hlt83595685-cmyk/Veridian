@@ -31,5 +31,13 @@ export type DomainEvent =
   | { type: 'workspace.dataRefreshed' }
   | { type: 'controlPlane.changed' }
   | { type: 'github.authChanged' }
+  // AI knowledge base: index contents changed (re-query status), and the
+  // chat stream (deltas + lifecycle) pushed from AgentService to the panel.
+  | { type: 'knowledge.indexChanged' }
+  | { type: 'knowledge.chatDelta'; conversationId: number; delta: string }
+  | { type: 'knowledge.chatState'
+      conversationId: number
+      state: 'searching' | 'answering' | 'done' | 'error'
+      detail?: string }
 
 export type DomainEventType = DomainEvent['type']

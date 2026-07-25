@@ -2,7 +2,7 @@
 // against shared/ipc-contract.ts, so each entry only forwards to a Service
 // (or shows a native dialog). No business logic lives here.
 import { dialog, shell, BrowserWindow, IpcMainInvokeEvent } from 'electron'
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
+import { readFileSync, writeFileSync, readdirSync, statSync, renameSync, copyFileSync, unlinkSync, existsSync } from 'fs'
 import { join, extname } from 'path'
 import * as Items from '../services/ItemService'
 import * as Creators from '../services/CreatorService'
@@ -22,6 +22,10 @@ import { startDeviceLogin, cancelDeviceLogin } from '../services/OAuthService'
 import { getAvatarPath } from '../services/AvatarService'
 import type { LocalWorkspaceKind } from '../../shared/types'
 import { manualConvertPdfToMd } from '../services/ConversionService'
+import * as Agent from '../knowledge/agent'
+import { rebuildIndex, getIndexStatus } from '../knowledge/indexer'
+import { testProvider } from '../knowledge/providers'
+import { closeKnowledgeDb, knowledgeDir } from '../knowledge/db'
 import { convertPdfToMarkdown } from '../mineruApi'
 import { assertReadable, assertWritable, grantAccess } from '../security/pathGuard'
 import type { IpcChannel } from '../../shared/ipc-contract'
@@ -45,6 +49,12 @@ const RENDERER_BLOCKED_SETTINGS = new Set(['github.oauthToken', 'controlPlane.se
 // (settings:pickStoragePath) so the value is always a user-picked directory.
 const RENDERER_WRITABLE_SETTINGS = new Set([
   'tool.pdf2md.enabled', 'tool.pdf2md.mode', 'tool.pdf2md.apiToken',
+  // AI knowledge base provider configs (keys are safeStorage-encrypted by
+  // SettingsService). knowledge.storagePath is NOT here -- it goes through
+  // the knowledge:pickStoragePath dialog, same rule as storage.path.
+  'knowledge.chat.preset', 'knowledge.chat.baseURL', 'knowledge.chat.model', 'knowledge.chat.apiKey',
+  'knowledge.embedding.preset', 'knowledge.embedding.baseURL', 'knowledge.embedding.model',
+  'knowledge.embedding.apiKey', 'knowledge.embedding.reuseChatKey',
 ])
 
 function collectImages(dir: string): string[] {
@@ -242,4 +252,37 @@ export const handlers: Record<IpcChannel, Handler> = {
   'github:acceptInvitation':  (_e, id: number) => GitHub.acceptInvitation(id),
   'github:declineInvitation': (_e, id: number) => GitHub.declineInvitation(id),
   'github:listCollaborators': (_e, owner: string, repo: string) => GitHub.listCollaborators(owner, repo),
+
+  // AI knowledge base
+  'knowledge:ask':                (_e, question: string, conversationId: number | null) =>
+    Agent.ask(question, conversationId),
+  'knowledge:stop':               (_e, conversationId: number) => Agent.stopGeneration(conversationId),
+  'knowledge:listConversations':  () => Agent.listConversations(),
+  'knowledge:getMessages':        (_e, conversationId: number) => Agent.getMessages(conversationId),
+  'knowledge:deleteConversation': (_e, conversationId: number) => Agent.deleteConversation(conversationId),
+  'knowledge:rebuildIndex':       () => rebuildIndex(),
+  'knowledge:indexStatus':        () => getIndexStatus(),
+  'knowledge:testProvider':       (_e, which: 'chat' | 'embedding') => testProvider(which),
+  'knowledge:pickStoragePath': async (e) => {
+    const result = await dialog.showOpenDialog(ownerWindow(e)!, {
+      title: '选择 AI 知识库存储目录',
+      properties: ['openDirectory', 'createDirectory'],
+    })
+    if (result.canceled) return null
+    const dest = result.filePaths[0]
+    // Move the existing database over so the index doesn't silently reset.
+    const oldDir = knowledgeDir()
+    closeKnowledgeDb()
+    if (oldDir !== dest) {
+      for (const f of ['knowledge.db', 'knowledge.db-wal', 'knowledge.db-shm']) {
+        const from = join(oldDir, f)
+        if (!existsSync(from)) continue
+        try { renameSync(from, join(dest, f)) }
+        catch { copyFileSync(from, join(dest, f)); unlinkSync(from) }   // cross-drive
+      }
+    }
+    grantAccess(dest)
+    Settings.setSetting('knowledge.storagePath', dest)
+    return dest
+  },
 }

@@ -7,6 +7,7 @@ import { startLocalServer, stopLocalServer } from './server'
 import { registerIpcGateway } from './ipc/gateway'
 import { initConversionService } from './services/ConversionService'
 import { initWorkspaceSyncService } from './services/WorkspaceSyncService'
+import { initKnowledgeIndexer } from './knowledge/indexer'
 import { initAutoUpdater } from './services/UpdateService'
 import { assertReadable } from './security/pathGuard'
 
@@ -110,6 +111,7 @@ app.whenReady().then(async () => {
   }
   initConversionService()
   initWorkspaceSyncService()
+  initKnowledgeIndexer()
   registerIpcGateway(ipcMain)
 
   // No native menu bar -- Tools/Settings live as in-app pages reached from

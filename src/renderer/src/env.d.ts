@@ -98,6 +98,23 @@ interface VeridianAPI {
       detail?: string
     }>
   }
+  knowledge: {
+    ask: (question: string, conversationId: number | null) => Promise<number>
+    stop: (conversationId: number) => Promise<void>
+    listConversations: () => Promise<Array<{ id: number; title: string; created_at: number }>>
+    getMessages: (conversationId: number) => Promise<Array<{
+      id: number; conversation_id: number; role: string; content: string
+      citations: string; created_at: number
+    }>>
+    deleteConversation: (conversationId: number) => Promise<void>
+    rebuildIndex: () => Promise<void>
+    indexStatus: () => Promise<{
+      items: number; indexedItems: number; pendingChunks: number; totalChunks: number
+      embeddingModel: string | null; vecAvailable: boolean
+    }>
+    pickStoragePath: () => Promise<string | null>
+    testProvider: (which: 'chat' | 'embedding') => Promise<string | null>
+  }
   onPdf2mdStatus: (cb: (e: {
     filename: string
     state: 'running' | 'done' | 'error' | 'idle'

@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { useUiStore } from '../../stores/uiStore'
 import { StorageTab, LanguageTab } from '../tools/SettingsDialog'
 import { WorkspaceSettingsTab } from '../workspace/WorkspaceSettingsTab'
+import { KnowledgeSettingsTab } from '../knowledge/KnowledgeSettingsTab'
 
-type Tab = 'storage' | 'language' | 'github'
+type Tab = 'storage' | 'language' | 'github' | 'knowledge'
 
 // Full-page settings view (replaces the old native-menu-driven modal).
 // Entered via the sidebar's bottom gear icon; Esc or the back button
@@ -21,9 +22,10 @@ export function SettingsPage(): JSX.Element {
   }, [setPage])
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'storage',  label: t('settings.storage.title') },
-    { id: 'language', label: t('settings.language.title') },
-    { id: 'github',   label: 'GitHub' },
+    { id: 'storage',   label: t('settings.storage.title') },
+    { id: 'language',  label: t('settings.language.title') },
+    { id: 'github',    label: 'GitHub' },
+    { id: 'knowledge', label: t('settings.knowledge.title') },
   ]
 
   return (
@@ -82,9 +84,10 @@ export function SettingsPage(): JSX.Element {
 
       {/* Content */}
       <div style={{ padding: '20px 22px 22px', flex: 1, overflow: 'auto', maxWidth: 620 }}>
-        {tab === 'storage'  && <StorageTab />}
-        {tab === 'language' && <LanguageTab />}
-        {tab === 'github'   && <WorkspaceSettingsTab />}
+        {tab === 'storage'   && <StorageTab />}
+        {tab === 'language'  && <LanguageTab />}
+        {tab === 'github'    && <WorkspaceSettingsTab />}
+        {tab === 'knowledge' && <KnowledgeSettingsTab />}
       </div>
     </div>
   )

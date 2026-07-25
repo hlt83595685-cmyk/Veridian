@@ -141,6 +141,18 @@ export const contract = {
   'github:acceptInvitation':   z.tuple([z.number().int().positive()]),
   'github:declineInvitation':  z.tuple([z.number().int().positive()]),
   'github:listCollaborators':  z.tuple([z.string().min(1).max(256), z.string().min(1).max(256)]),
+
+  // AI knowledge base (RAG). ask returns a conversation id immediately; the
+  // streamed answer arrives via knowledge.chatDelta / chatState domain events.
+  'knowledge:ask':                z.tuple([z.string().min(1).max(4000), id.nullable()]),
+  'knowledge:stop':               z.tuple([id]),
+  'knowledge:listConversations':  z.tuple([]),
+  'knowledge:getMessages':        z.tuple([id]),
+  'knowledge:deleteConversation': z.tuple([id]),
+  'knowledge:rebuildIndex':       z.tuple([]),
+  'knowledge:indexStatus':        z.tuple([]),
+  'knowledge:pickStoragePath':    z.tuple([]),
+  'knowledge:testProvider':       z.tuple([z.enum(['chat', 'embedding'])]),
 } as const
 
 export type IpcChannel = keyof typeof contract
