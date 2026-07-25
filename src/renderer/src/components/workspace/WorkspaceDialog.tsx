@@ -131,12 +131,68 @@ function InviteForm({ owner, repo, onClose }: { owner: string; repo: string; onC
   )
 }
 
+// Read-only list of the repo's collaborators (avatar + login + role). GitHub
+// requires push access to call this endpoint -- a read-only collaborator's
+// token gets 403, surfaced distinctly from "no collaborators" so it doesn't
+// read as a lie.
+function MembersList({ owner, repo }: { owner: string; repo: string }): JSX.Element {
+  const { t } = useTranslation('common')
+  const [state, setState] = useState<
+    | { phase: 'loading' }
+    | { phase: 'ok'; members: Array<{ login: string; avatarUrl: string; role: string }> }
+    | { phase: 'error'; text: string }
+  >({ phase: 'loading' })
+
+  useEffect(() => {
+    let alive = true
+    window.veridian.github.listCollaborators(owner, repo).then((res) => {
+      if (!alive) return
+      if (res.ok) setState({ phase: 'ok', members: res.collaborators ?? [] })
+      else {
+        const known: Record<string, string> = {
+          forbidden: t('workspace.members.forbidden'),
+          not_found: t('workspace.members.notFound'),
+        }
+        setState({ phase: 'error', text: known[res.code ?? ''] ?? res.detail ?? res.code ?? 'error' })
+      }
+    }).catch((err) => { if (alive) setState({ phase: 'error', text: (err as Error).message }) })
+    return () => { alive = false }
+  }, [owner, repo, t])
+
+  if (state.phase === 'loading') {
+    return <div style={{ fontSize: 12, color: 'var(--muted)' }}>{t('workspace.members.loading')}</div>
+  }
+  if (state.phase === 'error') {
+    return <div style={{ fontSize: 12, color: 'var(--accent)' }}>{state.text}</div>
+  }
+  if (state.members.length === 0) {
+    return <div style={{ fontSize: 12, color: 'var(--muted)' }}>{t('workspace.members.empty')}</div>
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {state.members.map((m) => (
+        <div key={m.login} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <img src={m.avatarUrl} alt="" width={22} height={22} style={{ borderRadius: '50%', flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: 'var(--foreground)', flex: 1, minWidth: 0 }}>{m.login}</span>
+          <span style={{
+            fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase',
+            padding: '2px 6px', borderRadius: 5, background: 'var(--surface)', border: '1px solid var(--border)',
+          }}>
+            {m.role}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function WorkspaceList({ workspaces }: { workspaces: LocalWorkspace[] }): JSX.Element {
   const { t } = useTranslation('common')
   const { load, activeWorkspaceId, setActiveWorkspace } = useWorkspaceStore()
-  // Only one row's invite form open at a time -- opening another closes the
-  // previous one, which also keeps this simple (single piece of state).
-  const [inviteOpenId, setInviteOpenId] = useState<number | null>(null)
+  // Only one row's expanded panel open at a time (invite form OR members
+  // list) -- opening one closes whichever was open, on any row.
+  const [openPanel, setOpenPanel] = useState<{ id: number; kind: 'invite' | 'members' } | null>(null)
 
   const remove = async (id: number): Promise<void> => {
     if (activeWorkspaceId === id) await setActiveWorkspace(null)
@@ -151,7 +207,7 @@ function WorkspaceList({ workspaces }: { workspaces: LocalWorkspace[] }): JSX.El
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {workspaces.map((w) => {
-        const inviteOpen = inviteOpenId === w.id
+        const panelKind = openPanel?.id === w.id ? openPanel.kind : null
         return (
           <div key={w.id} style={{
             display: 'flex', flexDirection: 'column', gap: 8,
@@ -167,14 +223,19 @@ function WorkspaceList({ workspaces }: { workspaces: LocalWorkspace[] }): JSX.El
                     : t('workspace.kindLocal')}
                 </div>
               </div>
-              {/* Delete steps aside while inviting -- it must never sit right
-                  next to a "cancel" button that looks nearly identical. */}
-              {!inviteOpen && (
+              {/* Delete steps aside while a panel is open -- it must never sit
+                  right next to a "cancel" button that looks nearly identical. */}
+              {!panelKind && (
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   {w.kind === 'github' && w.repo_owner && w.repo_name && (
-                    <button onClick={() => setInviteOpenId(w.id)} style={{ ...secondaryBtnStyle, height: 28 }}>
-                      {t('workspace.invite.button')}
-                    </button>
+                    <>
+                      <button onClick={() => setOpenPanel({ id: w.id, kind: 'members' })} style={{ ...secondaryBtnStyle, height: 28 }}>
+                        {t('workspace.members.button')}
+                      </button>
+                      <button onClick={() => setOpenPanel({ id: w.id, kind: 'invite' })} style={{ ...secondaryBtnStyle, height: 28 }}>
+                        {t('workspace.invite.button')}
+                      </button>
+                    </>
                   )}
                   <button onClick={() => remove(w.id)} style={{ ...secondaryBtnStyle, height: 28, color: 'var(--accent)' }}>
                     {t('workspace.deleteWs')}
@@ -182,8 +243,16 @@ function WorkspaceList({ workspaces }: { workspaces: LocalWorkspace[] }): JSX.El
                 </div>
               )}
             </div>
-            {inviteOpen && w.repo_owner && w.repo_name && (
-              <InviteForm owner={w.repo_owner} repo={w.repo_name} onClose={() => setInviteOpenId(null)} />
+            {panelKind === 'invite' && w.repo_owner && w.repo_name && (
+              <InviteForm owner={w.repo_owner} repo={w.repo_name} onClose={() => setOpenPanel(null)} />
+            )}
+            {panelKind === 'members' && w.repo_owner && w.repo_name && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <MembersList owner={w.repo_owner} repo={w.repo_name} />
+                <button onClick={() => setOpenPanel(null)} style={{ ...secondaryBtnStyle, height: 26, alignSelf: 'flex-start', padding: '0 12px', fontSize: 12 }}>
+                  {t('workspace.invite.cancel')}
+                </button>
+              </div>
             )}
           </div>
         )

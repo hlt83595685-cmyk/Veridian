@@ -241,4 +241,5 @@ export const handlers: Record<IpcChannel, Handler> = {
   'github:listInvitations':   () => GitHub.listInvitations(),
   'github:acceptInvitation':  (_e, id: number) => GitHub.acceptInvitation(id),
   'github:declineInvitation': (_e, id: number) => GitHub.declineInvitation(id),
+  'github:listCollaborators': (_e, owner: string, repo: string) => GitHub.listCollaborators(owner, repo),
 }

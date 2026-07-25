@@ -91,6 +91,12 @@ interface VeridianAPI {
     }>>
     acceptInvitation: (id: number) => Promise<void>
     declineInvitation: (id: number) => Promise<void>
+    listCollaborators: (owner: string, repo: string) => Promise<{
+      ok: boolean
+      collaborators?: Array<{ login: string; avatarUrl: string; role: string }>
+      code?: string
+      detail?: string
+    }>
   }
   onPdf2mdStatus: (cb: (e: {
     filename: string

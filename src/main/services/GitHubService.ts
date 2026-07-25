@@ -203,3 +203,40 @@ export async function declineInvitation(id: number): Promise<void> {
   })
   if (!res.ok) throw new Error(`GitHub HTTP ${res.status}`)
 }
+
+export interface Collaborator {
+  login: string
+  avatarUrl: string
+  role: string   // GitHub's role_name: "admin" | "maintain" | "write" | "triage" | "read"
+}
+
+export type ListCollaboratorsResult =
+  | { ok: true; collaborators: Collaborator[] }
+  | { ok: false; code: 'forbidden' | 'not_found' | 'http_error' | 'network'; detail?: string }
+
+/**
+ * Collaborators on a repo, with their role. GitHub requires at least push
+ * access to call this endpoint -- a read-only collaborator gets 403, which
+ * we surface as 'forbidden' rather than an empty list (silently showing
+ * "no collaborators" to someone who simply lacks permission to see them
+ * would be misleading).
+ */
+export async function listCollaborators(owner: string, repo: string): Promise<ListCollaboratorsResult> {
+  const token = getGitHubToken()
+  if (!token) return { ok: false, code: 'not_found' }
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/collaborators?per_page=100`, {
+      headers: API_HEADERS(token), signal: AbortSignal.timeout(10_000),
+    })
+    if (res.status === 403) return { ok: false, code: 'forbidden' }
+    if (res.status === 404) return { ok: false, code: 'not_found' }
+    if (!res.ok) return { ok: false, code: 'http_error', detail: `HTTP ${res.status}` }
+    const raw = (await res.json()) as Array<{ login: string; avatar_url: string; role_name: string }>
+    return {
+      ok: true,
+      collaborators: raw.map((r) => ({ login: r.login, avatarUrl: r.avatar_url, role: r.role_name })),
+    }
+  } catch (err) {
+    return { ok: false, code: 'network', detail: (err as Error).message }
+  }
+}

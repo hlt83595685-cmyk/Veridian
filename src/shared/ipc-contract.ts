@@ -140,6 +140,7 @@ export const contract = {
   'github:listInvitations':    z.tuple([]),
   'github:acceptInvitation':   z.tuple([z.number().int().positive()]),
   'github:declineInvitation':  z.tuple([z.number().int().positive()]),
+  'github:listCollaborators':  z.tuple([z.string().min(1).max(256), z.string().min(1).max(256)]),
 } as const
 
 export type IpcChannel = keyof typeof contract

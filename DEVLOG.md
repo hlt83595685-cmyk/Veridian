@@ -1,6 +1,22 @@
 # Veridian 开发日志
 
-## 2026-07-25 — 会话状态恢复（当前工作空间 + 阅读器）
+## 2026-07-25 — 查看协作空间成员
+
+`GitHubService` 新增 `listCollaborators(owner, repo)`，封装
+`GET /repos/{owner}/{repo}/collaborators`，返回每个协作者的头像 URL、
+用户名、角色（`role_name`：admin/maintain/write/triage/read）。GitHub 要求
+调用方对该仓库至少有写权限，只读协作者的令牌会拿到 403——单独映射成
+"没有权限查看"文案，不和"暂无协作者"混为一谈（避免误导只读用户以为
+仓库没人协作）。
+
+**UI**：`WorkspaceDialog` 的工作空间列表行，`inviteOpenId` 状态泛化成
+`openPanel: { id, kind: 'invite' | 'members' } | null`（同一行同一时刻只
+展开一个面板），新增"查看成员"按钮和 `MembersList` 组件——头像直接用
+GitHub 返回的 `avatarUrl`（`WorkspaceSwitcher` 身份行已有先例直接这么用，
+不需要再走本地缓存那套）。
+
+**验证**：用 Electron 自身渲染器截图确认三按钮行（查看成员/邀请协作者/
+删除）不拥挤；typecheck（node 基线 4 / web 0）、34 测试通过、build 成功。
 
 上次关闭软件时的工作空间和阅读器打开状态，下次启动自动恢复。范围经用户
 确认限定为这两项（不含选中条目/分类/搜索词/窗口大小——`viewerPath` 一旦

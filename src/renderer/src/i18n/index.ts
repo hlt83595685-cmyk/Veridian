@@ -203,6 +203,13 @@ const zh = {
       accept: '接受',
       decline: '拒绝',
     },
+    members: {
+      button: '查看成员',
+      loading: '加载中...',
+      empty: '暂无协作者',
+      forbidden: '没有权限查看成员列表（需要写权限）',
+      notFound: '仓库不存在，或无权限访问',
+    },
   },
 }
 
@@ -407,6 +414,13 @@ const en = {
       receivedFrom: '{{login}} invited you to join',
       accept: 'Accept',
       decline: 'Decline',
+    },
+    members: {
+      button: 'View Members',
+      loading: 'Loading...',
+      empty: 'No collaborators yet',
+      forbidden: 'No permission to view members (requires write access)',
+      notFound: 'Repository not found, or no access',
     },
   },
 }
