@@ -36,7 +36,7 @@ export function AttachmentsTab({ itemId }: { itemId: number }): JSX.Element {
 
   const handleOpen = async (att: Attachment): Promise<void> => {
     const name = att.filename?.toLowerCase() ?? ''
-    const isImgDir = (att as Attachment & { type?: string }).type === 'imagedir'
+    const isImgDir = att.type === 'imagedir'
     const isPdf = att.mime_type === 'application/pdf' || name.endsWith('.pdf')
     const isMd  = att.mime_type === 'text/markdown' || name.endsWith('.md')
 
@@ -55,7 +55,7 @@ export function AttachmentsTab({ itemId }: { itemId: number }): JSX.Element {
   }
 
   const getAttIcon = (att: Attachment): { img?: string; icon?: string } => {
-    const isImgDir = (att as Attachment & { type?: string }).type === 'imagedir'
+    const isImgDir = att.type === 'imagedir'
     if (isImgDir) return { img: iconImg }
     const isMd = att.mime_type === 'text/markdown' || att.filename?.toLowerCase().endsWith('.md')
     if (isMd) return { img: iconMd }

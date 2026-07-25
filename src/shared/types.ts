@@ -71,7 +71,7 @@ export interface Tag {
 export interface Attachment {
   id: number
   item_id: number
-  type: 'pdf' | 'link' | 'other'
+  type: 'pdf' | 'link' | 'other' | 'imagedir' | 'markdown'
   filename: string | null
   path: string | null
   url: string | null
