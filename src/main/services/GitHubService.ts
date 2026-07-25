@@ -125,3 +125,81 @@ export async function testRepoAccess(repoUrl: string): Promise<RepoAccessResult>
     return { ok: false, code: 'network', detail: (err as Error).message }
   }
 }
+
+export interface Invitation {
+  id: number
+  repoOwner: string
+  repoName: string
+  repoFullName: string
+  inviterLogin: string
+}
+
+export type InviteResult =
+  | { ok: true; alreadyCollaborator: boolean }
+  | { ok: false; code: 'not_found' | 'forbidden' | 'http_error' | 'network'; detail?: string }
+
+/**
+ * Invites a GitHub user as a collaborator with write access. 201 = invitation
+ * sent; 204 = already a collaborator (treated as success, no invite needed).
+ * 404 covers both "user doesn't exist" and "repo not accessible" -- GitHub
+ * deliberately doesn't reveal which, matching testRepoAccess's convention.
+ */
+export async function inviteCollaborator(owner: string, repo: string, username: string): Promise<InviteResult> {
+  const token = getGitHubToken()
+  if (!token) return { ok: false, code: 'not_found' }
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/collaborators/${username}`, {
+      method: 'PUT',
+      headers: { ...API_HEADERS(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permission: 'push' }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (res.status === 201) return { ok: true, alreadyCollaborator: false }
+    if (res.status === 204) return { ok: true, alreadyCollaborator: true }
+    if (res.status === 404) return { ok: false, code: 'not_found' }
+    if (res.status === 403) return { ok: false, code: 'forbidden' }
+    return { ok: false, code: 'http_error', detail: `HTTP ${res.status}` }
+  } catch (err) {
+    return { ok: false, code: 'network', detail: (err as Error).message }
+  }
+}
+
+/** Pending repository invitations for the current user (accept/decline elsewhere). */
+export async function listInvitations(): Promise<Invitation[]> {
+  const token = getGitHubToken()
+  if (!token) return []
+  const res = await fetch('https://api.github.com/user/repository_invitations', {
+    headers: API_HEADERS(token), signal: AbortSignal.timeout(10_000),
+  })
+  if (!res.ok) return []
+  const raw = (await res.json()) as Array<{
+    id: number
+    repository: { name: string; full_name: string; owner: { login: string } }
+    inviter: { login: string } | null
+  }>
+  return raw.map((r) => ({
+    id: r.id,
+    repoOwner: r.repository.owner.login,
+    repoName: r.repository.name,
+    repoFullName: r.repository.full_name,
+    inviterLogin: r.inviter?.login ?? 'unknown',
+  }))
+}
+
+export async function acceptInvitation(id: number): Promise<void> {
+  const token = getGitHubToken()
+  if (!token) throw new Error('no_auth')
+  const res = await fetch(`https://api.github.com/user/repository_invitations/${id}`, {
+    method: 'PATCH', headers: API_HEADERS(token), signal: AbortSignal.timeout(10_000),
+  })
+  if (!res.ok) throw new Error(`GitHub HTTP ${res.status}`)
+}
+
+export async function declineInvitation(id: number): Promise<void> {
+  const token = getGitHubToken()
+  if (!token) throw new Error('no_auth')
+  const res = await fetch(`https://api.github.com/user/repository_invitations/${id}`, {
+    method: 'DELETE', headers: API_HEADERS(token), signal: AbortSignal.timeout(10_000),
+  })
+  if (!res.ok) throw new Error(`GitHub HTTP ${res.status}`)
+}
