@@ -17,7 +17,7 @@
 import type Database from 'better-sqlite3'
 import {
   copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync,
-  rmSync, statSync, writeFileSync,
+  renameSync, rmSync, statSync, writeFileSync,
 } from 'fs'
 import { basename, join } from 'path'
 
@@ -141,27 +141,45 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
       id: number; type: string; filename: string | null; path: string | null
       url: string | null; mime_type: string | null
     }>
-    // Canonical naming: locally-managed copies carry UUID filenames (import
-    // dedup) and conversion outputs inherit them -- ugly and meaningless in
-    // a shared repo. Name repo files after the item's PDF instead:
-    //   <original>.pdf / <original>.md / images/
-    const pdfStem = (() => {
-      const pdf = atts.find((a) => a.type === 'pdf' && a.filename)
-      return pdf?.filename?.replace(/\.pdf$/i, '') ?? null
-    })()
+    // Canonical naming: the folder already carries the human-readable title,
+    // so the files inside use UNIFORM names -- Full.pdf / Full.md / images/.
+    // These are per-item singletons written with overwrite semantics (a
+    // re-conversion or re-import replaces the previous copy in place). Only
+    // additional non-canonical files keep uniquePath collision handling.
+    let pdfNamed = false
     for (const att of atts) {
       if (!att.path) continue
-      if (att.path.startsWith(repoRoot)) continue
-      // Conversion outputs (markdown/imagedir) are singletons per item with
-      // CANONICAL names -- a re-conversion must overwrite the previous repo
-      // copy, never stack foo-1.md / images-1 next to it. Only real user
-      // files (PDFs etc.) get uniquePath collision handling.
-      const isConversion = att.type === 'imagedir' || att.type === 'markdown'
+      if (att.path.startsWith(repoRoot)) {
+        // Already in-repo: migrate legacy names (<stem>.pdf / <stem>.md) to
+        // the canonical ones in place, so older items converge on Full.* too.
+        let want: string | null = null
+        if (att.type === 'imagedir') want = 'images'
+        else if (att.type === 'markdown') want = 'Full.md'
+        else if (att.type === 'pdf' && !pdfNamed) want = 'Full.pdf'
+        if (att.type === 'pdf') pdfNamed = true
+        if (want && att.path.startsWith(files) && basename(att.path) !== want) {
+          const dest = join(files, want)
+          try {
+            if (existsSync(dest)) rmSync(dest, { recursive: true, force: true })
+            renameSync(att.path, dest)
+            db.prepare('UPDATE attachments SET path = ?, filename = ? WHERE id = ?')
+              .run(dest, want, att.id)
+            att.path = dest
+            att.filename = want
+          } catch (err) {
+            console.warn(`[WorkspaceFiles] canonical rename failed (${att.path}):`, err)
+          }
+        }
+        continue
+      }
+      const isFirstPdf = att.type === 'pdf' && !pdfNamed
+      const isCanonical = att.type === 'imagedir' || att.type === 'markdown' || isFirstPdf
       let name: string
       if (att.type === 'imagedir') name = 'images'
-      else if (att.type === 'markdown') name = `${pdfStem ?? 'fulltext'}.md`
+      else if (att.type === 'markdown') name = 'Full.md'
+      else if (isFirstPdf) name = 'Full.pdf'
       else name = att.filename ?? basename(att.path)
-      const dest = isConversion ? join(files, name) : uniquePath(files, name)
+      const dest = isCanonical ? join(files, name) : uniquePath(files, name)
       try {
         if (att.type === 'imagedir') {
           // cpSync onto an existing dir MERGES old and new contents -- stale
@@ -171,6 +189,7 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
         } else {
           copyFileSync(att.path, dest)   // plain overwrite for files
         }
+        if (isFirstPdf) pdfNamed = true
         db.prepare('UPDATE attachments SET path = ?, filename = ? WHERE id = ?')
           .run(dest, basename(dest), att.id)
         att.path = dest
@@ -179,6 +198,20 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
         console.warn(`[WorkspaceFiles] attachment relocation failed (${att.path}):`, err)
       }
     }
+
+    // Reconcile files/: anything not backed by an attachment row is an orphan
+    // (a superseded canonical name, or debris from older builds) and is
+    // removed so the repo mirrors the item's attachments exactly.
+    const expected = new Set<string>()
+    for (const att of atts) {
+      if (att.path && att.path.startsWith(files)) expected.add(basename(att.path))
+    }
+    try {
+      for (const entry of readdirSync(files)) {
+        if (expected.has(entry)) continue
+        try { rmSync(join(files, entry), { recursive: true, force: true }) } catch { /* ignore */ }
+      }
+    } catch { /* files dir unreadable -- skip reconcile */ }
 
     const creators = db.prepare(`
       SELECT c.first_name, c.last_name, c.orcid, ic.role, ic.position

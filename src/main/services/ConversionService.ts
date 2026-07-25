@@ -3,8 +3,10 @@
 // job.progress event, and conversion outputs are registered through
 // AttachmentService so the UI refreshes automatically.
 import { join, dirname, basename } from 'path'
-import { existsSync, mkdirSync, rmSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'fs'
+import { randomUUID } from 'crypto'
 import { app } from 'electron'
+import { planImageRenames } from './markdownImages'
 import { registerJobType, enqueue } from '../core/JobQueue'
 import { convertPdfToMarkdownAuto, convertPdfToMarkdownPrecision } from '../mineruApi'
 import { registerAttachment, registerAttachmentDir, listByItem } from './AttachmentService'
@@ -30,6 +32,34 @@ function stagingDir(itemId: number): string {
   try { rmSync(dir, { recursive: true, force: true }) } catch { /* ignore */ }
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+// Normalize the conversion output in staging: every image referenced by the
+// markdown becomes images/figN.<ext> (order of first appearance), and the
+// files in imagesDir are renamed to match. Two-phase rename (via temp names)
+// so a source file that happens to already carry a target name (fig1.png)
+// can't be clobbered mid-way. Best-effort: a failure here must not fail the
+// conversion -- the un-normalized output is still perfectly usable.
+function normalizeImages(mdPath: string, imagesDir: string): void {
+  try {
+    const files = readdirSync(imagesDir).filter((f) => {
+      try { return statSync(join(imagesDir, f)).isFile() } catch { return false }
+    })
+    const md = readFileSync(mdPath, 'utf-8')
+    const { content, renames } = planImageRenames(md, files)
+    if (renames.length === 0) return
+    // Phase 1: move all sources out of the way; Phase 2: settle final names.
+    const temps: Array<{ tmp: string; to: string }> = []
+    for (const r of renames) {
+      const tmp = join(imagesDir, `${randomUUID()}.tmp`)
+      renameSync(join(imagesDir, r.from), tmp)
+      temps.push({ tmp, to: join(imagesDir, r.to) })
+    }
+    for (const t of temps) renameSync(t.tmp, t.to)
+    writeFileSync(mdPath, content, 'utf-8')
+  } catch (err) {
+    console.warn('[conversion] image normalization skipped:', (err as Error).message)
+  }
 }
 
 let pendingConversions = 0
@@ -59,6 +89,7 @@ export function initConversionService(): void {
         }, outputPath)
         mdPath = result.mdPath
         if (result.imagesDir) {
+          normalizeImages(mdPath, result.imagesDir)   // figN names, in staging
           grantAccess(result.imagesDir)
           registerAttachmentDir(itemId, result.imagesDir, basename(result.imagesDir))
         }
