@@ -1,5 +1,34 @@
 # Veridian 开发日志
 
+## 2026-07-25 — v0.1.3 发布记录
+
+合并 main：块 A（GitHub OAuth 登录）+ 块 B（贡献者标注）+ 同步流程三改（一次性
+提交/失败标红/标题目录）+ 暂存目录修复 + 转换产物规范化（figN + Full 命名）+
+图片带功能 + 响应式修复 + 块 C（软件内邀请协作者）+ 邀请控件布局调整。发布前
+在合并后的 main 上重跑全量校验：node typecheck 基线 4、web typecheck **0**、
+34 测试通过、build 成功。
+
+**发布过程踩的新坑**：electron-builder 的重复 release 竞态这次表现不同以往——
+两次并发创建请求中一次因"tag 已存在"报 422 直接失败，导致**打包进程提前退出**，
+只上传了 blockmap 就中断，`exe` 和 `latest.yml` 都没传；更隐蔽的是，中断前
+`dist/latest.yml` 还停留在**上一次（v0.1.2）打包的旧文件**（进程还没跑到重新
+生成这一步就挂了）。若直接把这份 stale 文件传上去，`electron-updater` 客户端
+会读到"最新版是 0.1.2"、sha512 对不上 0.1.3 的 exe，静默导致所有已装 0.1.2
+的用户永远收不到 0.1.3 更新提示。
+
+**处理**：核实 `dist/` 下 exe/blockmap 的文件时间戳确认是本次新构建（而不是
+latest.yml 的旧时间戳）→ 补传 exe → 用 Node `crypto.createHash('sha512')`
+对本地新 exe 重新计算摘要、手写正确的 `latest.yml`（version/sha512/size 与
+真实文件一致）→ 删除误传的旧版本 asset → 重新上传 → 用**未认证请求**
+（`GET /releases/latest`，与 electron-updater 客户端完全一致的调用方式）
+确认最终解析结果版本号、sha512、文件名全部正确。
+
+**教训沉淀**：`--publish always` 每次发布后必须核实两件事——① 该 tag 下只有
+一个 release（无重复）；② `latest.yml` 的 `version` 字段与被打包的实际版本
+一致（不能只看"文件存在"，内容也可能是上一版残留）。
+
+---
+
 ## 2026-07-25 — 邀请协作者控件布局调整
 
 用真实样式值渲染静态 HTML mock（Electron 自身 Chromium 截图，无需连 Chrome
