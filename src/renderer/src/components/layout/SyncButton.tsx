@@ -49,18 +49,22 @@ export function SyncButton(): JSX.Element | null {
         cursor: syncing ? 'default' : 'pointer',
       }}
     >
-      {/* Fixed-size square box + flex-centered glyph: an inline-block sized
-          only by font metrics has asymmetric ascent/descent padding, so
-          rotate() spins it around an off-center point. A known square box
-          makes the box's center (= transform-origin: 50% 50%) coincide with
-          the glyph's visual center. */}
-      <span style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: 16, height: 16, lineHeight: 1,
-        animation: syncing ? 'spin 1s linear infinite' : 'none',
-      }}>
-        ⟳
-      </span>
+      {/* A text glyph's drawn ink is not guaranteed centered within its own
+          font metrics (varies by font/renderer) -- no amount of box-centering
+          fixes that, since rotate() spins the ink, not the box. While syncing,
+          draw a plain CSS ring instead: its geometry is ours, so it's exactly
+          symmetric and rotates cleanly around its true center. The glyph is
+          only used at rest, where it never rotates and any ink offset is
+          invisible. */}
+      {syncing ? (
+        <span style={{
+          display: 'block', width: 14, height: 14, borderRadius: '50%',
+          border: '2px solid var(--foreground-2)', borderTopColor: 'transparent',
+          animation: 'spin 0.7s linear infinite',
+        }} />
+      ) : (
+        <span style={{ lineHeight: 1 }}>⟳</span>
+      )}
     </button>
   )
 }
