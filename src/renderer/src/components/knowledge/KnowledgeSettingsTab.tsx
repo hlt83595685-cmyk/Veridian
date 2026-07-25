@@ -13,7 +13,7 @@ const CHAT_PRESETS: Preset[] = [
 	{ id: 'zhipu', label: '智谱 GLM', baseURL: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-plus' },
 	{ id: 'moonshot', label: 'Kimi (Moonshot)', baseURL: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
 	{ id: 'openai', label: 'OpenAI', baseURL: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-	{ id: 'claude-subscription', label: 'Claude（订阅令牌）', baseURL: 'https://api.anthropic.com', model: 'claude-sonnet-4-5' },
+	{ id: 'claude-subscription', label: 'Claude（订阅令牌）', baseURL: 'https://api.anthropic.com', model: 'claude-sonnet-5' },
 ]
 
 const EMBEDDING_PRESETS: Preset[] = [

@@ -19,7 +19,7 @@ export function getChatConfig(): ProviderConfig | null {
 	// The Claude preset's endpoint/version are fixed by the protocol, not
 	// user-editable -- only the pasted setup-token varies.
 	const cfg: ProviderConfig = preset === 'claude-subscription'
-		? { preset, baseURL: 'https://api.anthropic.com', model: str(getSetting('knowledge.chat.model')) || 'claude-sonnet-4-5', apiKey: str(getSetting('knowledge.chat.apiKey')) }
+		? { preset, baseURL: 'https://api.anthropic.com', model: str(getSetting('knowledge.chat.model')) || 'claude-sonnet-5', apiKey: str(getSetting('knowledge.chat.apiKey')) }
 		: {
 			preset,
 			baseURL: str(getSetting('knowledge.chat.baseURL')).replace(/\/+$/, ''),
