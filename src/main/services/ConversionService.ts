@@ -3,7 +3,8 @@
 // job.progress event, and conversion outputs are registered through
 // AttachmentService so the UI refreshes automatically.
 import { join, dirname, basename } from 'path'
-import { existsSync } from 'fs'
+import { existsSync, mkdirSync, rmSync } from 'fs'
+import { app } from 'electron'
 import { registerJobType, enqueue } from '../core/JobQueue'
 import { convertPdfToMarkdownAuto, convertPdfToMarkdownPrecision } from '../mineruApi'
 import { registerAttachment, registerAttachmentDir, listByItem } from './AttachmentService'
@@ -14,7 +15,21 @@ import { setConversionFailed } from '../db/items'
 interface Pdf2mdPayload {
   itemId: number
   pdfPath: string
-  outputPath?: string
+}
+
+// Conversion output ALWAYS goes to a per-item staging dir under userData,
+// never next to the PDF: after a workspace sync the PDF lives INSIDE the repo,
+// and converting next to it would dump MinerU's raw zip extraction (full.md,
+// images, layout.json and other debris) straight into papers/<title>/files/,
+// bypassing the exporter's canonical-name overwrite. With staging, only the
+// registered md/images attachments are relocated into the repo (md overwrites
+// files/<stem>.md; images replaces files/images wholesale) and the debris
+// stays here. Cleared before each run so re-conversions start fresh.
+function stagingDir(itemId: number): string {
+  const dir = join(app.getPath('userData'), 'conversions', String(itemId))
+  try { rmSync(dir, { recursive: true, force: true }) } catch { /* ignore */ }
+  mkdirSync(dir, { recursive: true })
+  return dir
 }
 
 let pendingConversions = 0
@@ -30,7 +45,8 @@ export function setOnConversionsIdle(fn: () => void): void {
 
 export function initConversionService(): void {
   registerJobType<Pdf2mdPayload>('pdf2md', async (payload, ctx) => {
-    const { itemId, pdfPath, outputPath } = payload
+    const { itemId, pdfPath } = payload
+    const outputPath = join(stagingDir(itemId), `${basename(pdfPath, '.pdf')}.md`)
     try {
       const mode = getPdf2mdMode()
       const token = getPdf2mdApiToken()
@@ -91,10 +107,11 @@ export function autoConvertPdfToMd(itemId: number, pdfPath: string): void {
 }
 
 /**
- * Manual conversion from the context menu. Re-running overwrites the
- * previous output IN PLACE (same .md path; registerAttachment dedupes the
- * row) instead of stacking -1/-2 versioned copies -- repeat conversions of
- * one PDF must not multiply files locally or in a synced workspace repo.
+ * Manual conversion from the context menu. Output goes to the item's staging
+ * dir (see stagingDir); the workspace exporter then relocates it over the
+ * previous repo copy under its canonical name -- repeat conversions replace
+ * files/<stem>.md and files/images in place, never stack copies or dump
+ * MinerU's raw extraction into the repo.
  * Returns an error code when the item has no PDF attachment.
  */
 export function manualConvertPdfToMd(itemId: number): string | null {
@@ -104,15 +121,7 @@ export function manualConvertPdfToMd(itemId: number): string | null {
   )
   if (!pdfAtt?.path) return 'no_pdf'
 
-  const pdfPath = pdfAtt.path
-
-  // Reuse the item's existing markdown output path if there is one
-  const existingMd = attachments.find(
-    (a) => a.path && (a.mime_type === 'text/markdown' || a.filename?.toLowerCase().endsWith('.md'))
-  )
-  const outputPath = existingMd?.path ?? join(dirname(pdfPath), `${basename(pdfPath, '.pdf')}.md`)
-
   pendingConversions++
-  enqueue<Pdf2mdPayload>('pdf2md', basename(pdfPath), { itemId, pdfPath, outputPath })
+  enqueue<Pdf2mdPayload>('pdf2md', basename(pdfAtt.path), { itemId, pdfPath: pdfAtt.path })
   return null
 }

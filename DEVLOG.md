@@ -1,5 +1,27 @@
 # Veridian 开发日志
 
+## 2026-07-25 — 重转换污染仓库修复（暂存目录方案）
+
+用户实测发现：已同步的 PDF 重转 markdown 后，MinerU 的**整个 zip 解压目录**
+（full.md、images、layout.json 等杂物）直接落进仓库的 `files/` 下成为嵌套新目录，
+且旧 md/images 未被替换。
+
+**根因**：`manualConvertPdfToMd` 复用已同步进仓库的 md 路径作输出目标 →
+MinerU 解压目录（`<stem>_mineru/`）生成在仓库 `files/` 内 → 新 md 路径已在
+repoRoot 内 → 导出搬运的"固定名覆盖"逻辑（v0.1.2）被 `startsWith(repoRoot)`
+跳过，完全没执行。
+
+**修复（比"先删后放"更根治）**：转换输出**永远写到仓库外的暂存目录**
+`userData/conversions/<itemId>/`（每次转换前清空）。这样注册的 md/images
+附件路径在仓库外 → 导出搬运必然触发 → md 固定名覆盖 `files/<stem>.md`、
+images 先删 `files/images` 再整体拷入（旧图清除、结构不变）→ zip 杂物留在
+暂存区**根本进不了仓库**。`manualConvertPdfToMd` 不再复用旧输出路径。
+
+**注意**：此前测试中已被污染的仓库需**手动删除一次** `files/` 下的
+`<stem>_mineru/` 嵌套目录（修复只防止再次发生，不清理历史污染）。
+
+---
+
 ## 2026-07-24 — 重复文献检测合并 + 转换附件堆积修复（v0.1.2）
 
 同步设计审查（见对话记录）发现的两个数据完整性问题，均在软件端修复后再同步——
