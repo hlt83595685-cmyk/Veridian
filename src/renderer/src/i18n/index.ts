@@ -190,6 +190,11 @@ const zh = {
       invalidUrl: '无法解析仓库地址（应形如 https://github.com/用户名/仓库名）',
       notFound: '仓库不存在，或该 Token 无权访问（GitHub 返回 404）',
     },
+    invite: {
+      receivedFrom: '{{login}} 邀请你加入 {{repo}}',
+      accept: '接受',
+      decline: '拒绝',
+    },
   },
 }
 
@@ -381,6 +386,11 @@ const en = {
       noPat: 'Sign in with GitHub first (Settings → GitHub)',
       invalidUrl: 'Cannot parse repository URL (expected https://github.com/owner/repo)',
       notFound: 'Repository not found, or the token has no access to it (GitHub returned 404)',
+    },
+    invite: {
+      receivedFrom: '{{login}} invited you to join {{repo}}',
+      accept: 'Accept',
+      decline: 'Decline',
     },
   },
 }

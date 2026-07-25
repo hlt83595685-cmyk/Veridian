@@ -15,6 +15,9 @@ export function WorkspaceSwitcher(): JSX.Element {
   const [identity, setIdentity] = useState<{ authed: boolean; login: string | null; avatarUrl: string | null }>(
     { authed: false, login: null, avatarUrl: null }
   )
+  const [invitations, setInvitations] = useState<Array<{
+    id: number; repoOwner: string; repoName: string; repoFullName: string; inviterLogin: string
+  }>>([])
   const rootRef = useRef<HTMLDivElement>(null)
 
   const activeWs = workspaces.find((w) => w.id === activeWorkspaceId)
@@ -34,6 +37,22 @@ export function WorkspaceSwitcher(): JSX.Element {
     window.veridian.onDomainEvent(onEvent)
     return () => window.veridian.offDomainEvent(onEvent)
   }, [load])
+
+  // One-time fetch on mount -- no polling, matches the "check once at
+  // startup" decision to avoid background network chatter.
+  useEffect(() => {
+    window.veridian.github.listInvitations().then(setInvitations).catch(() => {})
+  }, [])
+
+  const respondInvitation = async (id: number, accept: boolean): Promise<void> => {
+    try {
+      if (accept) await window.veridian.github.acceptInvitation(id)
+      else await window.veridian.github.declineInvitation(id)
+      setInvitations((prev) => prev.filter((i) => i.id !== id))
+    } catch (err) {
+      console.error('[WorkspaceSwitcher] invitation response failed:', err)
+    }
+  }
 
   useEffect(() => {
     if (!open) return
@@ -55,6 +74,7 @@ export function WorkspaceSwitcher(): JSX.Element {
       <button
         onClick={() => setOpen((v) => !v)}
         style={{
+          position: 'relative',
           display: 'flex', alignItems: 'center', gap: 6,
           height: 32, padding: '0 12px', borderRadius: 'var(--radius-md)',
           border: '1px solid var(--border)', background: 'var(--surface)',
@@ -68,6 +88,13 @@ export function WorkspaceSwitcher(): JSX.Element {
           {switching ? t('workspace.switching') : activeLabel}
         </span>
         <span style={{ fontSize: 9, color: 'var(--muted)' }}>▾</span>
+        {invitations.length > 0 && (
+          <span style={{
+            position: 'absolute', top: -2, right: -2,
+            width: 8, height: 8, borderRadius: '50%',
+            background: '#e5484d', border: '1px solid var(--surface)',
+          }} />
+        )}
       </button>
 
       {open && (
@@ -93,6 +120,34 @@ export function WorkspaceSwitcher(): JSX.Element {
               <span>{t('workspace.github.notConnected')}</span>
             )}
           </div>
+          {invitations.length > 0 && (
+            <div style={{ padding: '4px 8px 8px', borderBottom: '1px solid var(--separator)', marginBottom: 4 }}>
+              {invitations.map((inv) => (
+                <div key={inv.id} style={{
+                  display: 'flex', flexDirection: 'column', gap: 4,
+                  padding: '6px 4px', fontSize: 12,
+                }}>
+                  <span style={{ color: 'var(--foreground)' }}>
+                    {t('workspace.invite.receivedFrom', { login: inv.inviterLogin, repo: inv.repoFullName })}
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={() => respondInvitation(inv.id, true)}
+                      style={{ ...primaryBtnStyle, height: 24, padding: '0 10px', fontSize: 11 }}
+                    >
+                      {t('workspace.invite.accept')}
+                    </button>
+                    <button
+                      onClick={() => respondInvitation(inv.id, false)}
+                      style={{ ...secondaryBtnStyle, height: 24, padding: '0 10px', fontSize: 11 }}
+                    >
+                      {t('workspace.invite.decline')}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <Row
             label={t('workspace.personalLibrary')}
             active={activeWorkspaceId === null}
@@ -144,4 +199,16 @@ function Row({ label, active, onClick }: { label: string; active?: boolean; onCl
       {label}
     </button>
   )
+}
+
+const primaryBtnStyle: React.CSSProperties = {
+  height: 32, padding: '0 16px', borderRadius: 8,
+  border: 'none', background: 'var(--primary)',
+  color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+}
+
+const secondaryBtnStyle: React.CSSProperties = {
+  height: 32, padding: '0 16px', borderRadius: 8,
+  border: '1px solid var(--border)', background: 'var(--surface)',
+  color: 'var(--foreground-2)', fontSize: 13, cursor: 'pointer', flexShrink: 0,
 }
