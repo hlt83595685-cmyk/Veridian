@@ -70,6 +70,69 @@ export function WorkspaceDialog({ onClose }: Props): JSX.Element {
 
 // ── Existing workspaces ───────────────────────────────────────────────────────
 
+function InviteRow({ owner, repo }: { owner: string; repo: string }): JSX.Element {
+  const { t } = useTranslation('common')
+  const [open, setOpen] = useState(false)
+  const [username, setUsername] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const submit = async (): Promise<void> => {
+    if (!username.trim()) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const res = await window.veridian.github.inviteCollaborator(owner, repo, username.trim())
+      if (res.ok) {
+        setMsg({ ok: true, text: res.alreadyCollaborator ? t('workspace.invite.alreadyCollaborator') : t('workspace.invite.sent') })
+        setUsername('')
+      } else {
+        const known: Record<string, string> = {
+          not_found: t('workspace.invite.notFound'),
+          forbidden: t('workspace.invite.forbidden'),
+        }
+        setMsg({ ok: false, text: known[res.code ?? ''] ?? res.detail ?? res.code ?? 'error' })
+      }
+    } catch (err) {
+      setMsg({ ok: false, text: (err as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} style={{ ...secondaryBtnStyle, height: 28 }}>
+        {t('workspace.invite.button')}
+      </button>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder={t('workspace.invite.usernamePlaceholder')}
+          style={{ ...inputStyle, flex: 1, height: 28 }}
+        />
+        <button onClick={submit} disabled={busy || !username.trim()} style={{ ...primaryBtnStyle, height: 28, padding: '0 10px', fontSize: 12 }}>
+          {t('workspace.invite.send')}
+        </button>
+        <button onClick={() => { setOpen(false); setMsg(null) }} style={{ ...secondaryBtnStyle, height: 28, padding: '0 10px', fontSize: 12 }}>
+          {t('workspace.invite.cancel')}
+        </button>
+      </div>
+      {msg && (
+        <div style={{ fontSize: 11, color: msg.ok ? 'var(--accent-green)' : 'var(--accent)' }}>
+          {msg.text}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function WorkspaceList({ workspaces }: { workspaces: LocalWorkspace[] }): JSX.Element {
   const { t } = useTranslation('common')
   const { load, activeWorkspaceId, setActiveWorkspace } = useWorkspaceStore()
@@ -100,9 +163,16 @@ function WorkspaceList({ workspaces }: { workspaces: LocalWorkspace[] }): JSX.El
                 : t('workspace.kindLocal')}
             </div>
           </div>
-          <button onClick={() => remove(w.id)} style={{ ...secondaryBtnStyle, height: 28, color: 'var(--accent)' }}>
-            {t('workspace.deleteWs')}
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {w.kind === 'github' && w.repo_owner && w.repo_name && (
+                <InviteRow owner={w.repo_owner} repo={w.repo_name} />
+              )}
+              <button onClick={() => remove(w.id)} style={{ ...secondaryBtnStyle, height: 28, color: 'var(--accent)' }}>
+                {t('workspace.deleteWs')}
+              </button>
+            </div>
+          </div>
         </div>
       ))}
     </div>
