@@ -1,54 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useInView } from '../../hooks/useInView'
 import { useItemStore } from '../../stores/itemStore'
+import { useItemImages } from '../../data/hooks'
 import { sortByFigNumber } from './FigureStrip.utils'
-import type { Attachment } from '../../../../shared/types'
 
 const MAX_THUMBS = 10
 const THUMB_SIZE = 52
 
-interface Loaded {
-  dir: string
-  label: string   // the imagedir attachment's own display name, for the gallery header
-  files: string[]
-}
-
+// Lazy-mount gate: FigureStripContent (and the IPC calls its useItemImages
+// hook makes) only mounts once this row is near the viewport, so an
+// off-screen row in the (non-virtualized) list does zero work. Once mounted,
+// it stays mounted (useInView's inView never reverts to false), so it keeps
+// receiving live updates via the query cache -- no need to scroll away and
+// back, or restart the app, to see a conversion finish or a sync pull land.
 export function FigureStrip({ itemId }: { itemId: number }): JSX.Element {
   const { ref, inView } = useInView<HTMLDivElement>()
-  const [loaded, setLoaded] = useState<Loaded | null>(null)   // null = not fetched (or nothing to show) yet
+  return <div ref={ref}>{inView && <FigureStripContent itemId={itemId} />}</div>
+}
 
-  useEffect(() => {
-    if (!inView) return
-    let alive = true
-    window.veridian.attachments.getByItem(itemId)
-      .then((attachments: Attachment[]) => {
-        const imgDir = attachments.find((a) => a.type === 'imagedir')
-        if (!imgDir?.path) return null
-        const dir = imgDir.path
-        const label = imgDir.filename ?? '图片文件夹'
-        return window.veridian.fs.listDir(dir).then((files) => ({ dir, label, files }))
-      })
-      .then((result) => {
-        if (!alive) return
-        if (!result || result.files.length === 0) { setLoaded(null); return }
-        setLoaded({ dir: result.dir, label: result.label, files: sortByFigNumber(result.files).slice(0, MAX_THUMBS) })
-      })
-      .catch(() => { if (alive) setLoaded(null) })
-    return () => { alive = false }
-  }, [inView, itemId])
+function FigureStripContent({ itemId }: { itemId: number }): JSX.Element | null {
+  const { data } = useItemImages(itemId)
+  if (!data || data.files.length === 0) return null
 
-  if (!loaded) return <div ref={ref} />   // placeholder: not-yet-visible, no images, or fetch failed -- zero visual footprint
+  const files = sortByFigNumber(data.files).slice(0, MAX_THUMBS)
 
   return (
     <div
-      ref={ref}
       style={{
         display: 'flex', gap: 6, overflowX: 'auto', overflowY: 'hidden',
         padding: '6px 0 2px', marginTop: 4,
       }}
     >
-      {loaded.files.map((path) => (
-        <FigureThumb key={path} path={path} dir={loaded.dir} label={loaded.label} />
+      {files.map((path) => (
+        <FigureThumb key={path} path={path} dir={data.dir} label={data.label} />
       ))}
     </div>
   )

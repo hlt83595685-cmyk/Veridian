@@ -149,7 +149,10 @@ export function wireDomainEvents(onEvent?: (e: DomainEvent) => void): void {
         for (const id of e.ids) invalidate(['item', id])
         break
       case 'attachment.changed':
-        for (const id of e.itemIds) invalidate(['attachments', id])
+        for (const id of e.itemIds) {
+          invalidate(['attachments', id])
+          invalidate(['item-images', id])   // conversion finishing registers the imagedir attachment
+        }
         break
       case 'tag.changed':
         for (const id of e.itemIds) invalidate(['tags', id])

@@ -38,3 +38,29 @@ export function useCollections(): { data: Collection[]; loading: boolean } {
   )
   return { data: data ?? [], loading }
 }
+
+export interface ItemImages {
+  dir: string
+  label: string
+  files: string[]
+}
+
+// Resolves the item's imagedir attachment (if any) and lists its files.
+// Event-driven like the other hooks here: attachment.changed (e.g. a pdf2md
+// conversion registering the imagedir once it finishes) and
+// workspace.dataRefreshed (a sync/pull, or switching workspaces) both
+// invalidate this query centrally in queryCache.ts, so callers never need to
+// poll or manually refetch after those events.
+export function useItemImages(itemId: number): { data: ItemImages | null; loading: boolean } {
+  const { data, loading } = useQuery<ItemImages | null>(
+    ['item-images', itemId],
+    async () => {
+      const attachments = await window.veridian.attachments.getByItem(itemId)
+      const imgDir = attachments.find((a) => a.type === 'imagedir')
+      if (!imgDir?.path) return null
+      const files = await window.veridian.fs.listDir(imgDir.path)
+      return { dir: imgDir.path, label: imgDir.filename ?? '图片文件夹', files }
+    }
+  )
+  return { data: data ?? null, loading }
+}

@@ -1,6 +1,30 @@
 # Veridian 开发日志
 
-## 2026-07-25 — 转换产物规范化：figN 图片名 + Full 统一文件名
+## 2026-07-25 — 图片带接入响应式查询体系（修复：需重启/切换空间才刷新）
+
+用户反馈：新导入的 PDF 转换完成后不会自动出现图片带，要重启软件才有；协作
+仓库同步拉取的更新也要切出工作空间再切回来才能看到。
+
+**根因**：`FigureStrip` 用的是手写一次性 `useEffect` 拉取（滚入可视区域时拉一次
+就不再更新），没有接入项目已有的响应式查询系统 `data/queryCache.ts`
+（`useQuery` + 领域事件自动失效重拉——`AttachmentsTab` 的 `useAttachments`
+等其余数据读取全部走这套机制，唯独 `FigureStrip` 是例外）。"重启/切换空间
+才刷新"，本质是"整个组件被强制重新挂载"顶替了本该有的事件响应。
+
+**修复**：
+- `data/hooks.ts` 新增 `useItemImages(itemId)`，基于 `useQuery` 实现（查
+  imagedir 附件 + 列图片目录，合并为一次查询）。
+- `queryCache.ts` 的 `attachment.changed` 事件处理新增
+  `invalidate(['item-images', id])`（此前只失效 `attachments`）——转换完成
+  注册 imagedir 附件时会触发该事件，图片带因此自动重拉。
+- `workspace.dataRefreshed` 已有的 `invalidateAll()` 天然覆盖新 key，同步/
+  拉取后无需额外接线即可让已挂载的图片带自动刷新。
+- `FigureStrip.tsx` 重构为外层用 `useInView` 做懒挂载门控（保持原有的"不滚
+  到附近不做任何事"的内存策略不变），内层 `FigureStripContent` 用
+  `useItemImages` 拉取——一旦挂载，此后转换完成、同步拉取都会自动更新，
+  不需要用户任何操作。
+
+**验证**：typecheck 双端清零/回基线；34 测试通过；build 成功。
 
 **图片归一化**（`markdownImages.ts`，纯函数 11 单测）：转换成功后在暂存区内，
 按 md 中图片引用的首次出现顺序把引用改写为 `images/figN.<ext>`（覆盖
