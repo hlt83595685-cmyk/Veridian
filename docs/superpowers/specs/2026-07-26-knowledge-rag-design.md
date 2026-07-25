@@ -1,8 +1,8 @@
 # Veridian 知识库 + AI Agent + RAG 设计方案
 
 日期：2026-07-26
-状态：待用户确认
-范围（用户已确认）：**只做 RAG 问答**（不自动生成每篇笔记）；知识库**存放位置在设置中可配置**；所有 AI 产物**仅本地**，不随协作空间同步。
+状态：待用户确认（修订1：本地跑模型的部分整体移出第一期，embedding 和 LLM 全部走云端 API）
+范围（用户已确认）：**只做 RAG 问答**（不自动生成每篇笔记）；知识库**存放位置在设置中可配置**；所有 AI 产物**仅本地**，不随协作空间同步；**本地推理（Ollama / 本地 embedding 模型）先不考虑**。
 
 ## 1. 总体架构
 
@@ -14,7 +14,7 @@
 ┌─ 主进程 ─────┴──────────────────────────────────┐
 │  KnowledgeService     索引管道 + 混合检索        │
 │  AgentService         工具循环 + LLM Provider    │
-│  EmbeddingWorker      worker 线程跑 bge-m3       │
+│  EmbeddingClient      云端 embedding API 批量调用 │
 └──────────────┬──────────────────────────────────┘
                │
      knowledge.db（独立 SQLite 文件，位置可配置）
@@ -22,14 +22,14 @@
 ```
 
 设计原则（沿用本项目一贯约束）：
-- **零服务器基础设施**：向量库用 sqlite-vec 扩展直接加载进 better-sqlite3，不引入新数据库进程。
-- **embedding 本地免费跑**：transformers.js + BGE-M3（ONNX int8 量化，中英双语，8192 token 长文本）。检索永远可用、离线可用、零成本。只有对话部分才消耗 LLM 额度。
+- **零服务器基础设施**：向量库用 sqlite-vec 扩展直接加载进 better-sqlite3，不引入新数据库进程（sqlite-vec 是本地**存储**，不是本地推理，不在"先不考虑"之列）。
+- **embedding 和 LLM 都走云端 API**（用户决定：本地跑模型先不考虑）：无模型下载、无硬件要求。embedding 调用便宜到可忽略（一篇文献约 3 万 token，主流 embedding 接口计价折合几厘钱）。
 - **knowledge.db 与主库分离**：索引体积大且随时可重建，不污染主库备份；删掉即重置。
 
 ## 2. 知识库存放位置（设置项）
 
 - 设置页新增「AI 知识库」区块，第一项就是**存放目录**（目录选择器）。
-- 默认 `<userData>/knowledge/`；目录下放 `knowledge.db` 和 embedding 模型缓存（首次下载约 570MB）。
+- 默认 `<userData>/knowledge/`；目录下放 `knowledge.db`（会话历史 + 索引）。
 - 修改位置时把现有文件移动过去（fs.rename，跨盘则复制后删除）；正在索引时禁止修改。
 - 路径存 SettingsService key `knowledge.storagePath`（明文，不是机密）。
 
@@ -40,13 +40,16 @@
 2. 应用启动后台扫描：遍历当前工作空间全部 Full.md，对比内容 hash，补齐缺失/过期索引；
 3. 设置页「重建索引」按钮（清空重来）。
 
-**流程**：Full.md → 按 Markdown 标题层级切段，段内再按 ~500 token 滑窗（overlap 15%）→ EmbeddingWorker 批量嵌入 → 写入 knowledge.db。
+**流程**：Full.md → 按 Markdown 标题层级切段，段内再按 ~500 token 滑窗（overlap 15%）→ EmbeddingClient 批量调云端 embedding 接口（每批 ≤32 段）→ 写入 knowledge.db。
+
+**离线/失败处理**：embedding 需要联网；调用失败的文献记为"待索引"，下次启动扫描时自动补。FTS5 关键词索引不依赖网络，任何时候都先建好——即使 embedding 还没跑，关键词检索也已可用。
 
 **表结构**：
 ```sql
 chunks(id, workspace_id, item_id, item_key, heading_path, seq, text, content_hash)
-vec_chunks  -- vec0 虚拟表: chunk_id, embedding float[1024]
+vec_chunks  -- vec0 虚拟表: chunk_id, embedding float[N]（维度取决于所选 embedding 模型）
 fts_chunks  -- FTS5 虚拟表: text, tokenize='unicode61'  (中文按 unigram 兜底)
+meta(key, value)  -- 记录建索引所用的 embedding 模型和维度；换模型必须重建向量索引
 ```
 
 **工作空间隔离**：所有表带 `workspace_id`，检索只查当前活跃工作空间——协作空间切换后问答范围自动跟着切。
@@ -55,14 +58,15 @@ fts_chunks  -- FTS5 虚拟表: text, tokenize='unicode61'  (中文按 unigram �
 
 ## 4. 混合检索（RRF）
 
-query → ①bge-m3 向量 KNN top-30 ②FTS5 BM25 top-30 → Reciprocal Rank Fusion 融合 → top-8 chunks 进 LLM 上下文。纯向量对精确术语（基因名/化合物/作者名）弱，纯 BM25 对同义改述弱，RRF 融合在基准上稳定优于单路。全流程单文件 SQLite 内完成。
+query → ①云端 embedding 接口嵌入查询后向量 KNN top-30 ②FTS5 BM25 top-30 → Reciprocal Rank Fusion 融合 → top-8 chunks 进 LLM 上下文。纯向量对精确术语（基因名/化合物/作者名）弱，纯 BM25 对同义改述弱，RRF 融合在基准上稳定优于单路。全流程单文件 SQLite 内完成。
 
 ## 5. LLM Provider（两层，逐期实现）
 
-**第一期：OpenAI 兼容 HTTP 客户端**（一个实现覆盖所有）
-- 设置项：预设下拉（DeepSeek / 智谱 / Kimi / OpenAI / Ollama / 自定义）+ baseURL + model + apiKey。
+**第一期：OpenAI 兼容 HTTP 客户端**（一个实现覆盖所有云厂商）
+- **对话模型**设置：预设下拉（DeepSeek / 智谱 / Kimi / OpenAI / 自定义）+ baseURL + model + apiKey。
+- **embedding 模型**设置：独立一组（预设：智谱 embedding-3 / OpenAI text-embedding-3-small / SiliconFlow BGE-M3 / 自定义）。独立配置的原因：DeepSeek 没有 embedding 接口，对话和嵌入常常不是同一家。若两者同厂商可勾选"复用对话配置的 key"。
 - apiKey 用 safeStorage 加密存储（沿用 `github.oauthToken` 先例）。
-- Ollama 本身暴露 OpenAI 兼容端口（`http://localhost:11434/v1`），选 Ollama 预设即为本地免费模式。
+- 本地推理（Ollama 等）第一期不做；由于协议就是 OpenAI 兼容，将来想加只是设置页多一个预设，架构无需改动。
 
 **第二期：订阅账号桥接**（用户提出的 ChatGPT/Claude 订阅登录，查证结论）
 - **Claude 订阅：可行且官方允许。** Anthropic 现行政策（2026-06 确认）允许第三方应用通过 Claude Agent SDK 使用用户自己的 Claude 订阅，用量计入订阅额度。实现：检测本机已登录的 Claude Code，经 `@anthropic-ai/claude-agent-sdk` 调用。前提是用户装了 Claude Code 并已登录。
@@ -93,18 +97,18 @@ Provider 统一接口：`chat(messages, tools) → AsyncIterable<delta>`（流�
 
 | 包 | 用途 | 备注 |
 |---|---|---|
-| `sqlite-vec` | 向量检索 | 预编译二进制，`load()` 进 better-sqlite3 实例 |
-| `@huggingface/transformers` | 本地 embedding | 纯 JS/ONNX，主进程 worker 线程运行 |
+| `sqlite-vec` | 向量检索（本地存储） | 预编译二进制，`load()` 进 better-sqlite3 实例 |
 
-模型 `Xenova/bge-m3`（int8 ONNX，~570MB）首次使用时下载到知识库目录，之后离线可用。
+embedding 和对话都走 HTTP（Node 原生 fetch），**无其他新依赖**。
 
 ## 9. 分期
 
-- **第一期（本方案）**：设置区块（存放位置 + OpenAI 兼容 Provider）、索引管道、混合检索、Agent 工具循环、聊天面板。
-- **第二期（后续单独立项）**：Claude 订阅桥接（Agent SDK）；相关文献推荐；每篇自动笔记（若将来想要）。
+- **第一期（本方案）**：设置区块（存放位置 + 对话/embedding 两组 Provider 配置）、索引管道、混合检索、Agent 工具循环、聊天面板。
+- **第二期（后续单独立项）**：Claude 订阅桥接（Agent SDK）；本地推理（Ollama / 本地 embedding）；相关文献推荐；每篇自动笔记（若将来想要）。
 
 ## 10. 风险与对策
 
-- **bge-m3 首次下载 570MB**：设置页明确提示 + 下载进度条；下载失败可重试；模型文件在可配置的知识库目录里，换机器可拷贝。
-- **CPU 嵌入速度**：bge-m3 int8 在普通 CPU 上约 2-5 段/秒，一篇 50 段的文献 10-30 秒，放后台 worker + 队列，不阻塞 UI；与现有转换队列同样的异步模式。
+- **换 embedding 模型 = 向量不兼容**：meta 表记录建索引所用模型；检测到设置变更时提示"需要重建索引"并一键重建（FTS5 部分不受影响）。
+- **索引依赖联网**：失败文献标记"待索引"自动补跑；FTS5 关键词索引先行、始终可用，保证断网时至少有关键词检索。
 - **sqlite-vec 原生扩展与 Electron ABI**：sqlite-vec 是 SQLite 运行时扩展（.dll），不链接 Node ABI，理论上不受 electron-rebuild 影响；实现第一步先做加载冒烟测试，失败则回退纯 JS 余弦相似度（文献量 <5000 篇时全量扫描依然 <100ms）。
+- **API key 未配置时的体验**：聊天面板显示引导文案（去设置页配置），索引管道中 embedding 步骤挂起，仅建 FTS5。
