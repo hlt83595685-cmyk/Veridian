@@ -1,5 +1,41 @@
 # Veridian 开发日志
 
+## 2026-07-25 — 浏览器扩展中英文切换 + 工作空间显示
+
+扩展弹窗（`popup.js`/`popup.html`）此前完全没有 i18n（硬编码中文）也不知道
+当前活跃的是哪个工作空间。扩展没有构建流程（纯 `<script src="popup.js">`，
+无打包器），所以 i18n 直接内联在 `popup.js` 里一份 `STRINGS = { en, zh }`
+字典，不单独拆 i18n.js 模块。
+
+**语言切换**：弹窗内手动切换按钮（不跟随 `chrome.i18n` 的浏览器语言），
+偏好存 `chrome.storage.local`（弹窗每次关闭都会销毁 DOM/内存状态，必须持久化）。
+默认语言英文——弹窗打开瞬间（"Step 0"）就用 `getLang()` 读到的语言直接渲染
+初始文案，避免先闪一下硬编码中文再切换。`popup.html` 的初始文案节点改成空
+字符串，全部交给 `popup.js` 填充。
+
+**工作空间显示**：`/ping` 响应新增 `workspace: { kind, name }`
+（`src/main/server/index.ts`），来自 `getActiveWorkspace()` +
+`getWorkspace(id).name`——只吐原始 kind/name，本地化文案（"个人库" vs
+真实工作空间名）由扩展自己按当前语言选择，主进程不替扩展做语言决定。弹窗
+以只读方式展示"保存到：XXX"，不支持从扩展内切换工作空间（协作空间切换是
+桌面应用的操作，扩展只是告知用户"即将存到哪"，避免用户没注意到桌面端已切换
+库而存错地方）。
+
+**验证**：`claude-in-chrome` 未连接扩展，改用 Electron 隐藏窗口加载模拟
+`window.chrome` 的测试页 + `console-message` 事件回读渲染结果（截图法在此
+沙箱环境下 `capturePage()`/`executeJavaScript()` 均返回陈旧或空白结果，判定
+为环境限制而非代码问题，改走已验证可靠的页面 `console.log` 回读通道）。过程中
+发现真实 bug：作者列表"等 N 人"后缀传的是作者总数而非剩余未展示数量
+（7 位作者只显示 6 位时误显示"等 7 人"，应为"等 1 人"），已修复并重新验证
+中英文两版渲染均正确。
+
+`content.js` 无用户可见字符串（纯 DOM 提取），`background.js` 的 3 处内部
+错误兜底文案（`'no tab'` 等）保持英文不译——同桌面端不翻译 `console.error`
+调试信息的惯例一致，且用户几乎不会看到。
+
+**验证结果**：typecheck（node 基线 4 / web 0，无新增）、34 测试通过、
+`node --check` 语法检查通过。
+
 ## 2026-07-25 — 查看协作空间成员
 
 `GitHubService` 新增 `listCollaborators(owner, repo)`，封装

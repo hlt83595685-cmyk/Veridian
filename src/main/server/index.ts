@@ -9,6 +9,8 @@ import { fetchCrossRefByDoi, searchCrossRefByTitle, CROSSREF_TYPE_MAP } from '..
 import { setTagsForItem } from '../services/TagService'
 import { autoConvertPdfToMd } from '../services/ConversionService'
 import { emit } from '../core/Notifier'
+import { getActiveWorkspace } from '../services/WorkspaceContextService'
+import { getWorkspace } from '../services/LocalWorkspaceService'
 
 // 23120, NOT 23119: 23119 is Zotero's connector port -- squatting on it makes
 // the two apps silently steal each other's browser-extension traffic.
@@ -168,9 +170,15 @@ export function startLocalServer(): void {
     const url = (req.url ?? '/').split('?')[0]
 
     try {
-      // GET /ping
+      // GET /ping -- also reports which library the extension is about to
+      // save into. Raw kind/name only: the main process doesn't choose the
+      // extension's display language, that's the extension's job.
       if (req.method === 'GET' && url === '/ping') {
-        return json(res, 200, { ok: true, app: 'Veridian' }, cors)
+        const ctx = getActiveWorkspace()
+        const workspace = ctx.id === null
+          ? { kind: 'personal' as const, name: null }
+          : { kind: ctx.kind, name: getWorkspace(ctx.id)?.name ?? null }
+        return json(res, 200, { ok: true, app: 'Veridian', workspace }, cors)
       }
 
       // GET /collections
