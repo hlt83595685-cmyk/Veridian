@@ -1,6 +1,20 @@
 # Veridian 开发日志
 
-## 2026-07-25 — v0.1.3 发布记录
+## 2026-07-25 — 工具栏手动同步按钮
+
+新增 `SyncButton`（`src/renderer/src/components/layout/SyncButton.tsx`），
+放在工具栏工作空间切换器右侧（左侧区域）。
+
+- **显示条件**：仅当前激活的是 github 类型工作空间时渲染；个人库/本地工作
+  空间下不显示（无东西可同步）。
+- **状态反映真实同步进度**：`workspace.syncNow()` 只是把任务入队就立即返回，
+  真正的 pull+push 是后台异步跑的。按钮监听与状态栏 pdf2md 进度共用的同一条
+  `job.progress` 领域事件（按 `job.type === 'workspace.sync'` 过滤），据此
+  切换旋转图标——同步中禁用点击、图标旋转（复用 globals.css 已有的 `spin`
+  关键帧），真正完成/出错后自动恢复，而非猜一个固定延时假装在转。
+
+**验证**：用 Electron 自身 Chromium 渲染静态 mock 截图确认位置/尺寸观感后
+落地真代码；typecheck（node 4 基线 / web 0）、34 测试通过、build 成功。
 
 合并 main：块 A（GitHub OAuth 登录）+ 块 B（贡献者标注）+ 同步流程三改（一次性
 提交/失败标红/标题目录）+ 暂存目录修复 + 转换产物规范化（figN + Full 命名）+
