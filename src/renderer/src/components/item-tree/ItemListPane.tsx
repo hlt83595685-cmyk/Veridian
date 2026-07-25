@@ -4,6 +4,7 @@ import { useItemStore } from '../../stores/itemStore'
 import { useCollectionStore } from '../../stores/collectionStore'
 import type { Item } from '../../../../shared/types'
 import emptyRefsUrl from '../../assets/empty-refs.png'
+import { FigureStrip } from './FigureStrip'
 
 interface ContextMenu { x: number; y: number; itemId: number | null; showMove?: boolean }
 
@@ -156,6 +157,7 @@ function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu }: {
             )}
           </div>
         )}
+        <FigureStrip itemId={item.id} />
       </div>
       {/* Journal column */}
       <div style={{
