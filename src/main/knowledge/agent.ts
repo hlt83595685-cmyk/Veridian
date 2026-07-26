@@ -84,9 +84,11 @@ async function runTool(name: string, argsJson: string): Promise<string> {
 			'SELECT id, title, year, journal, doi FROM items WHERE key = ? AND deleted = 0'
 		).get(key) as { id: number; title: string | null; year: number | null; journal: string | null; doi: string | null } | undefined
 		if (!item) return 'not found'
-		const creators = getDb().prepare(
-			'SELECT last_name, first_name FROM creators WHERE item_id = ? ORDER BY position LIMIT 10'
-		).all(item.id) as { last_name: string; first_name: string | null }[]
+		const creators = getDb().prepare(`
+			SELECT c.last_name, c.first_name FROM creators c
+			JOIN item_creators ic ON ic.creator_id = c.id
+			WHERE ic.item_id = ? ORDER BY ic.position LIMIT 10
+		`).all(item.id) as { last_name: string; first_name: string | null }[]
 		return JSON.stringify({
 			title: item.title, year: item.year, journal: item.journal, doi: item.doi,
 			authors: creators.map((c) => [c.first_name, c.last_name].filter(Boolean).join(' ')),

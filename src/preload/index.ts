@@ -31,6 +31,13 @@ const _domainEventCbs = new Set<DomainEventCb>()
 let _pdf2mdStatusCb: Pdf2mdStatusCb | null = null
 let _pdf2mdProgressCb: Pdf2mdProgressCb | null = null
 
+// Idempotent registration: if this preload module is ever re-evaluated in the
+// same renderer (electron-vite HMR has been observed to do this without a
+// full process restart), a plain ipcRenderer.on would stack a second listener
+// -- every subsequent domain-event then fires each callback twice, which
+// shows up as duplicated streamed text in the AI chat panel. Clearing first
+// keeps this file safe to re-run.
+ipcRenderer.removeAllListeners('domain-event')
 ipcRenderer.on('domain-event', (_ev, e: DomainEvent) => {
   for (const cb of _domainEventCbs) cb(e)
 
@@ -47,6 +54,7 @@ ipcRenderer.on('domain-event', (_ev, e: DomainEvent) => {
     })
   }
 })
+ipcRenderer.removeAllListeners('tool:pdf2md:progress')
 ipcRenderer.on('tool:pdf2md:progress', (_ev, p) => { _pdf2mdProgressCb?.(p) })
 
 const veridianAPI = {
