@@ -263,14 +263,23 @@ function ProviderSection(props: {
 					/>
 				</Field>
 				{extra}
-				<div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-					<button onClick={onTest} disabled={testState === 'pending'} style={secondaryBtnStyle}>
-						{testState === 'pending' ? t('settings.knowledge.testing') : t('settings.knowledge.testBtn')}
-					</button>
-					{testState && testState !== 'pending' && (
-						<span style={{ fontSize: 12, color: testState === null ? 'var(--success, #16a34a)' : 'var(--danger, #dc2626)' }}>
-							{testState === null ? t('settings.knowledge.testOk') : t('settings.knowledge.testFail', { detail: testState })}
-						</span>
+				<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+					<div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+						<button onClick={onTest} disabled={testState === 'pending'} style={secondaryBtnStyle}>
+							{testState === 'pending' ? t('settings.knowledge.testing') : t('settings.knowledge.testBtn')}
+						</button>
+						{testState === null && (
+							<span style={{ fontSize: 12, color: 'var(--success, #16a34a)' }}>{t('settings.knowledge.testOk')}</span>
+						)}
+					</div>
+					{testState && testState !== 'pending' && testState !== null && (
+						<div style={{
+							fontSize: 11.5, color: 'var(--danger, #dc2626)', lineHeight: 1.5,
+							background: 'var(--muted-bg)', borderRadius: 8, padding: '8px 10px',
+							wordBreak: 'break-word', overflowWrap: 'anywhere',
+						}}>
+							{t('settings.knowledge.testFail', { detail: testState })}
+						</div>
 					)}
 				</div>
 			</div>
