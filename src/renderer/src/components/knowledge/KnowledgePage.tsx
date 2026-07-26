@@ -32,6 +32,14 @@ export function KnowledgePage(): JSX.Element {
 	const bottomRef = useRef<HTMLDivElement>(null)
 	const activeConvIdRef = useRef<number | null>(null)
 	activeConvIdRef.current = conversationId
+	// Synchronous re-entrancy guard for send(). chatState alone isn't safe here:
+	// its setter is async/batched, so two send() calls within the same tick
+	// (IME Enter-to-confirm firing right before Enter-to-submit, a fast
+	// double-click) both read the pre-update state and both pass the check --
+	// two concurrent streams then interleave their deltas into one bubble,
+	// which is exactly the "duplicated while streaming, correct once saved"
+	// symptom this fixes.
+	const busyRef = useRef(false)
 
 	useEffect(() => {
 		void refreshConversations()
@@ -60,10 +68,12 @@ export function KnowledgePage(): JSX.Element {
 				if (e.state === 'done') {
 					setChatState('idle')
 					streamingRef.current = ''
+					busyRef.current = false
 					void refreshMessages(e.conversationId)
 					void refreshConversations()
 				} else if (e.state === 'error') {
 					setChatState('error')
+					busyRef.current = false
 				} else {
 					setChatState(e.state)
 				}
@@ -110,7 +120,8 @@ export function KnowledgePage(): JSX.Element {
 
 	async function send(): Promise<void> {
 		const q = input.trim()
-		if (!q || chatState === 'searching' || chatState === 'answering') return
+		if (!q || busyRef.current) return
+		busyRef.current = true
 		setInput('')
 		streamingRef.current = ''
 		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [] }])

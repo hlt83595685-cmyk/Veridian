@@ -171,7 +171,7 @@ export function KnowledgeSettingsTab(): JSX.Element {
 				onApiKey={(v) => { setEmbedding((s) => ({ ...s, apiKey: v })); void saveField('knowledge.embedding.apiKey', v) }}
 				onTest={() => void test('embedding')}
 				testState={testState.which === 'embedding' ? testState.result : null}
-				disabled={reuseChatKey}
+				apiKeyDisabled={reuseChatKey}
 				t={t}
 				extra={
 					<label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--foreground-2)', marginTop: 8 }}>
@@ -224,17 +224,17 @@ function ProviderSection(props: {
 	onApiKey: (v: string) => void
 	onTest: () => void
 	testState: string | null
-	disabled?: boolean
+	apiKeyDisabled?: boolean
 	lockBaseUrl?: boolean
 	apiKeyLabel?: string
 	extra?: React.ReactNode
 	t: (key: string, opts?: Record<string, unknown>) => string
 }): JSX.Element {
-	const { title, desc, presets, state, onPreset, onBaseURL, onModel, onApiKey, onTest, testState, disabled, lockBaseUrl, apiKeyLabel, extra, t } = props
+	const { title, desc, presets, state, onPreset, onBaseURL, onModel, onApiKey, onTest, testState, apiKeyDisabled, lockBaseUrl, apiKeyLabel, extra, t } = props
 	return (
 		<Section label={title}>
 			<div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{desc}</div>
-			<div style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: disabled ? 0.5 : 1, pointerEvents: disabled ? 'none' : 'auto' }}>
+			<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 				<Field label={t('settings.knowledge.preset')}>
 					<select value={state.preset} onChange={(e) => onPreset(e.target.value)} style={inputStyle}>
 						<option value="">{t('settings.knowledge.presetCustom')}</option>
@@ -256,10 +256,11 @@ function ProviderSection(props: {
 				<Field label={apiKeyLabel ?? t('settings.knowledge.apiKey')}>
 					<input
 						type="password"
-						value={state.apiKey}
+						value={apiKeyDisabled ? '' : state.apiKey}
 						onChange={(e) => onApiKey(e.target.value)}
-						style={inputStyle}
-						placeholder={t('settings.knowledge.apiKeyPlaceholder')}
+						style={{ ...inputStyle, ...(apiKeyDisabled ? { opacity: 0.5 } : {}) }}
+						placeholder={apiKeyDisabled ? t('settings.knowledge.apiKeyReused') : t('settings.knowledge.apiKeyPlaceholder')}
+						disabled={apiKeyDisabled}
 					/>
 				</Field>
 				{extra}
