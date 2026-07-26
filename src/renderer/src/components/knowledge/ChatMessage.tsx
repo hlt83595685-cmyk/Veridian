@@ -34,6 +34,9 @@ export function ChatMessageView({ role, content, citations, streaming }: {
 	const setPage = useUiStore((s) => s.setPage)
 	const openMarkdown = useItemStore((s) => s.openMarkdown)
 	const byKeySeq = new Map(citations.map((c) => [`${c.itemKey}:${c.seq}`, c]))
+	// The sources list is per-paper, not per-excerpt -- citing the same paper
+	// at several seqs shouldn't repeat its title several times in the list.
+	const uniqueSources = [...new Map(citations.map((c) => [c.itemKey, c])).values()]
 
 	if (role === 'user') {
 		return (
@@ -91,12 +94,12 @@ export function ChatMessageView({ role, content, citations, streaming }: {
 				</div>
 			</div>
 
-			{citations.length > 0 && !streaming && (
+			{uniqueSources.length > 0 && !streaming && (
 				<div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '0 4px' }}>
 					<div style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
 						{t('knowledge.citationsLabel')}
 					</div>
-					{citations.map((c, i) => (
+					{uniqueSources.map((c, i) => (
 						<button
 							key={`${c.itemKey}:${c.seq}`}
 							onClick={() => void openCitation(c.itemId, setPage, openMarkdown)}

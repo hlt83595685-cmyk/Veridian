@@ -37,6 +37,14 @@ const creator = z.object({
 
 const pathString = z.string().min(1).max(1024)
 
+// @-mention context attached to a knowledge:ask call -- resolved server-side
+// into extra hidden context messages, kept out of the 4000-char question cap.
+const knowledgeRef = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('item'), itemKey: z.string().min(1).max(64) }),
+  z.object({ type: z.literal('file'), path: pathString }),
+  z.object({ type: z.literal('skill'), name: z.string().min(1).max(64) }),
+])
+
 export const contract = {
   // Items
   'items:getAll':          z.tuple([optionalLibraryId]),
@@ -144,7 +152,7 @@ export const contract = {
 
   // AI knowledge base (RAG). ask returns a conversation id immediately; the
   // streamed answer arrives via knowledge.chatDelta / chatState domain events.
-  'knowledge:ask':                z.tuple([z.string().min(1).max(4000), id.nullable()]),
+  'knowledge:ask':                z.tuple([z.string().min(1).max(4000), id.nullable(), z.array(knowledgeRef).max(5).optional()]),
   'knowledge:stop':               z.tuple([id]),
   'knowledge:listConversations':  z.tuple([]),
   'knowledge:getMessages':        z.tuple([id]),
@@ -153,6 +161,14 @@ export const contract = {
   'knowledge:indexStatus':        z.tuple([]),
   'knowledge:pickStoragePath':    z.tuple([]),
   'knowledge:testProvider':       z.tuple([z.enum(['chat', 'embedding'])]),
+
+  // Skills: reusable instruction blocks (SKILL.md, no code execution) the
+  // chat agent can load on demand -- see src/main/knowledge/skills.ts.
+  'skills:list':              z.tuple([]),
+  'skills:installFromGithub': z.tuple([z.string().url().max(2048)]),
+  'skills:installFromZip':    z.tuple([]),   // opens its own native file picker
+  'skills:uninstall':         z.tuple([z.string().min(1).max(64)]),
 } as const
 
 export type IpcChannel = keyof typeof contract
+export type KnowledgeRef = z.infer<typeof knowledgeRef>

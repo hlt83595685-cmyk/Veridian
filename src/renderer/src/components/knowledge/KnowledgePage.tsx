@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { useUiStore } from '../../stores/uiStore'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 import type { DomainEvent } from '../../../../shared/events'
+import type { KnowledgeRef } from '../../../../shared/ipc-contract'
+import type { Item, RepoTreeNode } from '../../../../shared/types'
 import { ChatMessageView, type CitationInfo } from './ChatMessage'
 
 interface ConversationRow { id: number; title: string; created_at: number }
@@ -14,6 +16,24 @@ interface DisplayMessage {
 }
 
 type ChatState = 'idle' | 'searching' | 'answering' | 'error'
+
+// @-mention (library items + workspace text files) and /-mention (installed
+// skills) both resolve to one of these; `token` is the literal text spliced
+// into the input so send() can tell whether the user later deleted it.
+interface PendingRef { ref: KnowledgeRef; token: string }
+interface MentionCandidate { label: string; sub: string; ref: KnowledgeRef; token: string }
+type MentionTrigger = { kind: 'at' | 'slash'; start: number; query: string } | null
+
+const TEXT_FILE_EXTS = new Set(['.md', '.txt'])
+
+function flattenTextFiles(nodes: RepoTreeNode[]): { name: string; absPath: string }[] {
+	const out: { name: string; absPath: string }[] = []
+	for (const n of nodes) {
+		if (n.isDir) out.push(...flattenTextFiles(n.children ?? []))
+		else if (TEXT_FILE_EXTS.has('.' + (n.name.split('.').pop()?.toLowerCase() ?? ''))) out.push({ name: n.name, absPath: n.absPath })
+	}
+	return out
+}
 
 export function KnowledgePage(): JSX.Element {
 	const { t } = useTranslation('common')
@@ -41,14 +61,103 @@ export function KnowledgePage(): JSX.Element {
 	// symptom this fixes.
 	const busyRef = useRef(false)
 
+	// @/`/`-mention state. `pendingRefs` is the source of truth sent to ask();
+	// the textarea's own text is just what the user sees and can freely edit.
+	const [pendingRefs, setPendingRefs] = useState<PendingRef[]>([])
+	const [mention, setMention] = useState<MentionTrigger>(null)
+	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([])
+	const [mentionIndex, setMentionIndex] = useState(0)
+	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	const mentionReqRef = useRef(0)
+
 	useEffect(() => {
 		void refreshConversations()
-		Promise.all([
+		void checkChatConfigured()
+	}, [])
+
+	async function checkChatConfigured(): Promise<void> {
+		const [b, m, k] = await Promise.all([
 			window.veridian.settings.get('knowledge.chat.baseURL'),
 			window.veridian.settings.get('knowledge.chat.model'),
 			window.veridian.settings.get('knowledge.chat.apiKey'),
-		]).then(([b, m, k]) => setChatConfigured(!!b && !!m && !!k))
-	}, [])
+		])
+		setChatConfigured(!!b && !!m && !!k)
+	}
+
+	// Resolve candidates for the active trigger. @ searches library items +
+	// workspace text files together; / (only valid as the very first token)
+	// lists installed skills. The repo tree is re-fetched on every @ trigger
+	// (not cached from mount) -- this page is kept mounted app-wide now
+	// (see MainLayout) so a mount-time fetch would go stale across workspace
+	// switches and could even race the active workspace still being resolved
+	// at very early app boot.
+	useEffect(() => {
+		if (!mention) { setMentionCandidates([]); return }
+		const reqId = ++mentionReqRef.current
+		const q = mention.query.toLowerCase()
+		if (mention.kind === 'slash') {
+			window.veridian.skills.list().then((skills) => {
+				if (mentionReqRef.current !== reqId) return
+				setMentionCandidates(
+					skills.filter((s) => s.name.toLowerCase().includes(q)).slice(0, 8).map((s) => ({
+						label: '/' + s.name, sub: s.description,
+						ref: { type: 'skill', name: s.name }, token: `/${s.name} `,
+					}))
+				)
+			}).catch(() => setMentionCandidates([]))
+			return
+		}
+
+		Promise.all([
+			window.veridian.workspace.listRepoTree().catch(() => []),
+			// Empty-query search returns nothing (FTS needs a term) -- fall back
+			// to the most recently touched items so a bare "@" isn't empty.
+			q ? window.veridian.items.search(mention.query).catch(() => []) : window.veridian.items.getAll().catch(() => []),
+		]).then(([tree, items]: [RepoTreeNode[], Item[]]) => {
+			if (mentionReqRef.current !== reqId) return
+			const files: MentionCandidate[] = flattenTextFiles(tree)
+				.filter((f) => f.name.toLowerCase().includes(q))
+				.slice(0, 5)
+				.map((f) => ({ label: f.name, sub: t('knowledge.mentionFile'), ref: { type: 'file', path: f.absPath }, token: `@${f.name} ` }))
+			const itemCands: MentionCandidate[] = items.slice(0, 5).map((it) => ({
+				label: it.title ?? it.key, sub: t('knowledge.mentionItem'),
+				ref: { type: 'item', itemKey: it.key }, token: `@${it.title ?? it.key} `,
+			}))
+			setMentionCandidates([...itemCands, ...files])
+			setMentionIndex(0)
+		})
+	}, [mention, t])
+
+	function detectMention(text: string, cursor: number): MentionTrigger {
+		const head = text.slice(0, cursor)
+		const at = head.match(/(?:^|\s)@([^\s@]*)$/)
+		if (at) return { kind: 'at', start: cursor - at[1].length - 1, query: at[1] }
+		const slash = head.match(/^\/(\S*)$/)
+		if (slash) return { kind: 'slash', start: 0, query: slash[1] }
+		return null
+	}
+
+	function onInputChange(e: React.ChangeEvent<HTMLTextAreaElement>): void {
+		const value = e.target.value
+		setInput(value)
+		setMention(detectMention(value, e.target.selectionStart ?? value.length))
+	}
+
+	function applyMention(cand: MentionCandidate): void {
+		if (!mention) return
+		const cursor = textareaRef.current?.selectionStart ?? input.length
+		const before = input.slice(0, mention.start)
+		const after = input.slice(cursor)
+		const next = before + cand.token + after
+		setInput(next)
+		setPendingRefs((prev) => [...prev, { ref: cand.ref, token: cand.token.trim() }])
+		setMention(null)
+		requestAnimationFrame(() => {
+			const pos = before.length + cand.token.length
+			textareaRef.current?.focus()
+			textareaRef.current?.setSelectionRange(pos, pos)
+		})
+	}
 
 	useEffect(() => {
 		const onEvent = (e: DomainEvent): void => {
@@ -77,6 +186,37 @@ export function KnowledgePage(): JSX.Element {
 				} else {
 					setChatState(e.state)
 				}
+			} else if (e.type === 'workspace.dataRefreshed') {
+				// This page is kept mounted app-wide (see MainLayout), so its
+				// mount-time conversation fetch can race the active workspace
+				// still resolving at very early app boot -- it only ever loads
+				// personal-library history (or nothing) and never retries.
+				// Re-fetch whenever the active data context settles or switches,
+				// same as every other workspace-scoped pane (RepoTreePane, etc.)
+				//
+				// This event can also fire mid-generation (a background sync pull
+				// completing has nothing to do with the user's own action). If a
+				// request is in flight, its eventual chatState:'done'/'error' for
+				// the old conversationId will be ignored below (conversationId no
+				// longer matches activeConvIdRef) and would otherwise leave
+				// busyRef stuck true forever -- nothing else ever resets it once
+				// this page stops remounting. Stop the orphaned generation and
+				// clear the guard here instead of leaving it to time out silently.
+				if (busyRef.current && activeConvIdRef.current !== null) {
+					void window.veridian.knowledge.stop(activeConvIdRef.current)
+				}
+				busyRef.current = false
+				setConversationId(null)
+				setMessages([])
+				setChatState('idle')
+				void refreshConversations()
+			} else if (e.type === 'settings.changed') {
+				// Same mount-once-is-no-longer-enough issue: chatConfigured was
+				// only ever probed at the very first mount (now app boot, before
+				// the user has had a chance to fill in the provider settings) and
+				// never re-checked, so finishing first-time setup in Settings
+				// never un-disables the chat input without a full app restart.
+				if (e.keys.some((k) => k.startsWith('knowledge.chat.'))) void checkChatConfigured()
 			}
 		}
 		return window.veridian.onDomainEvent(onEvent)
@@ -103,6 +243,8 @@ export function KnowledgePage(): JSX.Element {
 		setConversationId(null)
 		setMessages([])
 		setChatState('idle')
+		setPendingRefs([])
+		setMention(null)
 	}
 
 	async function openConversation(id: number): Promise<void> {
@@ -121,11 +263,16 @@ export function KnowledgePage(): JSX.Element {
 		const q = input.trim()
 		if (!q || busyRef.current) return
 		busyRef.current = true
+		// A ref only travels with the message if its token is still present --
+		// this is how deleting "@Some Paper " from the input drops the attachment.
+		const refs = pendingRefs.filter((p) => q.includes(p.token)).map((p) => p.ref)
 		setInput('')
+		setPendingRefs([])
+		setMention(null)
 		streamingRef.current = ''
 		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [] }])
 		setChatState('searching')
-		const id = await window.veridian.knowledge.ask(q, conversationId)
+		const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined)
 		setConversationId(id)
 	}
 
@@ -227,25 +374,55 @@ export function KnowledgePage(): JSX.Element {
 					<div ref={bottomRef} />
 				</div>
 
-				<div style={{ padding: '12px 16px 16px', borderTop: '1px solid var(--separator)', display: 'flex', gap: 8 }}>
-					<textarea
-						value={input}
-						onChange={(e) => setInput(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() }
-						}}
-						placeholder={t('knowledge.inputPlaceholder')}
-						disabled={chatConfigured === false}
-						rows={1}
-						style={inputStyle}
-					/>
-					{busy ? (
-						<button onClick={() => void stop()} style={stopBtnStyle}>{t('knowledge.stop')}</button>
-					) : (
-						<button onClick={() => void send()} disabled={!input.trim() || chatConfigured === false} style={sendBtnStyle}>
-							{t('knowledge.send')}
-						</button>
+				<div style={{ padding: '12px 16px 16px', borderTop: '1px solid var(--separator)', position: 'relative' }}>
+					{mention && mentionCandidates.length > 0 && (
+						<div style={mentionPopupStyle}>
+							{mentionCandidates.map((c, i) => (
+								<div
+									key={c.token + i}
+									onMouseDown={(e) => { e.preventDefault(); applyMention(c) }}
+									onMouseEnter={() => setMentionIndex(i)}
+									style={{
+										display: 'flex', alignItems: 'baseline', gap: 8, padding: '6px 10px',
+										borderRadius: 6, cursor: 'pointer', fontSize: 12.5,
+										background: i === mentionIndex ? 'var(--surface-2)' : 'transparent',
+									}}
+								>
+									<span style={{ color: 'var(--foreground)', fontWeight: 600, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+										{c.label}
+									</span>
+									<span style={{ color: 'var(--muted)', fontSize: 11, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.sub}</span>
+								</div>
+							))}
+						</div>
 					)}
+					<div style={{ display: 'flex', gap: 8 }}>
+						<textarea
+							ref={textareaRef}
+							value={input}
+							onChange={onInputChange}
+							onKeyDown={(e) => {
+								if (mention && mentionCandidates.length > 0) {
+									if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex((i) => (i + 1) % mentionCandidates.length); return }
+									if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex((i) => (i - 1 + mentionCandidates.length) % mentionCandidates.length); return }
+									if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applyMention(mentionCandidates[mentionIndex]); return }
+									if (e.key === 'Escape') { e.preventDefault(); setMention(null); return }
+								}
+								if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() }
+							}}
+							placeholder={t('knowledge.inputPlaceholder')}
+							disabled={chatConfigured === false}
+							rows={1}
+							style={inputStyle}
+						/>
+						{busy ? (
+							<button onClick={() => void stop()} style={stopBtnStyle}>{t('knowledge.stop')}</button>
+						) : (
+							<button onClick={() => void send()} disabled={!input.trim() || chatConfigured === false} style={sendBtnStyle}>
+								{t('knowledge.send')}
+							</button>
+						)}
+					</div>
 				</div>
 			</div>
 		</div>
@@ -267,6 +444,13 @@ const inputStyle: React.CSSProperties = {
 	flex: 1, minHeight: 38, maxHeight: 120, padding: '9px 12px', borderRadius: 10,
 	border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--foreground)',
 	fontSize: 13, resize: 'none', fontFamily: 'inherit',
+}
+
+const mentionPopupStyle: React.CSSProperties = {
+	position: 'absolute', left: 16, right: 16, bottom: '100%', marginBottom: 6,
+	maxHeight: 220, overflowY: 'auto', padding: 4, borderRadius: 10,
+	border: '1px solid var(--border)', background: 'var(--surface)', boxShadow: 'var(--shadow-md, 0 4px 16px rgba(0,0,0,0.15))',
+	zIndex: 20,
 }
 
 const sendBtnStyle: React.CSSProperties = {

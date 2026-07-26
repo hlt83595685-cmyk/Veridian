@@ -5,6 +5,7 @@ import type {
   LocalWorkspace, LocalWorkspaceKind, GitHubRepoInfo, RepoTreeNode,
 } from '../../shared/types'
 import type { DomainEvent } from '../../shared/events'
+import type { KnowledgeRef } from '../../shared/ipc-contract'
 
 interface VeridianAPI {
   items: {
@@ -99,7 +100,7 @@ interface VeridianAPI {
     }>
   }
   knowledge: {
-    ask: (question: string, conversationId: number | null) => Promise<number>
+    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[]) => Promise<number>
     stop: (conversationId: number) => Promise<void>
     listConversations: () => Promise<Array<{ id: number; title: string; created_at: number }>>
     getMessages: (conversationId: number) => Promise<Array<{
@@ -115,7 +116,14 @@ interface VeridianAPI {
     pickStoragePath: () => Promise<string | null>
     testProvider: (which: 'chat' | 'embedding') => Promise<string | null>
   }
+  skills: {
+    list: () => Promise<Array<{ name: string; description: string }>>
+    installFromGithub: (url: string) => Promise<{ name: string; description: string }>
+    installFromZip: () => Promise<{ name: string; description: string } | null>
+    uninstall: (name: string) => Promise<void>
+  }
   onPdf2mdStatus: (cb: (e: {
+    jobType: string
     filename: string
     state: 'running' | 'done' | 'error' | 'idle'
     message: string

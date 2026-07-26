@@ -136,7 +136,7 @@ export function StorageTab(): JSX.Element {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
       <Section label={t('settings.storage.label')}>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
           {t('settings.storage.desc')}
@@ -206,7 +206,7 @@ export function LanguageTab(): JSX.Element {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
       <Section label={t('settings.language.label')}>
         <div style={{ display: 'flex', gap: 10 }}>
           {(['zh', 'en'] as const).map((lang) => (

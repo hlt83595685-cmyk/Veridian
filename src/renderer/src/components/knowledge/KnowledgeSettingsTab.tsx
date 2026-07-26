@@ -119,7 +119,7 @@ export function KnowledgeSettingsTab(): JSX.Element {
 	const modelChanged = status?.embeddingModel && embedding.model && status.embeddingModel !== embedding.model
 
 	return (
-		<div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+		<div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
 			<Section label={t('settings.knowledge.title')}>
 				<div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
 					{t('settings.knowledge.storageDesc')}

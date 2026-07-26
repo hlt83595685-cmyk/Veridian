@@ -194,7 +194,7 @@ export function Pdf2mdTab(): JSX.Element {
   }, [t])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 560 }}>
 
       {/* Enable */}
       <Section label={t('tools.pdf2md.enableLabel')}>

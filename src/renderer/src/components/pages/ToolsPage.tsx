@@ -47,7 +47,7 @@ export function ToolsPage(): JSX.Element {
       </div>
 
       {/* Content */}
-      <div style={{ padding: '20px 22px 22px', flex: 1, overflow: 'auto', maxWidth: 620 }}>
+      <div style={{ padding: '20px 22px 22px', flex: 1, overflow: 'auto' }}>
         <Pdf2mdTab />
       </div>
     </div>

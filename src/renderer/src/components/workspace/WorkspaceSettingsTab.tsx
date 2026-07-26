@@ -48,7 +48,7 @@ export function WorkspaceSettingsTab(): JSX.Element {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
       <Section label={t('workspace.github.title')}>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
           {t('workspace.github.desc')}

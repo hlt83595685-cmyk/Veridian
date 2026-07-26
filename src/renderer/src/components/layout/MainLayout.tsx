@@ -50,13 +50,22 @@ export function MainLayout(): JSX.Element {
           margin: '12px 16px 12px 12px',
           boxShadow: 'var(--shadow-sm)',
         }}>
-          {page === 'settings'
+          {/* Kept mounted (just hidden) rather than conditionally rendered like the
+              other pages -- switching away and back should find the same
+              conversation, draft text, and scroll position still there. This
+              is in-memory only (dies with a full app restart, unlike the
+              window/viewer state MainStore persists) since it's scoped to
+              "don't lose my place while I go look something up", not a
+              session-restore feature. */}
+          <div style={{ display: page === 'knowledge' ? 'contents' : 'none' }}>
+            <KnowledgePage />
+          </div>
+          {page === 'knowledge' ? null
+            : page === 'settings'
             ? <SettingsPage />
             : page === 'tools'
               ? <ToolsPage />
-              : page === 'knowledge'
-                ? <KnowledgePage />
-                : viewerPath
+              : viewerPath
                 ? viewerType === 'markdown'
                   ? <MarkdownReaderPane />
                   : viewerType === 'gallery'

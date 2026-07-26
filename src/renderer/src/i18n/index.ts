@@ -77,6 +77,16 @@ const zh = {
       rebuildConfirm: '重建索引会清空现有的检索数据并重新生成，确定继续吗？',
       modelChangedHint: 'Embedding 模型已变更，需要重建索引才能生效',
     },
+    skills: {
+      title: 'Skill',
+      installedTitle: '已安装',
+      noneInstalled: '还没有安装任何 skill',
+      uninstall: '卸载',
+      installTitle: '安装',
+      installDesc: '粘贴 GitHub 文件夹链接（该文件夹需含 SKILL.md），或从本地 zip 安装',
+      installFromGithub: '从 GitHub 安装',
+      installFromZip: '选择本地 zip 安装',
+    },
     close: '关闭',
   },
   toolbar: {
@@ -264,6 +274,8 @@ const zh = {
     citationsLabel: '引用来源',
     emptyState: '向 AI 助手提问，答案会引用你库中的文献',
     error: '出错了：{{detail}}',
+    mentionItem: '文献',
+    mentionFile: '文件',
   },
 }
 
@@ -342,6 +354,16 @@ const en = {
       rebuilding: 'Rebuilding...',
       rebuildConfirm: 'Rebuilding clears the existing search index and regenerates it. Continue?',
       modelChangedHint: 'Embedding model changed -- rebuild the index for it to take effect',
+    },
+    skills: {
+      title: 'Skills',
+      installedTitle: 'Installed',
+      noneInstalled: 'No skills installed yet',
+      uninstall: 'Uninstall',
+      installTitle: 'Install',
+      installDesc: 'Paste a GitHub folder link (must contain a SKILL.md), or install from a local zip',
+      installFromGithub: 'Install from GitHub',
+      installFromZip: 'Install from local zip',
     },
     close: 'Close',
   },
@@ -530,6 +552,8 @@ const en = {
     citationsLabel: 'Sources',
     emptyState: 'Ask the AI assistant a question -- answers cite papers from your library',
     error: 'Error: {{detail}}',
+    mentionItem: 'paper',
+    mentionFile: 'file',
   },
 }
 

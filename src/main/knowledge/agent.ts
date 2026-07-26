@@ -1,14 +1,20 @@
 // Tool-loop agent over the knowledge index. No framework: an OpenAI-compatible
-// function-calling loop (max 8 rounds) with three read-only tools. Streaming
-// deltas and lifecycle states are pushed to the renderer via domain events;
-// the IPC call itself only returns the conversation id.
+// function-calling loop (max 8 rounds) with three read-only tools, plus a 4th
+// (load_skill) when the user has installed skills. Streaming deltas and
+// lifecycle states are pushed to the renderer via domain events; the IPC call
+// itself only returns the conversation id.
 import { getDb } from '../db'
 import { emit } from '../core/Notifier'
 import { getActiveWorkspace } from '../services/WorkspaceContextService'
+import { assertReadable } from '../security/pathGuard'
 import { getKnowledgeDb } from './db'
 import { hybridSearch } from './search'
 import { getChatConfig, chatStream, type ChatMessage, type ToolDef } from './providers'
 import { extractCitations } from './citations'
+import { listInstalledSkills, getSkillBody } from './skills'
+import { readFileSync } from 'fs'
+import { basename } from 'path'
+import type { KnowledgeRef } from '../../shared/ipc-contract'
 
 const MAX_ROUNDS = 8
 const abortControllers = new Map<number, AbortController>()
@@ -19,7 +25,7 @@ function wsId(): number {
 
 // ── Tools ────────────────────────────────────────────────────────────────────
 
-const TOOLS: ToolDef[] = [
+const BASE_TOOLS: ToolDef[] = [
 	{
 		type: 'function',
 		function: {
@@ -63,6 +69,22 @@ const TOOLS: ToolDef[] = [
 		},
 	},
 ]
+
+const LOAD_SKILL_TOOL: ToolDef = {
+	type: 'function',
+	function: {
+		name: 'load_skill',
+		description:
+			'Load the full instructions for one of the installed skills listed at the end of this ' +
+			'prompt. Call this before following a skill\'s procedure -- the catalog only gives you its ' +
+			'name and a one-line description, not the actual steps.',
+		parameters: {
+			type: 'object',
+			properties: { name: { type: 'string', description: 'the skill name from the catalog' } },
+			required: ['name'],
+		},
+	},
+}
 
 async function runTool(name: string, argsJson: string): Promise<string> {
 	let args: Record<string, unknown>
@@ -108,6 +130,11 @@ async function runTool(name: string, argsJson: string): Promise<string> {
 		return rows.map((r) => `[${key}:${r.seq}] (${r.heading_path || 'text'})\n${r.text}`).join('\n\n')
 	}
 
+	if (name === 'load_skill') {
+		const body = getSkillBody(String(args.name ?? ''))
+		return body ?? 'not found'
+	}
+
 	return 'error: unknown tool'
 }
 
@@ -151,7 +178,7 @@ function resolveCitations(raw: { itemKey: string; seq: number }[]): Citation[] {
 
 // ── The ask loop ─────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are the research assistant inside Veridian, a reference manager. You answer questions strictly from the user's own paper library using the provided tools.
+const BASE_SYSTEM_PROMPT = `You are the research assistant inside Veridian, a reference manager. You answer questions strictly from the user's own paper library using the provided tools.
 
 Rules:
 - ALWAYS search the library before answering; never answer from general knowledge alone. If the library has nothing relevant, say so plainly.
@@ -159,7 +186,57 @@ Rules:
 - Answer in the same language the user asked in.
 - Be concise and factual. Quote numbers and findings exactly as the excerpts state them.`
 
-export async function ask(question: string, conversationId: number | null): Promise<number> {
+/** Appends an installed-skills catalog (name + one-line description) so the
+ *  model can decide on its own when a skill's procedure applies -- mirrors
+ *  how Claude's own Agent Skills are progressively disclosed: the catalog is
+ *  cheap, the full body only loads via load_skill when actually relevant. */
+function buildSystemPrompt(): string {
+	const skills = listInstalledSkills()
+	if (!skills.length) return BASE_SYSTEM_PROMPT
+	const catalog = skills.map((s) => `- ${s.name}: ${s.description}`).join('\n')
+	return `${BASE_SYSTEM_PROMPT}\n\nInstalled skills (call load_skill(name) to read one in full before using it):\n${catalog}`
+}
+
+const MAX_REF_CHARS = 8000
+
+/** Resolves @/`/`-mention refs into extra hidden context messages, injected
+ *  right after the system prompt and kept out of the 4000-char question cap
+ *  the visible chat bubble is limited to. */
+function resolveRefs(refs: KnowledgeRef[] | undefined, ws: number): ChatMessage[] {
+	if (!refs?.length) return []
+	const out: ChatMessage[] = []
+	for (const ref of refs) {
+		if (ref.type === 'item') {
+			const item = getDb().prepare('SELECT title FROM items WHERE key = ? AND deleted = 0')
+				.get(ref.itemKey) as { title: string | null } | undefined
+			const rows = getKnowledgeDb().prepare(
+				'SELECT heading_path, text FROM chunks WHERE workspace_id = ? AND item_key = ? ORDER BY seq'
+			).all(ws, ref.itemKey) as { heading_path: string; text: string }[]
+			if (!rows.length) continue
+			const text = rows.map((r) => (r.heading_path ? `## ${r.heading_path}\n${r.text}` : r.text)).join('\n\n').slice(0, MAX_REF_CHARS)
+			out.push({ role: 'system', content: `[Attached paper: ${item?.title ?? ref.itemKey}]\n${text}` })
+		} else if (ref.type === 'file') {
+			try {
+				const real = assertReadable(ref.path)
+				const text = readFileSync(real, 'utf-8').slice(0, MAX_REF_CHARS)
+				out.push({ role: 'system', content: `[Attached file: ${basename(ref.path)}]\n${text}` })
+			} catch (err) {
+				out.push({ role: 'system', content: `[Attached file ${basename(ref.path)} could not be read: ${(err as Error).message}]` })
+			}
+		} else if (ref.type === 'skill') {
+			const body = getSkillBody(ref.name)
+			out.push({
+				role: 'system',
+				content: body
+					? `[Manually attached skill: ${ref.name} -- follow these instructions for this turn]\n${body}`
+					: `[Skill "${ref.name}" is not installed]`,
+			})
+		}
+	}
+	return out
+}
+
+export async function ask(question: string, conversationId: number | null, refs?: KnowledgeRef[]): Promise<number> {
 	const kdb = getKnowledgeDb()
 	const ws = wsId()
 
@@ -181,9 +258,12 @@ export async function ask(question: string, conversationId: number | null): Prom
 	// History (previous turns) + this question
 	const history = getMessages(convId)
 	const messages: ChatMessage[] = [
-		{ role: 'system', content: SYSTEM_PROMPT },
+		{ role: 'system', content: buildSystemPrompt() },
+		...resolveRefs(refs, ws),
 		...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
 	]
+
+	const tools = listInstalledSkills().length ? [...BASE_TOOLS, LOAD_SKILL_TOOL] : BASE_TOOLS
 
 	const ac = new AbortController()
 	abortControllers.set(convId, ac)
@@ -193,7 +273,7 @@ export async function ask(question: string, conversationId: number | null): Prom
 			let finalText = ''
 			for (let round = 0; round < MAX_ROUNDS; round++) {
 				emit({ type: 'knowledge.chatState', conversationId: convId!, state: round === 0 ? 'searching' : 'answering' })
-				const result = await chatStream(cfg, messages, TOOLS, (delta) => {
+				const result = await chatStream(cfg, messages, tools, (delta) => {
 					emit({ type: 'knowledge.chatDelta', conversationId: convId!, delta })
 				}, ac.signal)
 

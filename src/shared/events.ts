@@ -39,5 +39,6 @@ export type DomainEvent =
       conversationId: number
       state: 'searching' | 'answering' | 'done' | 'error'
       detail?: string }
+  | { type: 'skills.changed' }
 
 export type DomainEventType = DomainEvent['type']

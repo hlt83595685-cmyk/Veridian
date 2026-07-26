@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useStatusStore } from '../../stores/statusStore'
+
+// JobQueue type -> short badge text. Falls back to the raw type string for
+// any future job type that doesn't have a friendly label yet.
+function jobTypeLabel(jobType: string, t: (key: string) => string): string {
+  if (jobType === 'pdf2md') return 'pdf2md'
+  if (jobType === 'workspace.sync') return t('toolbar.sync')
+  return jobType
+}
 
 function useEllipsis(active: boolean): string {
   const [frame, setFrame] = useState(0)
@@ -12,6 +21,7 @@ function useEllipsis(active: boolean): string {
 }
 
 export function StatusBar(): JSX.Element | null {
+  const { t } = useTranslation('common')
   const { pdf2md, clear } = useStatusStore()
 
   // hooks must all be called before any early return
@@ -20,7 +30,7 @@ export function StatusBar(): JSX.Element | null {
 
   if (!pdf2md) return null
 
-  const { filename, state, message, chunk, pending } = pdf2md
+  const { jobType, filename, state, message, chunk, pending } = pdf2md
   const ledColor = state === 'done' ? '#34c759'
     : state === 'error' ? '#ff3b30'
     : '#007aff'
@@ -45,7 +55,7 @@ export function StatusBar(): JSX.Element | null {
         fontSize: 10, fontWeight: 700, color: 'var(--muted)',
         letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0,
       }}>
-        pdf2md
+        {jobTypeLabel(jobType, t)}
       </span>
 
       <span style={{ color: 'var(--separator)', fontSize: 10 }}>|</span>

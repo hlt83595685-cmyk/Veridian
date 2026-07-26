@@ -26,9 +26,11 @@ import * as Agent from '../knowledge/agent'
 import { rebuildIndex, getIndexStatus } from '../knowledge/indexer'
 import { testProvider } from '../knowledge/providers'
 import { closeKnowledgeDb, knowledgeDir } from '../knowledge/db'
+import * as Skills from '../knowledge/skills'
 import { convertPdfToMarkdown } from '../mineruApi'
 import { assertReadable, assertWritable, grantAccess } from '../security/pathGuard'
-import type { IpcChannel } from '../../shared/ipc-contract'
+import { emit } from '../core/Notifier'
+import type { IpcChannel, KnowledgeRef } from '../../shared/ipc-contract'
 
 type Handler = (event: IpcMainInvokeEvent, ...args: never[]) => unknown
 
@@ -254,8 +256,8 @@ export const handlers: Record<IpcChannel, Handler> = {
   'github:listCollaborators': (_e, owner: string, repo: string) => GitHub.listCollaborators(owner, repo),
 
   // AI knowledge base
-  'knowledge:ask':                (_e, question: string, conversationId: number | null) =>
-    Agent.ask(question, conversationId),
+  'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[]) =>
+    Agent.ask(question, conversationId, refs),
   'knowledge:stop':               (_e, conversationId: number) => Agent.stopGeneration(conversationId),
   'knowledge:listConversations':  () => Agent.listConversations(),
   'knowledge:getMessages':        (_e, conversationId: number) => Agent.getMessages(conversationId),
@@ -284,5 +286,28 @@ export const handlers: Record<IpcChannel, Handler> = {
     grantAccess(dest)
     Settings.setSetting('knowledge.storagePath', dest)
     return dest
+  },
+
+  // Skills: reusable instruction blocks the chat agent can load on demand.
+  'skills:list': () => Skills.listInstalledSkills(),
+  'skills:installFromGithub': async (_e, url: string) => {
+    const info = await Skills.installSkillFromGithubUrl(url)
+    emit({ type: 'skills.changed' })
+    return info
+  },
+  'skills:installFromZip': async (e) => {
+    const result = await dialog.showOpenDialog(ownerWindow(e)!, {
+      title: '选择 Skill 压缩包',
+      filters: [{ name: 'Zip', extensions: ['zip'] }],
+      properties: ['openFile'],
+    })
+    if (result.canceled) return null
+    const info = Skills.installSkillFromZip(readFileSync(result.filePaths[0]))
+    emit({ type: 'skills.changed' })
+    return info
+  },
+  'skills:uninstall': (_e, name: string) => {
+    Skills.uninstallSkill(name)
+    emit({ type: 'skills.changed' })
   },
 }

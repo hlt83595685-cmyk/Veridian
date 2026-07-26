@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { DomainEvent, JobStatus } from '../shared/events'
+import type { KnowledgeRef } from '../shared/ipc-contract'
 
 // Every invoke goes through the gateway envelope: { ok, data } on success,
 // { ok: false, error } on failure. Unwrapping here keeps renderer call sites
@@ -19,6 +20,7 @@ async function call<T = unknown>(channel: string, ...args: unknown[]): Promise<T
 
 type DomainEventCb = (e: DomainEvent) => void
 type Pdf2mdStatusCb = (e: {
+  jobType: string
   filename: string
   state: 'running' | 'done' | 'error' | 'idle'
   message: string
@@ -45,6 +47,7 @@ ipcRenderer.on('domain-event', (_ev, e: DomainEvent) => {
   if (e.type === 'job.progress') {
     const job: JobStatus = e.job
     _pdf2mdStatusCb?.({
+      jobType: job.type,
       filename: job.label,
       state: job.state === 'queued' ? 'running' : job.state,
       message: job.message,
@@ -152,8 +155,8 @@ const veridianAPI = {
         'github:listCollaborators', owner, repo),
   },
   knowledge: {
-    ask: (question: string, conversationId: number | null) =>
-      call<number>('knowledge:ask', question, conversationId),
+    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[]) =>
+      call<number>('knowledge:ask', question, conversationId, refs),
     stop: (conversationId: number) => call('knowledge:stop', conversationId),
     listConversations: () =>
       call<Array<{ id: number; title: string; created_at: number }>>('knowledge:listConversations'),
@@ -167,6 +170,13 @@ const veridianAPI = {
         'knowledge:indexStatus'),
     pickStoragePath: () => call<string | null>('knowledge:pickStoragePath'),
     testProvider: (which: 'chat' | 'embedding') => call<string | null>('knowledge:testProvider', which),
+  },
+  skills: {
+    list: () => call<Array<{ name: string; description: string }>>('skills:list'),
+    installFromGithub: (url: string) =>
+      call<{ name: string; description: string }>('skills:installFromGithub', url),
+    installFromZip: () => call<{ name: string; description: string } | null>('skills:installFromZip'),
+    uninstall: (name: string) => call('skills:uninstall', name),
   },
   // Domain-event stream: the renderer query cache subscribes here.
   //

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 export interface Pdf2mdStatus {
+  jobType: string   // JobQueue type, e.g. 'pdf2md' | 'workspace.sync' -- the bar's left badge
   filename: string
   state: 'running' | 'done' | 'error' | 'idle'
   message: string

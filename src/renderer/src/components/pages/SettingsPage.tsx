@@ -4,8 +4,9 @@ import { useUiStore } from '../../stores/uiStore'
 import { StorageTab, LanguageTab } from '../tools/SettingsDialog'
 import { WorkspaceSettingsTab } from '../workspace/WorkspaceSettingsTab'
 import { KnowledgeSettingsTab } from '../knowledge/KnowledgeSettingsTab'
+import { SkillsSettingsTab } from '../knowledge/SkillsSettingsTab'
 
-type Tab = 'storage' | 'language' | 'github' | 'knowledge'
+type Tab = 'storage' | 'language' | 'github' | 'knowledge' | 'skills'
 
 // Full-page settings view (replaces the old native-menu-driven modal).
 // Entered via the sidebar's bottom gear icon; Esc or the back button
@@ -26,6 +27,7 @@ export function SettingsPage(): JSX.Element {
     { id: 'language',  label: t('settings.language.title') },
     { id: 'github',    label: 'GitHub' },
     { id: 'knowledge', label: t('settings.knowledge.title') },
+    { id: 'skills',    label: t('settings.skills.title') },
   ]
 
   return (
@@ -83,11 +85,12 @@ export function SettingsPage(): JSX.Element {
       </div>
 
       {/* Content */}
-      <div style={{ padding: '20px 22px 22px', flex: 1, overflow: 'auto', maxWidth: 620 }}>
+      <div style={{ padding: '20px 22px 22px', flex: 1, overflow: 'auto' }}>
         {tab === 'storage'   && <StorageTab />}
         {tab === 'language'  && <LanguageTab />}
         {tab === 'github'    && <WorkspaceSettingsTab />}
         {tab === 'knowledge' && <KnowledgeSettingsTab />}
+        {tab === 'skills'    && <SkillsSettingsTab />}
       </div>
     </div>
   )
