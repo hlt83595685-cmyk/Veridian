@@ -79,8 +79,7 @@ export function KnowledgePage(): JSX.Element {
 				}
 			}
 		}
-		window.veridian.onDomainEvent(onEvent)
-		return () => window.veridian.offDomainEvent(onEvent)
+		return window.veridian.onDomainEvent(onEvent)
 	}, [])
 
 	useEffect(() => {

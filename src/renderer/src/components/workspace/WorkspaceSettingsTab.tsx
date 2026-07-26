@@ -24,8 +24,7 @@ export function WorkspaceSettingsTab(): JSX.Element {
     const onEvent = (e: { type: string }): void => {
       if (e.type === 'github.authChanged') { setPending(null); setBusy(false); refresh() }
     }
-    window.veridian.onDomainEvent(onEvent)
-    return () => window.veridian.offDomainEvent(onEvent)
+    return window.veridian.onDomainEvent(onEvent)
   }, [])
 
   const login = async (): Promise<void> => {

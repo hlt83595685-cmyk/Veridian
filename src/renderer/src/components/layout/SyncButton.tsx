@@ -22,8 +22,7 @@ export function SyncButton(): JSX.Element | null {
       if (e.type !== 'job.progress' || e.job.type !== 'workspace.sync') return
       setSyncing(e.job.state === 'running' || e.job.state === 'queued')
     }
-    window.veridian.onDomainEvent(onEvent)
-    return () => window.veridian.offDomainEvent(onEvent)
+    return window.veridian.onDomainEvent(onEvent)
   }, [])
 
   if (!isGithub) return null

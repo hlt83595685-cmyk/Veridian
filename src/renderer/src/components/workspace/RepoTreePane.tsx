@@ -19,8 +19,7 @@ export function RepoTreePane(): JSX.Element {
     const onEvent = (e: { type: string }): void => {
       if (e.type === 'workspace.dataRefreshed' || e.type === 'attachment.changed') load()
     }
-    window.veridian.onDomainEvent(onEvent)
-    return () => window.veridian.offDomainEvent(onEvent)
+    return window.veridian.onDomainEvent(onEvent)
   }, [])
 
   if (tree.length === 0) {

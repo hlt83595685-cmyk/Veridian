@@ -34,8 +34,7 @@ export function WorkspaceSwitcher(): JSX.Element {
       if (e.type === 'workspace.changed') load()
       if (e.type === 'github.authChanged') refreshIdentity()
     }
-    window.veridian.onDomainEvent(onEvent)
-    return () => window.veridian.offDomainEvent(onEvent)
+    return window.veridian.onDomainEvent(onEvent)
   }, [load])
 
   // One-time fetch on mount -- no polling, matches the "check once at

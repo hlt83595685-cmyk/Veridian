@@ -133,8 +133,8 @@ interface VeridianAPI {
     pdfjsWorkerPath: () => Promise<string>
     listDir: (dirPath: string) => Promise<string[]>
   }
-  onDomainEvent: (cb: (e: DomainEvent) => void) => void
-  offDomainEvent: (cb: (e: DomainEvent) => void) => void
+  /** Returns an unsubscribe function -- see the preload comment on why offDomainEvent(cb) can't work. */
+  onDomainEvent: (cb: (e: DomainEvent) => void) => () => void
   tools: {
     openExternal: (url: string) => Promise<void>
     pickPdf: () => Promise<string | null>

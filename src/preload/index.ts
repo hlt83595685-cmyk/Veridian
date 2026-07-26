@@ -34,9 +34,8 @@ let _pdf2mdProgressCb: Pdf2mdProgressCb | null = null
 // Idempotent registration: if this preload module is ever re-evaluated in the
 // same renderer (electron-vite HMR has been observed to do this without a
 // full process restart), a plain ipcRenderer.on would stack a second listener
-// -- every subsequent domain-event then fires each callback twice, which
-// shows up as duplicated streamed text in the AI chat panel. Clearing first
-// keeps this file safe to re-run.
+// -- every subsequent domain-event then fires each callback twice. Clearing
+// first keeps this file safe to re-run.
 ipcRenderer.removeAllListeners('domain-event')
 ipcRenderer.on('domain-event', (_ev, e: DomainEvent) => {
   for (const cb of _domainEventCbs) cb(e)
@@ -169,9 +168,24 @@ const veridianAPI = {
     pickStoragePath: () => call<string | null>('knowledge:pickStoragePath'),
     testProvider: (which: 'chat' | 'embedding') => call<string | null>('knowledge:testProvider', which),
   },
-  // Domain-event stream: the renderer query cache subscribes here
-  onDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.add(cb) },
-  offDomainEvent: (cb: DomainEventCb) => { _domainEventCbs.delete(cb) },
+  // Domain-event stream: the renderer query cache subscribes here.
+  //
+  // onDomainEvent returns its own unsubscribe closure rather than exposing a
+  // separate offDomainEvent(cb) -- this is load-bearing, not stylistic.
+  // Functions passed as arguments across contextBridge's isolation boundary
+  // are marshaled through a proxy on each call; two separate calls with "the
+  // same" JS function reference produce two DIFFERENT proxy objects on this
+  // side. A Set keyed by reference equality (offDomainEvent(cb) doing
+  // `_domainEventCbs.delete(cb)`) therefore NEVER actually removes anything
+  // -- every unsubscribe silently no-ops and callbacks accumulate forever
+  // (confirmed: chatDelta streamed each token N times, N growing across
+  // every mount/unmount of every subscribing component). Returning the
+  // unsubscribe function instead means the `cb` reference it closes over
+  // never needs to cross the boundary a second time.
+  onDomainEvent: (cb: DomainEventCb): (() => void) => {
+    _domainEventCbs.add(cb)
+    return () => { _domainEventCbs.delete(cb) }
+  },
   // pdf2md status (queue-level, single LED) -- legacy adapter over job.progress
   onPdf2mdStatus: (cb: Pdf2mdStatusCb) => { _pdf2mdStatusCb = cb },
   offPdf2mdStatus: () => { _pdf2mdStatusCb = null },
