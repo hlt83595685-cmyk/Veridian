@@ -40,7 +40,7 @@ Veridian keeps your PDFs, notes, and tags organized in one library, and lets you
   - **Skill marketplace** — Install ready-made "skills" (extra know-how for the assistant) from a GitHub link or a zip file, and manage them from Settings. A skill only adds instructions for the assistant to follow — it can never run anything on your computer.
 - **Browser extension** — While reading a paper online, click the extension icon to save it straight into your library with the details already filled in.
 - **Synced workspaces** — Keep a library as a folder on your computer, or connect it to a GitHub repository so it stays backed up, syncs across machines, and can be shared with collaborators.
-- **PDF to Markdown** — Convert a PDF into clean, readable text that's easy to search and that the AI assistant can read through.
+- **PDF to Markdown, powered by MinerU** — Convert a PDF into clean, readable text (including tables and figures) using the [MinerU](https://mineru.net) API, so it's easy to search and the AI assistant can read through it. Requires your own free MinerU API key, entered once in Settings → Tools.
 - **Everything stays on your computer** — Your library lives locally; nothing is uploaded anywhere unless you turn on GitHub sync or connect an AI provider yourself.
 - **Chinese / English interface** — Switch the app's display language anytime from Settings.
 - **Automatic updates** — When a new version is released, Veridian finds it, downloads it in the background, and asks if you'd like to install it — no manual download needed.
@@ -88,7 +88,7 @@ Veridian 把你的 PDF、笔记和标签整理进一个统一的文献库，并�
   - **Skill 市场** — 可以从一个 GitHub 链接或本地 zip 文件安装现成的"技能包"（给 AI 助手补充的专门知识），在设置里统一管理。技能只会给 AI 助手增加行动指令，不会在你的电脑上执行任何操作。
 - **浏览器扩展** — 在网页上看到一篇文献时，点一下扩展图标就能把它连同各项信息一起保存进文献库。
 - **同步工作区** — 文献库既可以只是电脑上的一个文件夹，也可以连接到 GitHub 仓库，实现自动备份、跨设备同步，以及和协作者共享。
-- **PDF 转 Markdown** — 把 PDF 转换成清晰、易读、方便检索的文本，AI 助手也能读懂并引用。
+- **PDF 转 Markdown，由 MinerU 提供支持** — 通过 [MinerU](https://mineru.net) API 把 PDF（包括表格、图片）转换成清晰、易读、方便检索的文本，AI 助手也能读懂并引用。需要在 设置 → 工具 中填入一次你自己的免费 MinerU API Key。
 - **数据留在你自己电脑上** — 文献库数据保存在本地，除非你主动开启 GitHub 同步或自己配置了 AI 服务，否则不会上传到任何地方。
 - **中英文界面切换** — 随时可以在设置里切换整个应用的显示语言。
 - **自动更新** — 有新版本发布时，Veridian 会自动发现、在后台下载好，然后询问你是否要安装——不需要手动下载。
