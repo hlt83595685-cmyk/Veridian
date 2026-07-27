@@ -44,6 +44,7 @@ Veridian organizes your PDFs, metadata, tags, notes, and Markdown into a local-f
 - **PDF → Markdown conversion** — turn a PDF into clean, searchable Markdown for the knowledge index.
 - **Local-first** — your library lives in a local SQLite database; nothing leaves your machine unless you explicitly configure GitHub sync or an AI provider.
 - **Bilingual UI** — switch the whole interface between 中文 and English from Settings.
+- **Auto-updates** — installed builds check GitHub Releases on startup, download new versions in the background, then prompt you to install and relaunch. No manual reinstall needed once you're on a packaged build.
 
 ### Tech stack
 
@@ -93,6 +94,7 @@ Veridian 是一个本地优先的文献管理平台，将 PDF、元数据、标�
 - **PDF 转 Markdown** — 把 PDF 转换为结构清晰、可被检索的 Markdown，供知识库索引使用。
 - **本地优先** — 文献库数据存放在本地 SQLite 数据库中，除非你主动配置 GitHub 同步或 AI 服务商，否则数据不会离开你的电脑。
 - **中英双语界面** — 可在设置中随时切换整个应用界面的语言。
+- **自动更新** — 已安装的应用每次启动时会自动检查 GitHub Releases 上的新版本，后台静默下载完成后会弹窗提示，点击"立即更新"即可自动安装并重启，无需手动下载重装。
 
 ### 技术栈
 
