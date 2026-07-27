@@ -6,7 +6,6 @@
 
 ![version](https://img.shields.io/badge/version-0.1.5-7c5cff)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4)
-![stack](https://img.shields.io/badge/stack-Electron%20%7C%20React%20%7C%20TypeScript-3178c6)
 
 **[English](#english)** ・ **[中文](#中文)**
 
@@ -17,7 +16,7 @@
 <a id="english"></a>
 ## English
 
-Veridian organizes your PDFs, metadata, tags, notes, and Markdown into a local-first, optionally GitHub-synced research library — then layers an AI assistant on top that can search, summarize, and answer questions **grounded in your own library**.
+Veridian keeps your PDFs, notes, and tags organized in one library, and lets you ask an AI assistant questions about your own papers — with answers that link straight back to the source.
 
 ### Screenshots
 
@@ -34,40 +33,38 @@ Veridian organizes your PDFs, metadata, tags, notes, and Markdown into a local-f
 
 ### Features
 
-- **Reference management** — import PDFs, auto-fetch metadata from CrossRef, organize with collections/tags/notes, trash & restore, full-text search across your library.
-- **AI research assistant** — a chat panel that indexes your library (hybrid keyword + vector search) and answers questions with inline citations back to the source paper.
-  - Type `@` to attach a specific library item or a file from your workspace as context for the current question.
-  - Type `/` to manually force the assistant to use one of your installed skills for that turn — otherwise it decides on its own when a skill applies.
-  - **Skill marketplace** — install reusable, text-only "skills" (Anthropic Agent Skills format: `SKILL.md` frontmatter + Markdown body) from a GitHub folder URL or a local `.zip`, manage them from Settings → Skills. Skills only ever add instructions to the model's context — they never execute code.
-- **Browser extension** — a one-click Chrome extension that saves the page you're reading straight into your Veridian library with metadata pre-filled.
-- **GitHub-synced workspaces** — keep a reference library as a local folder or sync it against a GitHub repo (device-flow OAuth login, collaborator invites, background sync).
-- **PDF → Markdown conversion** — turn a PDF into clean, searchable Markdown for the knowledge index.
-- **Local-first** — your library lives in a local SQLite database; nothing leaves your machine unless you explicitly configure GitHub sync or an AI provider.
-- **Bilingual UI** — switch the whole interface between 中文 and English from Settings.
-- **Auto-updates** — installed builds check GitHub Releases on startup, download new versions in the background, then prompt you to install and relaunch. No manual reinstall needed once you're on a packaged build.
+- **Reference management** — Import PDFs and Veridian fills in the title, authors, journal, and year for you. Organize papers into collections and tags, write notes on each item, and search your whole library instantly. Deleted items go to Trash first, so nothing is lost by accident.
+- **AI research assistant** — Ask questions in plain language and get answers with citations pointing back to the exact paper they came from.
+  - Type `@` to bring a specific paper or file into the conversation as context.
+  - Type `/` to tell the assistant to use one particular skill for that question; otherwise it decides on its own when a skill is useful.
+  - **Skill marketplace** — Install ready-made "skills" (extra know-how for the assistant) from a GitHub link or a zip file, and manage them from Settings. A skill only adds instructions for the assistant to follow — it can never run anything on your computer.
+- **Browser extension** — While reading a paper online, click the extension icon to save it straight into your library with the details already filled in.
+- **Synced workspaces** — Keep a library as a folder on your computer, or connect it to a GitHub repository so it stays backed up, syncs across machines, and can be shared with collaborators.
+- **PDF to Markdown** — Convert a PDF into clean, readable text that's easy to search and that the AI assistant can read through.
+- **Everything stays on your computer** — Your library lives locally; nothing is uploaded anywhere unless you turn on GitHub sync or connect an AI provider yourself.
+- **Chinese / English interface** — Switch the app's display language anytime from Settings.
+- **Automatic updates** — When a new version is released, Veridian finds it, downloads it in the background, and asks if you'd like to install it — no manual download needed.
 
-### Tech stack
+### Getting started: a first-time walkthrough
 
-Electron 36 · React 18 + TypeScript · better-sqlite3 · isomorphic-git + Octokit (GitHub sync) · citeproc-js + KaTeX (citations & math) · react-i18next (i18n)
+1. **Create or open a library.** On first launch, create a library — either a plain folder on your computer, or a GitHub repository if you'd like it synced and backed up.
+2. **Add your first papers.** Click **"+ Add Item"** to import a PDF from your computer, or install the [browser extension](#the-browser-extension) and click it while reading a paper online to save it with one click.
+3. **Organize as you go.** Create collections in the sidebar to group related papers, attach tags, and write notes under each item's **Notes** tab.
+4. **Ask the AI assistant.** Open **"AI Assistant"**, and ask something like *"summarize what these three papers agree on"*. Type `@` and start typing a title to point the question at one specific paper.
+5. **Install a skill (optional).** In **Settings → Skills**, install a skill useful for your field — it becomes something the assistant can use automatically, or you can force it for one message by typing `/` first.
+6. **Turn on sync (optional).** In **Settings → Workspace**, connect a GitHub repository if you want your library backed up, available on another computer, or shared with collaborators.
+7. **Stay up to date.** Just keep using the app — new versions download themselves in the background, and you'll only see a prompt when one is ready to install.
 
-### Getting started
+### The browser extension
 
-Download the latest installer from the [Releases](../../releases) page, or build from source:
-
-```bash
-npm install
-npm run dev        # start in dev mode
-npm run package     # build a Windows installer into dist/
-```
-
-The Chrome extension lives in [`browser-extension/`](browser-extension) — load it unpacked via `chrome://extensions` (Developer mode → "Load unpacked").
+Download the latest installer from the [Releases](../../releases) page. The Chrome extension is loaded separately: open `chrome://extensions`, turn on **Developer mode**, choose **"Load unpacked"**, and select the [`browser-extension/`](browser-extension) folder.
 
 ---
 
 <a id="中文"></a>
 ## 中文
 
-Veridian 是一个本地优先的文献管理平台，将 PDF、元数据、标签、笔记和 Markdown 整理进一个可选 GitHub 同步的研究文献库，并在此基础上内置了一个 **基于你自己文献库回答问题** 的 AI 研究助手。
+Veridian 把你的 PDF、笔记和标签整理进一个统一的文献库，并让你可以直接向 AI 助手提问——得到的回答会附带指向原文出处的引用来源。
 
 ### 界面截图
 
@@ -84,30 +81,28 @@ Veridian 是一个本地优先的文献管理平台，将 PDF、元数据、标�
 
 ### 主要功能
 
-- **文献管理** — 导入 PDF、通过 CrossRef 自动抓取元数据、用分类/标签/笔记整理文献、支持回收站与恢复、支持全文检索。
-- **AI 研究助手** — 对话面板会对文献库建立索引（关键词+向量混合检索），回答时会附带指向原文的引用来源。
-  - 输入 `@` 可以把某篇具体文献或工作区中的某个文件作为本轮提问的上下文引用进来。
-  - 输入 `/`（仅限消息开头）可以手动指定本轮强制使用某个已安装的 skill；不手动指定时，AI 会自动判断当前问题是否需要用到某个 skill。
-  - **Skill 市场** — 支持安装可复用的纯文本"技能"（遵循 Anthropic Agent Skills 规范：`SKILL.md` YAML frontmatter + Markdown 正文），可以从 GitHub 文件夹链接或本地 `.zip` 安装，在设置 → Skill 标签页统一管理。Skill 只会向模型上下文中追加文字指令，不会执行任何代码。
-- **浏览器扩展** — 一键 Chrome 扩展，浏览网页时可以直接把当前文献连同元数据保存进 Veridian 文献库。
-- **GitHub 同步工作区** — 文献库既可以是本地文件夹，也可以与 GitHub 仓库同步（Device Flow OAuth 登录、协作者邀请、后台自动同步）。
-- **PDF 转 Markdown** — 把 PDF 转换为结构清晰、可被检索的 Markdown，供知识库索引使用。
-- **本地优先** — 文献库数据存放在本地 SQLite 数据库中，除非你主动配置 GitHub 同步或 AI 服务商，否则数据不会离开你的电脑。
-- **中英双语界面** — 可在设置中随时切换整个应用界面的语言。
-- **自动更新** — 已安装的应用每次启动时会自动检查 GitHub Releases 上的新版本，后台静默下载完成后会弹窗提示，点击"立即更新"即可自动安装并重启，无需手动下载重装。
+- **文献管理** — 导入 PDF 后，标题、作者、期刊、年份会自动帮你填好。可以用分类和标签整理文献，给每篇文献写笔记，随时对整个文献库进行搜索。删除的条目会先进入回收站，不会误删丢失。
+- **AI 研究助手** — 用日常语言提问，得到的回答会附带指向原文出处的引用来源。
+  - 输入 `@` 可以把某篇具体文献或某个文件带入当前对话作为参考内容。
+  - 输入 `/`（消息开头）可以指定这一轮回答必须使用某个技能；不指定的话，AI 会自己判断什么时候需要用到某个技能。
+  - **Skill 市场** — 可以从一个 GitHub 链接或本地 zip 文件安装现成的"技能包"（给 AI 助手补充的专门知识），在设置里统一管理。技能只会给 AI 助手增加行动指令，不会在你的电脑上执行任何操作。
+- **浏览器扩展** — 在网页上看到一篇文献时，点一下扩展图标就能把它连同各项信息一起保存进文献库。
+- **同步工作区** — 文献库既可以只是电脑上的一个文件夹，也可以连接到 GitHub 仓库，实现自动备份、跨设备同步，以及和协作者共享。
+- **PDF 转 Markdown** — 把 PDF 转换成清晰、易读、方便检索的文本，AI 助手也能读懂并引用。
+- **数据留在你自己电脑上** — 文献库数据保存在本地，除非你主动开启 GitHub 同步或自己配置了 AI 服务，否则不会上传到任何地方。
+- **中英文界面切换** — 随时可以在设置里切换整个应用的显示语言。
+- **自动更新** — 有新版本发布时，Veridian 会自动发现、在后台下载好，然后询问你是否要安装——不需要手动下载。
 
-### 技术栈
+### 新手上手指南
 
-Electron 36 · React 18 + TypeScript · better-sqlite3 · isomorphic-git + Octokit（GitHub 同步）· citeproc-js + KaTeX（引用与公式渲染）· react-i18next（多语言）
+1. **新建或打开一个文献库。** 首次启动时新建一个文献库——可以是电脑上的一个普通文件夹，如果想要自动备份和同步，也可以选择一个 GitHub 仓库。
+2. **添加第一批文献。** 点击 **"+ 添加条目"** 从电脑导入 PDF；或者装上[浏览器扩展](#浏览器扩展)，看文献时点一下就能一键保存。
+3. **边用边整理。** 在左侧新建分类把相关文献归到一起，给文献打标签，在每个条目的"笔记"标签页里记点东西。
+4. **向 AI 助手提问。** 打开 **"AI 助手"**，问一句"总结一下这三篇论文的共同结论"；如果只想针对某一篇提问，输入 `@` 然后打出标题选中它。
+5. **安装一个技能（可选）。** 在 **设置 → Skill** 里安装一个适合你研究方向的技能，之后 AI 会自动判断合适的时候用上它，也可以在某条消息开头输入 `/` 强制这一轮使用它。
+6. **开启同步（可选）。** 在 **设置 → 工作区** 里连接一个 GitHub 仓库，让文献库自动备份、可以在别的电脑上打开，或者和协作者共享。
+7. **保持最新版本。** 正常使用就行——新版本会在后台自动下载好，只有等它准备就绪时才会弹窗询问你是否安装。
 
-### 快速开始
+### 浏览器扩展
 
-从 [Releases](../../releases) 页面下载最新安装包，或从源码构建：
-
-```bash
-npm install
-npm run dev        # 开发模式启动
-npm run package     # 构建 Windows 安装包，产物在 dist/ 目录
-```
-
-浏览器扩展源码在 [`browser-extension/`](browser-extension) 目录，可以在 Chrome 的 `chrome://extensions` 页面开启"开发者模式"后选择"加载已解压的扩展程序"进行加载。
+从 [Releases](../../releases) 页面下载最新安装包。浏览器扩展需要单独加载：打开 Chrome 的 `chrome://extensions` 页面，开启"开发者模式"，点击"加载已解压的扩展程序"，选择 [`browser-extension/`](browser-extension) 目录即可。
