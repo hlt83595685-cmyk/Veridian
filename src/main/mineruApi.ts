@@ -1,9 +1,10 @@
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs'
+import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync, copyFileSync } from 'fs'
 import { basename, join, dirname } from 'path'
 import { tmpdir } from 'os'
 import { randomUUID } from 'crypto'
 import { PDFDocument } from 'pdf-lib'
 import AdmZip from 'adm-zip'
+import { planChunkMerge } from './services/mergeChunks'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -110,18 +111,15 @@ async function agentPollResult(taskId: string): Promise<string> {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Step 1: get a pre-signed upload URL + the resulting public file URL.
- * Uses the batch file-url endpoint with a single file entry.
- */
-/**
- * Step 1: POST /api/v4/file-urls/batch
- * Returns { batchId, uploadUrl } where uploadUrl is the OSS pre-signed PUT URL.
- * The batch endpoint automatically submits the parse task once the file is uploaded.
+ * Step 1: POST /api/v4/file-urls/batch for one or more files.
+ * Returns { batchId, uploadUrls } where each uploadUrl is an OSS pre-signed PUT
+ * URL aligned to the input order. The batch endpoint automatically submits the
+ * parse task once each file is uploaded.
  */
 async function precisionBatchSubmit(
-  fileName: string,
+  fileNames: string[],
   token: string
-): Promise<{ batchId: string; uploadUrl: string }> {
+): Promise<{ batchId: string; uploadUrls: string[] }> {
   const resp = await fetchJson(`${PRECISION_BASE}/file-urls/batch`, {
     method: 'POST',
     headers: {
@@ -129,7 +127,7 @@ async function precisionBatchSubmit(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
-      files: [{ name: fileName }],
+      files: fileNames.map((name) => ({ name })),
       model_version: 'vlm',
       enable_formula: true,
       enable_table: true,
@@ -141,9 +139,11 @@ async function precisionBatchSubmit(
     data: { batch_id: string; file_urls: string[] }
   }
   if (resp.code !== 0) throw new Error(`MinerU batch submit error (${resp.code}): ${resp.msg}`)
-  const uploadUrl = resp.data.file_urls?.[0]
-  if (!uploadUrl) throw new Error('No upload URL returned from MinerU')
-  return { batchId: resp.data.batch_id, uploadUrl }
+  const uploadUrls = resp.data.file_urls
+  if (!uploadUrls || uploadUrls.length !== fileNames.length) {
+    throw new Error('MinerU 返回的上传地址数量与提交文件数不一致')
+  }
+  return { batchId: resp.data.batch_id, uploadUrls }
 }
 
 /** Step 2: PUT file to OSS pre-signed URL. Must NOT send Content-Type header. */
@@ -153,8 +153,14 @@ async function precisionUploadFile(filePath: string, uploadUrl: string): Promise
   if (!resp.ok) throw new Error(`Upload failed: HTTP ${resp.status}`)
 }
 
-/** Step 3: Poll GET /api/v4/extract-results/batch/{batch_id} until done. Returns zip URL. */
-async function precisionPollBatch(batchId: string, token: string): Promise<string> {
+/** Step 3: Poll GET /api/v4/extract-results/batch/{batch_id} until all
+ *  expectedCount files are done. Returns each file's zip URL; fails fast if any
+ *  chunk failed. */
+async function precisionPollBatch(
+  batchId: string,
+  token: string,
+  expectedCount: number
+): Promise<Array<{ fileName: string; zipUrl: string }>> {
   for (let i = 0; i < 240; i++) {
     await sleep(5000)
     const resp = await fetchJson(`${PRECISION_BASE}/extract-results/batch/${batchId}`, {
@@ -173,14 +179,17 @@ async function precisionPollBatch(batchId: string, token: string): Promise<strin
       }
     }
     if (resp.code !== 0) throw new Error(`Precision poll error: ${JSON.stringify(resp)}`)
-    const result = resp.data.extract_result?.[0]
-    if (!result) continue
-    const { state, full_zip_url, err_msg } = result
-    if (state === 'done') {
-      if (!full_zip_url) throw new Error('No full_zip_url in precision result')
-      return full_zip_url
+    const results = resp.data.extract_result ?? []
+    const failed = results.find((r) => r.state === 'failed')
+    if (failed) throw new Error(`Precision task failed (${failed.file_name}): ${failed.err_msg ?? 'unknown'}`)
+    // Require the full set present before trusting an all-done check: entries can
+    // appear incrementally, and every() over a partial set is misleading.
+    if (results.length === expectedCount && results.every((r) => r.state === 'done')) {
+      return results.map((r) => {
+        if (!r.full_zip_url) throw new Error(`No full_zip_url for ${r.file_name}`)
+        return { fileName: r.file_name, zipUrl: r.full_zip_url }
+      })
     }
-    if (state === 'failed') throw new Error(`Precision task failed: ${err_msg ?? 'unknown'}`)
     // states: waiting-file, pending, running, converting — keep polling
   }
   throw new Error('Timeout waiting for MinerU precision result (20 min)')
@@ -298,22 +307,88 @@ export async function convertPdfToMarkdownPrecision(
   const outputDir = dirname(outputPath ?? filePath)
   const stem = basename(filePath, '.pdf')
 
-  const fileName = basename(filePath)
+  onProgress?.({ state: 'pending', message: '读取 PDF 页数...' })
+  const pageCount = await getPdfPageCount(filePath)
 
-  onProgress?.({ state: 'pending', message: '获取上传地址...' })
-  const { batchId, uploadUrl } = await precisionBatchSubmit(fileName, token)
+  // ── Single-file path (<= 20 pages): unchanged behavior ──────────────────────
+  if (pageCount <= MAX_PAGES_PER_CHUNK) {
+    const fileName = basename(filePath)
+    onProgress?.({ state: 'pending', message: '获取上传地址...' })
+    const { batchId, uploadUrls } = await precisionBatchSubmit([fileName], token)
+    onProgress?.({ state: 'running', message: '上传 PDF...' })
+    await precisionUploadFile(filePath, uploadUrls[0])
+    onProgress?.({ state: 'running', message: '精准解析中（VLM 模型，速度较慢）...' })
+    const [result] = await precisionPollBatch(batchId, token, 1)
+    onProgress?.({ state: 'running', message: '下载并解压结果...' })
+    const { mdPath, imagesDir } = await precisionExtractZip(result.zipUrl, outputDir, stem)
+    onProgress?.({ state: 'done', message: '精准解析完成' })
+    return { mdPath, imagesDir }
+  }
 
-  onProgress?.({ state: 'running', message: '上传 PDF...' })
-  await precisionUploadFile(filePath, uploadUrl)
+  // ── Multi-chunk path (> 20 pages): split, batch-submit, merge ───────────────
+  const tmpDir = join(tmpdir(), `veridian-pdf2md-${randomUUID()}`)
+  mkdirSync(tmpDir, { recursive: true })
+  try {
+    onProgress?.({ state: 'running', message: `拆分 PDF（${pageCount} 页 → 每块 ${MAX_PAGES_PER_CHUNK} 页）...` })
+    const chunks = await splitPdf(filePath, MAX_PAGES_PER_CHUNK, tmpDir)
+    if (chunks.length > 200) {
+      throw new Error(`PDF 过大：拆分为 ${chunks.length} 块，超过 MinerU 单批次 200 块上限`)
+    }
+    const fileNames = chunks.map((c) => basename(c))
 
-  onProgress?.({ state: 'running', message: '精准解析中（VLM 模型，速度较慢）...' })
-  const zipUrl = await precisionPollBatch(batchId, token)
+    onProgress?.({ state: 'running', message: `批量上传 ${chunks.length} 个分块...` })
+    const { batchId, uploadUrls } = await precisionBatchSubmit(fileNames, token)
+    await Promise.all(chunks.map((c, i) => precisionUploadFile(c, uploadUrls[i])))
 
-  onProgress?.({ state: 'running', message: '下载并解压结果...' })
-  const { mdPath, imagesDir } = await precisionExtractZip(zipUrl, outputDir, stem)
+    onProgress?.({ state: 'running', message: `精准解析中（${chunks.length} 块并行，VLM 模型）...` })
+    const results = await precisionPollBatch(batchId, token, chunks.length)
+    // Batch result order is not guaranteed -- map back to chunk order by name.
+    const zipByName = new Map(results.map((r) => [r.fileName, r.zipUrl]))
 
-  onProgress?.({ state: 'done', message: '精准解析完成' })
-  return { mdPath, imagesDir }
+    onProgress?.({ state: 'running', message: '下载并解压各分块结果...' })
+    const extractRoot = join(tmpDir, 'extract')
+    const chunkResults: Array<{ md: string; images: string[]; imagesDir: string | null }> = []
+    for (let i = 0; i < chunks.length; i++) {
+      const zipUrl = zipByName.get(fileNames[i])
+      if (!zipUrl) throw new Error(`缺少分块结果：${fileNames[i]}`)
+      const { mdPath, imagesDir } = await precisionExtractZip(zipUrl, extractRoot, `chunk${i + 1}`)
+      const md = readFileSync(mdPath, 'utf-8')
+      const images = imagesDir
+        ? readdirSync(imagesDir).filter((f) => {
+            try { return statSync(join(imagesDir, f)).isFile() } catch { return false }
+          })
+        : []
+      chunkResults.push({ md, images, imagesDir })
+    }
+
+    onProgress?.({ state: 'running', message: `合并 ${chunks.length} 个分块结果...` })
+    const { content, copies } = planChunkMerge(
+      chunkResults.map((c) => ({ md: c.md, images: c.images }))
+    )
+
+    // Merged output under ${stem}_mineru/images -- matches the md's images/ ref
+    // convention and the single-file path's dir shape, so ConversionService and
+    // the repo exporter treat it identically. Copy (not move): chunks live on
+    // tmpdir, the merged dir under staging -- possibly a different volume.
+    const mergedRoot = join(outputDir, `${stem}_mineru`)
+    const mergedImagesDir = join(mergedRoot, 'images')
+    mkdirSync(mergedImagesDir, { recursive: true })
+    for (const cp of copies) {
+      const srcDir = chunkResults[cp.chunk].imagesDir
+      if (!srcDir) continue
+      copyFileSync(join(srcDir, cp.from), join(mergedImagesDir, cp.to))
+    }
+
+    const mdPath = join(mergedRoot, 'full.md')
+    writeFileSync(mdPath, content, 'utf-8')
+
+    onProgress?.({ state: 'done', message: '精准解析完成' })
+    return { mdPath, imagesDir: copies.length > 0 ? mergedImagesDir : null }
+  } finally {
+    // tmpDir holds only chunk PDFs + raw per-chunk extraction; the merged output
+    // already lives under staging, so this cleanup is safe.
+    try { rmSync(tmpDir, { recursive: true, force: true }) } catch { /* ignore */ }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
