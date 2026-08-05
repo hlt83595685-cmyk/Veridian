@@ -13,6 +13,7 @@ import { registerAttachment, registerAttachmentDir, listByItem } from './Attachm
 import { isPdf2mdEnabled, getPdf2mdMode, getPdf2mdApiToken } from './SettingsService'
 import { grantAccess } from '../security/pathGuard'
 import { setConversionFailed } from '../db/items'
+import { emit } from '../core/Notifier'
 
 interface Pdf2mdPayload {
   itemId: number
@@ -110,8 +111,10 @@ export function initConversionService(): void {
       grantAccess(mdPath)
       registerAttachment(itemId, mdPath)
       setConversionFailed(itemId, false)   // success clears any prior failure
+      emit({ type: 'item.modified', ids: [itemId] })   // refresh the list's red-flag column
     } catch (err) {
       setConversionFailed(itemId, true)    // hold this item out of sync
+      emit({ type: 'item.modified', ids: [itemId] })   // surface the red flag in the list now
       throw err                            // keep JobQueue's error reporting
     } finally {
       pendingConversions--
