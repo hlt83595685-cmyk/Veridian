@@ -86,6 +86,12 @@
     "files": [
       "out/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "resources/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
     "asarUnpack": [
       "node_modules/sqlite-vec-windows-x64/**"
     ],
