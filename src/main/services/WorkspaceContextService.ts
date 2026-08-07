@@ -17,6 +17,7 @@ import { importAll, exportMissingItems } from './WorkspaceFiles'
 import { grantAccess } from '../security/pathGuard'
 import { emit } from '../core/Notifier'
 import { getStatus } from './GitHubService'
+import { normalizeContentRoot } from './contentRoot'
 import { setAttribution } from './attribution'
 import { setSetting } from './SettingsService'
 
@@ -72,10 +73,9 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
   const ws = getWorkspace(id)
   if (!ws) throw new Error(`Workspace ${id} not found`)
 
-  const base = workspaceBaseDir(id, ws.local_path)
-  grantAccess(base)
-
   if (ws.kind === 'github') {
+    const base = workspaceBaseDir(id, ws.local_path)
+    grantAccess(base)
     const repoRoot = join(base, 'repo')
     await ensureClone(repoRoot, ws.repo_owner!, ws.repo_name!)
     grantAccess(repoRoot)
@@ -102,9 +102,28 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
     active = { id, kind: 'github', repoRoot }
   }
   else {
-    // Local/private workspace: its own isolated database, no git involved
+    // Local workspace. Folder-backed when local_path names a content root:
+    // import from and write back to that folder, no git. The index.db is an
+    // app-managed CACHE (userData/workspaces/<id>), never written inside the
+    // user's folder -- so local_path here means "the content root", not "where
+    // the db lives". No content root => a plain DB-only private library.
+    const base = workspaceBaseDir(id, null)
+    grantAccess(base)
     openWorkspaceDb(join(base, 'index.db'))
-    active = { id, kind: 'local', repoRoot: null }
+
+    const contentRoot = ws.local_path ? normalizeContentRoot(ws.local_path) : null
+    if (contentRoot) {
+      grantAccess(contentRoot)
+      const db = getDb()
+      // Rescue changes stranded in the cached index.db by a crash before the
+      // last write-back, then rebuild from the folder (tree = source of truth).
+      const recovered = exportMissingItems(db, contentRoot)
+      if (recovered > 0) {
+        console.log(`[WorkspaceContext] recovered ${recovered} stranded local item(s)`)
+      }
+      importAll(db, contentRoot)
+    }
+    active = { id, kind: 'local', repoRoot: contentRoot }
   }
 
   // Attribution follows the active workspace: github -> current GitHub login,
