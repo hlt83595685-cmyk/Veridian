@@ -428,6 +428,11 @@ function CreateSection(): JSX.Element {
         <option value="local">{t('workspace.create.kindLocal')}</option>
         <option value="github">{t('workspace.create.kindGithub')}</option>
       </select>
+      {kind === 'local' && (
+        <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>
+          {t('workspace.create.localFolderHint')}
+        </div>
+      )}
       {kind === 'github' && (
         <>
           <div style={{ display: 'flex', gap: 8 }}>

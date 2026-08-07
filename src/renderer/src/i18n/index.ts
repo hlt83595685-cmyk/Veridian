@@ -103,6 +103,7 @@ const zh = {
     title: '文库',
     all: '全部文献',
     recent: '最近添加',
+    starred: '重要',
     trash: '废纸篓',
     myCollections: '我的分类',
     new: '新建分类',
@@ -137,6 +138,8 @@ const zh = {
     titleFontSize: '标题字号',
     thumbSize: '缩略图大小',
     showTags: '标签',
+    star: '标记为重要',
+    unstar: '取消重要标记',
   },
   detail: {
     title: '标题',
@@ -220,6 +223,7 @@ const zh = {
       kindGithub: '绑定 GitHub 仓库（可协作）',
       repoUrlPlaceholder: 'https://github.com/用户名/仓库名 或 用户名/仓库名',
       submit: '创建',
+      localFolderHint: '「本地」会让你选一个文件夹作为文献库：选含 papers/ 的文件夹即导入现有文献；留空则新建空库。不涉及 git。',
     },
     github: {
       title: 'GitHub 账号',
@@ -386,6 +390,7 @@ const en = {
     title: 'Library',
     all: 'All Items',
     recent: 'Recently Added',
+    starred: 'Important',
     trash: 'Trash',
     myCollections: 'My Collections',
     new: 'New Collection',
@@ -420,6 +425,8 @@ const en = {
     titleFontSize: 'Title Font Size',
     thumbSize: 'Thumbnail Size',
     showTags: 'Tags',
+    star: 'Mark as important',
+    unstar: 'Remove important mark',
   },
   detail: {
     title: 'Title',
@@ -503,6 +510,7 @@ const en = {
       kindGithub: 'Bound to a GitHub repository (collaborative)',
       repoUrlPlaceholder: 'https://github.com/owner/repo or owner/repo',
       submit: 'Create',
+      localFolderHint: '"Local" lets you pick a folder as the library: choose one containing papers/ to import existing items, or leave it empty for a new library. No git involved.',
     },
     github: {
       title: 'GitHub Account',
