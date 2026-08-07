@@ -88,6 +88,7 @@ export const contract = {
 
   // Import
   'import:openDialog': z.tuple([id.optional()]),
+  'import:paths':      z.tuple([z.array(pathString).max(500), id.optional()]),
 
   // File system (all paths pass through pathGuard in the handlers)
   'fs:readFile':     z.tuple([pathString]),

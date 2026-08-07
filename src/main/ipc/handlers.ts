@@ -57,6 +57,9 @@ const RENDERER_WRITABLE_SETTINGS = new Set([
   'knowledge.chat.preset', 'knowledge.chat.baseURL', 'knowledge.chat.model', 'knowledge.chat.apiKey',
   'knowledge.embedding.preset', 'knowledge.embedding.baseURL', 'knowledge.embedding.model',
   'knowledge.embedding.apiKey', 'knowledge.embedding.reuseChatKey',
+  // Item-list display preferences (title font size, visible columns) -- pure UI
+  // state, safe to persist from the renderer.
+  'ui.itemList',
 ])
 
 function collectImages(dir: string): string[] {
@@ -150,6 +153,13 @@ export const handlers: Record<IpcChannel, Handler> = {
     })
     if (result.canceled) return { canceled: true, imported: 0 }
     const imported = await Import.importFiles(result.filePaths, collectionId)
+    return { canceled: false, imported }
+  },
+
+  // Drag-and-drop import: paths already resolved in preload via webUtils.
+  // Reuses the same importer/dedup/auto-convert path as the dialog above.
+  'import:paths': async (_e, filePaths: string[], collectionId?: number) => {
+    const imported = await Import.importFiles(filePaths, collectionId)
     return { canceled: false, imported }
   },
 

@@ -126,6 +126,22 @@ function createTray(): void {
   tray.on('click', showMainWindow)
 }
 
+// Single-instance lock (packaged builds only). Because closing the window only
+// hides Veridian to the tray, it commonly keeps running in the background -- so
+// a fresh launch (double-clicking the shortcut, opening a file) must re-focus
+// the existing window, not spawn a second process. A duplicate can't bind port
+// 23120 or share Chromium's cache directory -- exactly the "port in use" +
+// cache-access-denied startup errors. The primary instance is notified via
+// 'second-instance' and brings its window back from the tray.
+// Gated to app.isPackaged so a `npm run dev` session can still run alongside an
+// installed copy during development (electron-vite manages its own restarts).
+const isPrimaryInstance = !app.isPackaged || app.requestSingleInstanceLock()
+if (!isPrimaryInstance) {
+  app.quit()
+} else if (app.isPackaged) {
+  app.on('second-instance', () => showMainWindow())
+}
+
 // Register veridian-file:// protocol so the renderer can load local files
 // (file:// is blocked by Electron's CSP in sandboxed contexts)
 protocol.registerSchemesAsPrivileged([
@@ -133,6 +149,9 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 app.whenReady().then(async () => {
+  // A secondary instance is on its way out (app.quit above); never create a
+  // window, DB connection, or local server from it.
+  if (!isPrimaryInstance) return
   electronApp.setAppUserModelId('com.veridian.app')
 
   protocol.handle('veridian-file', (request) => {

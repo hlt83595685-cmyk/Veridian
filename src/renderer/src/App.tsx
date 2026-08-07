@@ -4,6 +4,7 @@ import { useItemStore } from './stores/itemStore'
 import { useCollectionStore } from './stores/collectionStore'
 import { useStatusStore } from './stores/statusStore'
 import { useWorkspaceStore } from './stores/workspaceStore'
+import { useViewPrefsStore } from './stores/viewPrefsStore'
 import { wireDomainEvents } from './data/queryCache'
 import './i18n'
 
@@ -55,6 +56,8 @@ export default function App(): JSX.Element {
   // back to the personal library with no reader open, same as a fresh install.
   useEffect(() => {
     if (!window.veridian) return
+    // Item-list display preferences (title font size, visible columns).
+    void useViewPrefsStore.getState().load()
     void (async () => {
       const workspaceId = await window.veridian.settings.get('session.workspaceId')
       if (typeof workspaceId === 'number') {
@@ -74,6 +77,20 @@ export default function App(): JSX.Element {
     window.veridian.onPdf2mdStatus((e) => setStatus(e))
     return () => window.veridian.offPdf2mdStatus()
   }, [setStatus])
+
+  // Safety net for drag-and-drop import: without a window-level preventDefault,
+  // a file dropped ANYWHERE outside the list's drop zone makes Chromium
+  // navigate to it (the PDF replaces the whole app). The ItemListPane handler
+  // still does the actual import on its own zone; this only stops stray drops.
+  useEffect(() => {
+    const prevent = (e: DragEvent): void => e.preventDefault()
+    window.addEventListener('dragover', prevent)
+    window.addEventListener('drop', prevent)
+    return () => {
+      window.removeEventListener('dragover', prevent)
+      window.removeEventListener('drop', prevent)
+    }
+  }, [])
 
   // Global Delete key — trash selected item
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { DomainEvent, JobStatus } from '../shared/events'
 import type { KnowledgeRef } from '../shared/ipc-contract'
@@ -26,6 +26,7 @@ type Pdf2mdStatusCb = (e: {
   message: string
   chunk?: string
   pending: number
+  progress?: number
 }) => void
 type Pdf2mdProgressCb = (p: { state: string; message?: string; progress?: number }) => void
 
@@ -53,6 +54,7 @@ ipcRenderer.on('domain-event', (_ev, e: DomainEvent) => {
       message: job.message,
       chunk: job.chunk,
       pending: job.pending,
+      progress: job.progress,
     })
   }
 })
@@ -103,6 +105,12 @@ const veridianAPI = {
   },
   import: {
     openDialog: (collectionId?: number) => call('import:openDialog', collectionId),
+    paths: (filePaths: string[], collectionId?: number) =>
+      call('import:paths', filePaths, collectionId),
+    // Electron 36 removed the non-standard File.path; webUtils.getPathForFile is
+    // the sanctioned way to recover a dropped file's absolute path. Must run in
+    // preload (has the real File), not over the bridge.
+    pathForFile: (file: File): string => webUtils.getPathForFile(file),
   },
   fs: {
     readFile: (filePath: string) => call<Uint8Array>('fs:readFile', filePath),

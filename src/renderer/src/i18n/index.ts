@@ -132,6 +132,10 @@ const zh = {
     yearColumn: '年份',
     sortYearDesc: '按年份降序排列',
     sortYearReset: '恢复默认排序',
+    dropHint: '松开以导入 PDF · BibTeX · JSON',
+    displaySettings: '显示设置',
+    titleFontSize: '标题字号',
+    showTags: '标签',
   },
   detail: {
     title: '标题',
@@ -410,6 +414,10 @@ const en = {
     yearColumn: 'Year',
     sortYearDesc: 'Sort by year (newest first)',
     sortYearReset: 'Reset sort order',
+    dropHint: 'Drop to import PDF · BibTeX · JSON',
+    displaySettings: 'Display Settings',
+    titleFontSize: 'Title Font Size',
+    showTags: 'Tags',
   },
   detail: {
     title: 'Title',

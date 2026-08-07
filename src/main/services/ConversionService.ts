@@ -94,7 +94,7 @@ export function initConversionService(): void {
       if (mode === 'precision') {
         if (!token) throw new Error('精准解析模式需要填写 API Token（请前往设置 → PDF 转换）')
         const result = await convertPdfToMarkdownPrecision(pdfPath, token, (p) => {
-          ctx.progress(p.message ?? p.state, p.chunk)
+          ctx.progress(p.message ?? p.state, p.chunk, p.progress)
         }, outputPath)
         mdPath = result.mdPath
         if (result.imagesDir) {
@@ -105,7 +105,7 @@ export function initConversionService(): void {
       }
       else {
         mdPath = await convertPdfToMarkdownAuto(pdfPath, (p) => {
-          ctx.progress(p.message ?? p.state, p.chunk)
+          ctx.progress(p.message ?? p.state, p.chunk, p.progress)
         }, outputPath)
       }
       grantAccess(mdPath)

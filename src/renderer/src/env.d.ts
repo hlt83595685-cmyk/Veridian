@@ -129,10 +129,13 @@ interface VeridianAPI {
     message: string
     chunk?: string
     pending: number
+    progress?: number
   }) => void) => void
   offPdf2mdStatus: () => void
   import: {
     openDialog: (collectionId?: number) => Promise<ImportResult>
+    paths: (filePaths: string[], collectionId?: number) => Promise<ImportResult>
+    pathForFile: (file: File) => string
   }
   fs: {
     readFile: (filePath: string) => Promise<Uint8Array>

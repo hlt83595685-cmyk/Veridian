@@ -11,6 +11,7 @@ export interface JobStatus {
   message: string
   chunk?: string
   pending: number          // jobs still waiting behind this one
+  progress?: number        // 0..1 completion of the CURRENT job; absent = indeterminate
 }
 
 export type DomainEvent =

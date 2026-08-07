@@ -6,7 +6,7 @@ import { emit } from './Notifier'
 import type { JobStatus } from '../../shared/events'
 
 export interface JobContext {
-  progress: (message: string, chunk?: string) => void
+  progress: (message: string, chunk?: string, percent?: number) => void
 }
 
 export type JobHandler<P> = (payload: P, ctx: JobContext) => Promise<void>
@@ -54,12 +54,14 @@ function pendingOf(type: string): number {
   return queue.filter((j) => j.type === type).length
 }
 
-function pushStatus(job: Job, state: JobStatus['state'], message: string, chunk?: string): void {
+function pushStatus(
+  job: Job, state: JobStatus['state'], message: string, chunk?: string, progress?: number
+): void {
   emit({
     type: 'job.progress',
     job: {
       id: job.id, type: job.type, label: job.label,
-      state, message, chunk, pending: pendingOf(job.type),
+      state, message, chunk, pending: pendingOf(job.type), progress,
     },
   })
 }
@@ -83,12 +85,12 @@ function drain(): void {
 async function run(job: Job, cfg: JobTypeConfig): Promise<void> {
   job.attempts++
   const ctx: JobContext = {
-    progress: (message, chunk) => pushStatus(job, 'running', message, chunk),
+    progress: (message, chunk, percent) => pushStatus(job, 'running', message, chunk, percent),
   }
   pushStatus(job, 'running', '处理中...')
   try {
     await cfg.handler(job.payload, ctx)
-    pushStatus(job, 'done', '完成')
+    pushStatus(job, 'done', '完成', undefined, 1)
   } catch (err) {
     const msg = (err as Error).message
     console.error(`[JobQueue] ${job.type} failed (attempt ${job.attempts}):`, err)

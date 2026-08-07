@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useCollectionStore } from '../../stores/collectionStore'
+import { useViewPrefsStore, FONT_MIN, FONT_MAX } from '../../stores/viewPrefsStore'
 import type { Item } from '../../../../shared/types'
 import emptyRefsUrl from '../../assets/empty-refs.png'
 import { FigureStrip } from './FigureStrip'
@@ -67,12 +68,16 @@ function ContributorAvatar({ login, size = 18 }: { login: string; size?: number 
   )
 }
 
-function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu }: {
+function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu, titleFontSize, showJournal, showYear, showTags }: {
   item: Item
   selected: boolean
   onClick: () => void
   onDoubleClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
+  titleFontSize: number
+  showJournal: boolean
+  showYear: boolean
+  showTags: boolean
 }): JSX.Element {
   const { t } = useTranslation('common')
   const icon = TYPE_ICON[item.type] ?? '📄'
@@ -102,7 +107,7 @@ function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu }: {
       {/* Title + tags */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{
-          fontSize: 18,
+          fontSize: titleFontSize,
           fontFamily: '"Times New Roman", "Georgia", "Palatino Linotype", serif',
           fontWeight: selected ? 600 : 500,
           color: selected ? 'var(--primary)' : 'var(--foreground)',
@@ -126,7 +131,7 @@ function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu }: {
           )}
           {item.title || t('item.untitled')}
         </p>
-        {item.tags && item.tags.length > 0 && (
+        {showTags && item.tags && item.tags.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
             {item.tags.slice(0, 6).map((tag) => (
               <span key={tag} style={{
@@ -160,41 +165,45 @@ function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu }: {
         <FigureStrip itemId={item.id} />
       </div>
       {/* Journal column */}
-      <div style={{
-        flexShrink: 0,
-        width: 130,
-        textAlign: 'right',
-        paddingTop: 2,
-        overflow: 'hidden',
-      }}>
-        <span style={{
-          display: 'block',
-          fontSize: 11,
-          fontWeight: 400,
-          color: selected ? 'var(--primary)' : 'var(--foreground-2)',
+      {showJournal && (
+        <div style={{
+          flexShrink: 0,
+          width: 130,
+          textAlign: 'right',
+          paddingTop: 2,
           overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
         }}>
-          {item.journal ?? ''}
-        </span>
-      </div>
+          <span style={{
+            display: 'block',
+            fontSize: 11,
+            fontWeight: 400,
+            color: selected ? 'var(--primary)' : 'var(--foreground-2)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}>
+            {item.journal ?? ''}
+          </span>
+        </div>
+      )}
       {/* Year column */}
-      <div style={{
-        flexShrink: 0,
-        width: 40,
-        textAlign: 'right',
-        paddingTop: 2,
-      }}>
-        <span style={{
-          fontSize: 12,
-          fontWeight: selected ? 600 : 500,
-          color: selected ? 'var(--primary)' : 'var(--accent-orange)',
-          letterSpacing: '-0.01em',
+      {showYear && (
+        <div style={{
+          flexShrink: 0,
+          width: 40,
+          textAlign: 'right',
+          paddingTop: 2,
         }}>
-          {item.year ?? '—'}
-        </span>
-      </div>
+          <span style={{
+            fontSize: 12,
+            fontWeight: selected ? 600 : 500,
+            color: selected ? 'var(--primary)' : 'var(--accent-orange)',
+            letterSpacing: '-0.01em',
+          }}>
+            {item.year ?? '—'}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -203,8 +212,14 @@ export function ItemListPane(): JSX.Element {
   const { t } = useTranslation('common')
   const { items, selectedId, setSelectedId, searchQuery, activeCollection, loadItems, yearSort, toggleYearSort } = useItemStore()
   const { collections } = useCollectionStore()
+  const prefs = useViewPrefsStore((s) => s.prefs)
+  const updatePrefs = useViewPrefsStore((s) => s.update)
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
+  const [viewMenu, setViewMenu] = useState<{ x: number; y: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const dragDepth = useRef(0)   // dragenter/leave fire per child; count to know when we truly left
   const menuRef = useRef<HTMLDivElement>(null)
+  const viewMenuRef = useRef<HTMLDivElement>(null)
   const isTrash = activeCollection === 'trash'
   const isCollection = activeCollection.startsWith('col:')
   const activeColId = isCollection ? parseInt(activeCollection.slice(4), 10) : null
@@ -230,6 +245,23 @@ export function ItemListPane(): JSX.Element {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  // View-settings popover: dismiss on outside click or Esc. Kept separate from
+  // the per-item context menu so interacting inside it (slider/toggles) doesn't
+  // close it.
+  useEffect(() => {
+    if (!viewMenu) return
+    const onDown = (e: MouseEvent): void => {
+      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) setViewMenu(null)
+    }
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') setViewMenu(null) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [viewMenu])
 
   const handleDoubleClick = async (item: Item): Promise<void> => {
     setSelectedId(item.id)
@@ -312,51 +344,101 @@ export function ItemListPane(): JSX.Element {
     setContextMenu(null)
   }
 
+  // ── Drag-and-drop import ──────────────────────────────────────────────────
+  // Dropping references into the list imports them just like the toolbar's
+  // Import button (same importer, dedup, and auto-pdf2md). Disabled in Trash.
+  const dropEnabled = !isTrash
+  const hasFiles = (e: React.DragEvent): boolean => e.dataTransfer.types.includes('Files')
+
+  const handleDragEnter = (e: React.DragEvent): void => {
+    if (!dropEnabled || !hasFiles(e)) return
+    e.preventDefault()
+    dragDepth.current += 1
+    setDragging(true)
+  }
+  const handleDragOver = (e: React.DragEvent): void => {
+    if (!dropEnabled || !hasFiles(e)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+  const handleDragLeave = (): void => {
+    if (!dropEnabled) return
+    dragDepth.current -= 1
+    if (dragDepth.current <= 0) { dragDepth.current = 0; setDragging(false) }
+  }
+  const handleDrop = async (e: React.DragEvent): Promise<void> => {
+    if (!dropEnabled) return
+    e.preventDefault()
+    dragDepth.current = 0
+    setDragging(false)
+    const paths = Array.from(e.dataTransfer.files)
+      .map((f) => window.veridian.import.pathForFile(f))
+      .filter((p) => /\.(pdf|bib|json)$/i.test(p))
+    if (paths.length === 0) return
+    try {
+      const res = await window.veridian.import.paths(paths, activeColId ?? undefined)
+      if (res.imported > 0) await loadItems()
+    } catch (err) {
+      console.error('[ItemListPane] drop import failed:', err)
+    }
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', height: '100%' }}
       onClick={() => setContextMenu(null)}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        padding: '0 14px', height: 36,
-        borderBottom: '1px solid var(--separator)',
-        background: 'var(--bg-elevated)',
-        flexShrink: 0,
-        gap: 8,
-      }}>
+      {/* Header — right-click opens the display-settings popover */}
+      <div
+        onContextMenu={(e) => { e.preventDefault(); setViewMenu({ x: e.clientX, y: e.clientY }) }}
+        title={t('item.displaySettings')}
+        style={{
+          display: 'flex', alignItems: 'center',
+          padding: '0 14px', height: 36,
+          borderBottom: '1px solid var(--separator)',
+          background: 'var(--bg-elevated)',
+          flexShrink: 0,
+          gap: 8,
+        }}>
         <span style={{ flex: 1, fontSize: 11, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.04em' }}>
           {t('item.listHeader', { count: filtered.length })}
         </span>
         {/* Journal column header */}
-        <span style={{
-          width: 130, textAlign: 'right', flexShrink: 0,
-          fontSize: 11, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.04em',
-        }}>
-          {t('item.journalColumn')}
-        </span>
-        {/* Year column header — clickable sort */}
-        <button
-          onClick={toggleYearSort}
-          title={yearSort === 'desc' ? t('item.sortYearReset') : t('item.sortYearDesc')}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2,
-            width: 40, flexShrink: 0,
-            padding: '2px 0',
-            border: 'none',
-            background: 'transparent',
-            color: yearSort === 'desc' ? 'var(--accent-orange)' : 'var(--muted)',
-            fontSize: 11, fontWeight: yearSort === 'desc' ? 700 : 600,
-            letterSpacing: '0.04em',
-            cursor: 'pointer',
-            transition: 'color var(--duration) var(--ease)',
-          }}
-        >
-          {t('item.yearColumn')}
-          <span style={{ fontSize: 8, lineHeight: 1, marginTop: 1 }}>
-            {yearSort === 'desc' ? '↓' : '↕'}
+        {prefs.showJournal && (
+          <span style={{
+            width: 130, textAlign: 'right', flexShrink: 0,
+            fontSize: 11, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.04em',
+          }}>
+            {t('item.journalColumn')}
           </span>
-        </button>
+        )}
+        {/* Year column header — clickable sort */}
+        {prefs.showYear && (
+          <button
+            onClick={toggleYearSort}
+            title={yearSort === 'desc' ? t('item.sortYearReset') : t('item.sortYearDesc')}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2,
+              width: 40, flexShrink: 0,
+              padding: '2px 0',
+              border: 'none',
+              background: 'transparent',
+              color: yearSort === 'desc' ? 'var(--accent-orange)' : 'var(--muted)',
+              fontSize: 11, fontWeight: yearSort === 'desc' ? 700 : 600,
+              letterSpacing: '0.04em',
+              cursor: 'pointer',
+              transition: 'color var(--duration) var(--ease)',
+            }}
+          >
+            {t('item.yearColumn')}
+            <span style={{ fontSize: 8, lineHeight: 1, marginTop: 1 }}>
+              {yearSort === 'desc' ? '↓' : '↕'}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* List */}
@@ -405,6 +487,10 @@ export function ItemListPane(): JSX.Element {
               onClick={() => setSelectedId(item.id)}
               onDoubleClick={() => handleDoubleClick(item)}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id }) }}
+              titleFontSize={prefs.titleFontSize}
+              showJournal={prefs.showJournal}
+              showYear={prefs.showYear}
+              showTags={prefs.showTags}
             />
           ))
         )}
@@ -490,7 +576,107 @@ export function ItemListPane(): JSX.Element {
           )}
         </div>
       )}
+
+      {/* Display-settings popover (right-click on the header). Stays open while
+          adjusting the slider / toggling columns; closes on outside click / Esc. */}
+      {viewMenu && (
+        <div
+          ref={viewMenuRef}
+          style={{
+            position: 'fixed',
+            top: viewMenu.y,
+            left: Math.min(viewMenu.x, window.innerWidth - 240),
+            zIndex: 100,
+            width: 224,
+            background: 'rgba(255,255,255,0.92)',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow-lg)',
+            padding: '10px 12px',
+          }}
+        >
+          {/* Title font size */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--foreground)' }}>
+              {t('item.titleFontSize')}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+              {prefs.titleFontSize}px
+            </span>
+          </div>
+          <input
+            type="range"
+            min={FONT_MIN}
+            max={FONT_MAX}
+            step={1}
+            value={prefs.titleFontSize}
+            onChange={(e) => updatePrefs({ titleFontSize: parseInt(e.target.value, 10) })}
+            style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer' }}
+          />
+
+          <div style={{ height: 1, background: 'var(--separator)', margin: '10px 0 6px' }} />
+
+          <ToggleRow label={t('item.journalColumn')} checked={prefs.showJournal}
+            onToggle={() => updatePrefs({ showJournal: !prefs.showJournal })} />
+          <ToggleRow label={t('item.yearColumn')} checked={prefs.showYear}
+            onToggle={() => updatePrefs({ showYear: !prefs.showYear })} />
+          <ToggleRow label={t('item.showTags')} checked={prefs.showTags}
+            onToggle={() => updatePrefs({ showTags: !prefs.showTags })} />
+        </div>
+      )}
+
+      {/* Drag-and-drop import overlay. pointer-events: none so the drop lands on
+          the root container, not this layer. */}
+      {dragging && (
+        <div style={{
+          position: 'absolute', inset: 8, zIndex: 50, pointerEvents: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderRadius: 'var(--radius-lg)',
+          border: '2.5px dashed var(--primary)',
+          background: 'var(--primary-light)',
+          backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)',
+        }}>
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+            color: 'var(--primary)',
+          }}>
+            <span style={{ fontSize: 40, lineHeight: 1 }}>↓</span>
+            <span style={{ fontSize: 16, fontWeight: 700 }}>{t('item.dropHint')}</span>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function ToggleRow({ label, checked, onToggle }: {
+  label: string; checked: boolean; onToggle: () => void
+}): JSX.Element {
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        width: '100%', padding: '6px 6px',
+        borderRadius: 'var(--radius-md)', border: 'none',
+        background: 'transparent', color: 'var(--foreground)',
+        fontSize: 13, fontWeight: 500, textAlign: 'left', cursor: 'pointer',
+      }}
+    >
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: 16, height: 16, flexShrink: 0,
+        borderRadius: 4,
+        border: `1.5px solid ${checked ? 'var(--primary)' : 'var(--border)'}`,
+        background: checked ? 'var(--primary)' : 'transparent',
+        color: '#fff', fontSize: 11, fontWeight: 800, lineHeight: 1,
+      }}>
+        {checked ? '✓' : ''}
+      </span>
+      {label}
+    </button>
   )
 }
 

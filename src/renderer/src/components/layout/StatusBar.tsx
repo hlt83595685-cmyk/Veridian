@@ -30,12 +30,20 @@ export function StatusBar(): JSX.Element | null {
 
   if (!pdf2md) return null
 
-  const { jobType, filename, state, message, chunk, pending } = pdf2md
+  const { jobType, filename, state, message, chunk, pending, progress } = pdf2md
   const ledColor = state === 'done' ? '#34c759'
     : state === 'error' ? '#ff3b30'
     : '#007aff'
   const currentLabel = chunk ? `${filename} [${chunk}]` : filename
   const queueLabel = pending > 0 ? `${pending} pending` : null
+
+  // done/error fill the track (green/red); running with a number shows that
+  // fraction; running without a number falls back to the sliding band.
+  const hasFraction = typeof progress === 'number'
+  const fillPct = state === 'done' || state === 'error'
+    ? 100
+    : hasFraction ? Math.min(100, Math.max(0, progress! * 100)) : 0
+  const indeterminate = isRunning && !hasFraction
 
   return (
     <div style={{
@@ -72,6 +80,38 @@ export function StatusBar(): JSX.Element | null {
             : <span style={{ color: '#ff3b30' }}>{currentLabel} — {message}</span>
         }
       </span>
+
+      {/* Inline progress pill with a flowing-light (流光) sweep. Determinate
+          fill for known fractions; a sliding band for indeterminate phases. */}
+      <div style={{
+        width: 150, height: 8, flexShrink: 0,
+        borderRadius: 5, overflow: 'hidden', position: 'relative',
+        background: 'rgba(120,120,128,0.18)',
+      }}>
+        {indeterminate ? (
+          <div style={{
+            position: 'absolute', top: 0, bottom: 0, left: 0, width: '35%',
+            borderRadius: 5,
+            background: `linear-gradient(90deg, ${ledColor}00, ${ledColor}, ${ledColor}00)`,
+            animation: 'pdf2md-indeterminate 1.15s ease-in-out infinite',
+          }} />
+        ) : (
+          <div style={{
+            position: 'absolute', top: 0, bottom: 0, left: 0,
+            width: `${fillPct}%`, borderRadius: 5, overflow: 'hidden',
+            background: ledColor,
+            transition: 'width 0.35s ease',
+          }}>
+            {isRunning && (
+              <div style={{
+                position: 'absolute', top: 0, bottom: 0, left: 0, width: '40%',
+                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.85), transparent)',
+                animation: 'pdf2md-flow 1.4s linear infinite',
+              }} />
+            )}
+          </div>
+        )}
+      </div>
 
       <span
         title={state === 'error' ? message : undefined}

@@ -184,6 +184,20 @@ button:active { opacity: 0.75; transform: scale(0.97); }
   50%       { opacity: 0.5; box-shadow: 0 0 2px 0px rgba(109, 93, 251, 0.2); }
 }
 
+/* Status-bar progress fill when the job reports no numeric estimate: a short
+   band that slides left-to-right so the user sees it's still working. */
+@keyframes pdf2md-indeterminate {
+  0%   { left: -35%; }
+  100% { left: 100%; }
+}
+
+/* Flowing-light (流光) sweep across the determinate fill: a highlight streak
+   glides along the filled portion while the job runs. */
+@keyframes pdf2md-flow {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+
 /* AI chat panel */
 .chat-cursor {
   display: inline-block;

@@ -7,6 +7,7 @@ export interface Pdf2mdStatus {
   message: string
   chunk?: string
   pending: number   // jobs still waiting (excluding current)
+  progress?: number // 0..1 completion of the current job; absent = indeterminate
 }
 
 interface StatusStore {
