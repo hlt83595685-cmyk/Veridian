@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useInView } from '../../hooks/useInView'
 import { useItemStore } from '../../stores/itemStore'
+import { useViewPrefsStore } from '../../stores/viewPrefsStore'
 import { useItemImages } from '../../data/hooks'
 import { sortByFigNumber } from './FigureStrip.utils'
 
 const MAX_THUMBS = 10
-const THUMB_SIZE = 52
 
 // Lazy-mount gate: FigureStripContent (and the IPC calls its useItemImages
 // hook makes) only mounts once this row is near the viewport, so an
@@ -20,6 +20,7 @@ export function FigureStrip({ itemId }: { itemId: number }): JSX.Element {
 
 function FigureStripContent({ itemId }: { itemId: number }): JSX.Element | null {
   const { data } = useItemImages(itemId)
+  const thumbSize = useViewPrefsStore((s) => s.prefs.thumbSize)
   if (!data || data.files.length === 0) return null
 
   const files = sortByFigNumber(data.files).slice(0, MAX_THUMBS)
@@ -32,13 +33,13 @@ function FigureStripContent({ itemId }: { itemId: number }): JSX.Element | null 
       }}
     >
       {files.map((path) => (
-        <FigureThumb key={path} path={path} dir={data.dir} label={data.label} />
+        <FigureThumb key={path} path={path} dir={data.dir} label={data.label} size={thumbSize} />
       ))}
     </div>
   )
 }
 
-function FigureThumb({ path, dir, label }: { path: string; dir: string; label: string }): JSX.Element | null {
+function FigureThumb({ path, dir, label, size }: { path: string; dir: string; label: string; size: number }): JSX.Element | null {
   const { openGallery } = useItemStore()
   const [failed, setFailed] = useState(false)
   if (failed) return null
@@ -57,7 +58,7 @@ function FigureThumb({ path, dir, label }: { path: string; dir: string; label: s
       }}
       onError={() => setFailed(true)}
       style={{
-        width: THUMB_SIZE, height: THUMB_SIZE, objectFit: 'cover',
+        width: size, height: size, objectFit: 'cover',
         borderRadius: 6, flexShrink: 0, cursor: 'pointer',
         border: '1px solid var(--border)',
       }}

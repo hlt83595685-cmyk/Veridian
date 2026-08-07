@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useCollectionStore } from '../../stores/collectionStore'
-import { useViewPrefsStore, FONT_MIN, FONT_MAX } from '../../stores/viewPrefsStore'
+import { useViewPrefsStore, FONT_MIN, FONT_MAX, THUMB_MIN, THUMB_MAX } from '../../stores/viewPrefsStore'
 import type { Item } from '../../../../shared/types'
 import emptyRefsUrl from '../../assets/empty-refs.png'
 import { FigureStrip } from './FigureStrip'
@@ -613,6 +613,25 @@ export function ItemListPane(): JSX.Element {
             step={1}
             value={prefs.titleFontSize}
             onChange={(e) => updatePrefs({ titleFontSize: parseInt(e.target.value, 10) })}
+            style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer' }}
+          />
+
+          {/* Figure-strip thumbnail size */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '8px 0 6px' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--foreground)' }}>
+              {t('item.thumbSize')}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+              {prefs.thumbSize}px
+            </span>
+          </div>
+          <input
+            type="range"
+            min={THUMB_MIN}
+            max={THUMB_MAX}
+            step={1}
+            value={prefs.thumbSize}
+            onChange={(e) => updatePrefs({ thumbSize: parseInt(e.target.value, 10) })}
             style={{ width: '100%', accentColor: 'var(--primary)', cursor: 'pointer' }}
           />
 

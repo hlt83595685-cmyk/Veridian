@@ -135,6 +135,7 @@ const zh = {
     dropHint: '松开以导入 PDF · BibTeX · JSON',
     displaySettings: '显示设置',
     titleFontSize: '标题字号',
+    thumbSize: '缩略图大小',
     showTags: '标签',
   },
   detail: {
@@ -417,6 +418,7 @@ const en = {
     dropHint: 'Drop to import PDF · BibTeX · JSON',
     displaySettings: 'Display Settings',
     titleFontSize: 'Title Font Size',
+    thumbSize: 'Thumbnail Size',
     showTags: 'Tags',
   },
   detail: {
