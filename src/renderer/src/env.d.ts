@@ -21,6 +21,7 @@ interface VeridianAPI {
     emptyTrash: (libraryId?: number) => Promise<void>
     fetchMetadata: (itemId: number) => Promise<{ source: 'crossref' | 'markdown' | 'none'; titleUpdated: boolean; tagsAdded: number }>
     search: (query: string) => Promise<Item[]>
+    setStarred: (id: number, starred: boolean) => Promise<void>
   }
   creators: {
     getByItem: (itemId: number) => Promise<Creator[]>

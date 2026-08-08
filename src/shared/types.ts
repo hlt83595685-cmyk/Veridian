@@ -22,6 +22,7 @@ export interface Item {
   version: number
   added_by: string | null
   conversion_failed: number
+  starred: number  // local-only "important" mark (0/1)
   tags?: string[]  // populated by getAllItemsWithTags
 }
 

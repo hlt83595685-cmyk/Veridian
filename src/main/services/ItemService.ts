@@ -7,6 +7,7 @@ import {
   createItem as repoCreate, updateItem as repoUpdate,
   trashItem as repoTrash, restoreItem as repoRestore,
   permanentlyDeleteItem as repoDelete, searchItems as repoSearch,
+  setStarred as repoSetStarred,
   type Item,
 } from '../db/items'
 import { appendOp, addTombstone } from '../db/oplog'
@@ -47,6 +48,14 @@ export function updateItem(id: number, data: Partial<Item>): void {
     repoUpdate(id, data)
     appendOp('item', id, 'modify', data)
   })()
+  emit({ type: 'item.modified', ids: [id] })
+}
+
+// Local-only "important" mark: no oplog entry (never syncs), just flips the
+// column and emits item.modified so the list's star + the "Important" view
+// refresh.
+export function setStarred(id: number, starred: boolean): void {
+  repoSetStarred(id, starred)
   emit({ type: 'item.modified', ids: [id] })
 }
 

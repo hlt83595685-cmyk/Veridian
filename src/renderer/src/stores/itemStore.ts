@@ -46,6 +46,9 @@ export const useItemStore = create<ItemStore>((set) => ({
       } else if (activeCollection === 'recent') {
         const all = await window.veridian.items.getAll()
         items = all.slice(0, 50)
+      } else if (activeCollection === 'starred') {
+        const all = await window.veridian.items.getAll()
+        items = all.filter((i) => i.starred === 1)
       } else {
         items = await window.veridian.items.getAll()
       }

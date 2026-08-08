@@ -26,6 +26,7 @@ export interface Item {
   version: number
   added_by: string | null
   conversion_failed: number
+  starred: number   // 0 = normal, 1 = marked important (local-only)
 }
 
 /**
@@ -162,6 +163,14 @@ export function createItem(data: Partial<Item>): Item {
 export function setConversionFailed(itemId: number, failed: boolean): void {
   getDb().prepare('UPDATE items SET conversion_failed = ? WHERE id = ?')
     .run(failed ? 1 : 0, itemId)
+}
+
+// Local-only "important" mark. Standalone UPDATE (not via updateItem) so it
+// never bumps updated_at/version or writes to the oplog -- starring is personal
+// view state, not a content change that should sync or reorder the list.
+export function setStarred(itemId: number, starred: boolean): void {
+  getDb().prepare('UPDATE items SET starred = ? WHERE id = ?')
+    .run(starred ? 1 : 0, itemId)
 }
 
 export function updateItem(id: number, data: Partial<Item>): void {

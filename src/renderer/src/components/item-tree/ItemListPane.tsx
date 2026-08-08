@@ -68,12 +68,13 @@ function ContributorAvatar({ login, size = 18 }: { login: string; size?: number 
   )
 }
 
-function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu, titleFontSize, showJournal, showYear, showTags }: {
+function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu, onToggleStar, titleFontSize, showJournal, showYear, showTags }: {
   item: Item
   selected: boolean
   onClick: () => void
   onDoubleClick: () => void
   onContextMenu: (e: React.MouseEvent) => void
+  onToggleStar: () => void
   titleFontSize: number
   showJournal: boolean
   showYear: boolean
@@ -100,6 +101,27 @@ function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu, titleF
         userSelect: 'none',
       }}
     >
+      {/* Important-mark toggle on the LEFT. Gold filled star when marked; a
+          faint hollow star otherwise (brightens on hover). stopPropagation so
+          clicking it neither selects nor opens the row. */}
+      <span
+        onClick={(e) => { e.stopPropagation(); onToggleStar() }}
+        title={item.starred === 1 ? t('item.unstar') : t('item.star')}
+        className="row-star"
+        style={{
+          flexShrink: 0, cursor: 'pointer', marginTop: 2,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          color: item.starred === 1 ? '#f5a623' : 'var(--muted)',
+          opacity: item.starred === 1 ? 1 : 0.5,
+          transition: 'opacity var(--duration) var(--ease), color var(--duration) var(--ease)',
+        }}
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20"
+          fill={item.starred === 1 ? 'currentColor' : 'none'} style={{ display: 'block' }}>
+          <path d="M10 1.8 L12 7.25 L17.8 7.47 L13.23 11.05 L14.82 16.63 L10 13.4 L5.18 16.63 L6.77 11.05 L2.2 7.47 L8 7.25 Z"
+            stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" />
+        </svg>
+      </span>
       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
         <span style={{ fontSize: 18, marginTop: 1 }}>{icon}</span>
         {item.added_by && <ContributorAvatar login={item.added_by} />}
@@ -344,6 +366,17 @@ export function ItemListPane(): JSX.Element {
     setContextMenu(null)
   }
 
+  // Toggle the local "important" mark. The item.modified event refreshes the
+  // list (updating the star, and dropping the row from the Important view when
+  // unstarred there).
+  const handleToggleStar = async (item: Item): Promise<void> => {
+    try {
+      await window.veridian.items.setStarred(item.id, item.starred !== 1)
+    } catch (err) {
+      console.error('[ItemListPane] toggle star failed:', err)
+    }
+  }
+
   // ── Drag-and-drop import ──────────────────────────────────────────────────
   // Dropping references into the list imports them just like the toolbar's
   // Import button (same importer, dedup, and auto-pdf2md). Disabled in Trash.
@@ -487,6 +520,7 @@ export function ItemListPane(): JSX.Element {
               onClick={() => setSelectedId(item.id)}
               onDoubleClick={() => handleDoubleClick(item)}
               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id }) }}
+              onToggleStar={() => handleToggleStar(item)}
               titleFontSize={prefs.titleFontSize}
               showJournal={prefs.showJournal}
               showYear={prefs.showYear}

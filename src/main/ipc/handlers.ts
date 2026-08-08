@@ -60,6 +60,8 @@ const RENDERER_WRITABLE_SETTINGS = new Set([
   // Item-list display preferences (title font size, visible columns) -- pure UI
   // state, safe to persist from the renderer.
   'ui.itemList',
+  // Pane widths (draggable sidebar/detail resizers) -- pure UI state.
+  'ui.layout',
 ])
 
 function collectImages(dir: string): string[] {
@@ -90,6 +92,7 @@ export const handlers: Record<IpcChannel, Handler> = {
   'items:emptyTrash':      (_e, libraryId?: number) => Items.emptyTrash(libraryId),
   'items:search':          (_e, query: string) => Items.search(query),
   'items:fetchMetadata':   (_e, itemId: number) => Metadata.fetchMetadataForItem(itemId),
+  'items:setStarred':      (_e, id: number, starred: boolean) => Items.setStarred(id, starred),
 
   // Creators
   'creators:getByItem':  (_e, itemId: number) => Creators.listByItem(itemId),

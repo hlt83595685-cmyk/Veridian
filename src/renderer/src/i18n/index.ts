@@ -142,6 +142,7 @@ const zh = {
     unstar: '取消重要标记',
   },
   detail: {
+    collapse: '收起面板',
     title: '标题',
     type: '类型',
     year: '年份',
@@ -429,6 +430,7 @@ const en = {
     unstar: 'Remove important mark',
   },
   detail: {
+    collapse: 'Collapse panel',
     title: 'Title',
     type: 'Type',
     year: 'Year',

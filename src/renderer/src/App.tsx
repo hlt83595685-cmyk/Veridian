@@ -5,6 +5,7 @@ import { useCollectionStore } from './stores/collectionStore'
 import { useStatusStore } from './stores/statusStore'
 import { useWorkspaceStore } from './stores/workspaceStore'
 import { useViewPrefsStore } from './stores/viewPrefsStore'
+import { useLayoutStore } from './stores/layoutStore'
 import { wireDomainEvents } from './data/queryCache'
 import './i18n'
 
@@ -58,6 +59,8 @@ export default function App(): JSX.Element {
     if (!window.veridian) return
     // Item-list display preferences (title font size, visible columns).
     void useViewPrefsStore.getState().load()
+    // Draggable pane widths (sidebar / detail).
+    void useLayoutStore.getState().load()
     void (async () => {
       const workspaceId = await window.veridian.settings.get('session.workspaceId')
       if (typeof workspaceId === 'number') {

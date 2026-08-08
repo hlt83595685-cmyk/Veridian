@@ -75,6 +75,7 @@ const veridianAPI = {
     emptyTrash: (libraryId?: number) => call('items:emptyTrash', libraryId),
     fetchMetadata: (itemId: number) => call('items:fetchMetadata', itemId),
     search: (query: string) => call('items:search', query),
+    setStarred: (id: number, starred: boolean) => call('items:setStarred', id, starred),
   },
   creators: {
     getByItem: (itemId: number) => call('creators:getByItem', itemId),

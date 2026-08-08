@@ -281,4 +281,13 @@ function runMigrations(db: Database.Database): void {
     }
     db.exec(`INSERT INTO schema_version VALUES (7)`)
   }
+  if (current < 8) {
+    // Local-only flag: user-marked "important" reference. Personal view state,
+    // kept out of item.json so it never syncs to collaborators / other devices.
+    const cols = (db.pragma('table_info(items)') as { name: string }[]).map((c) => c.name)
+    if (!cols.includes('starred')) {
+      db.exec(`ALTER TABLE items ADD COLUMN starred INTEGER NOT NULL DEFAULT 0`)
+    }
+    db.exec(`INSERT INTO schema_version VALUES (8)`)
+  }
 }

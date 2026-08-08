@@ -198,6 +198,37 @@ button:active { opacity: 0.75; transform: scale(0.97); }
   100% { transform: translateX(320%); }
 }
 
+/* Item-row "important" star: a faint hollow star brightens to gold on hover so
+   marking reads as available without cluttering every row. */
+.row-star:hover {
+  opacity: 1 !important;
+  color: #f5a623 !important;
+}
+
+/* Draggable pane divider: an invisible strip that shows a thin accent line
+   under the cursor (and while dragging), signalling it can be dragged. */
+.pane-resizer {
+  flex-shrink: 0;
+  cursor: col-resize;
+  position: relative;
+  align-self: stretch;
+}
+.pane-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background var(--duration) var(--ease);
+}
+.pane-resizer:hover::after,
+.pane-resizer.dragging::after {
+  background: var(--primary);
+}
+
 /* AI chat panel */
 .chat-cursor {
   display: inline-block;

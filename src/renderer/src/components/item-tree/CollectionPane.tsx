@@ -28,6 +28,15 @@ function IconRecent(): JSX.Element {
   )
 }
 
+function IconStar(): JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <path d="M8 2l1.85 3.75 4.15.6-3 2.92.7 4.13L8 11.45 4.3 13.4l.7-4.13-3-2.92 4.15-.6L8 2z"
+        stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" fill="none"/>
+    </svg>
+  )
+}
+
 function IconTrash({ full }: { full?: boolean }): JSX.Element {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
@@ -328,6 +337,15 @@ export function CollectionPane(): JSX.Element {
         label={t('collections.recent')}
         active={activeCollection === 'recent'}
         onClick={() => setActiveCollection('recent')}
+      />
+
+      {/* Important (starred) */}
+      <NavRow
+        id="starred"
+        icon={<IconStar />}
+        label={t('collections.starred')}
+        active={activeCollection === 'starred'}
+        onClick={() => setActiveCollection('starred')}
       />
 
       {/* Trash */}

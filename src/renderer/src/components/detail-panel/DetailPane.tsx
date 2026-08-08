@@ -10,7 +10,7 @@ type Tab = 'metadata' | 'tags' | 'attachments' | 'notes'
 
 export function DetailPane({ itemId }: { itemId: number }): JSX.Element {
   const { t } = useTranslation('common')
-  const { items, loadItems } = useItemStore()
+  const { items, loadItems, setSelectedId } = useItemStore()
   const [tab, setTab] = useState<Tab>('metadata')
 
   const item = items.find((i) => i.id === itemId)
@@ -60,6 +60,22 @@ export function DetailPane({ itemId }: { itemId: number }): JSX.Element {
             </button>
           )
         })}
+        <div style={{ flex: 1 }} />
+        {/* Collapse the detail panel back to the right (deselects the item). */}
+        <button
+          onClick={() => setSelectedId(null)}
+          title={t('detail.collapse')}
+          style={{
+            alignSelf: 'center', flexShrink: 0,
+            width: 26, height: 26, borderRadius: 'var(--radius-md)',
+            border: 'none', background: 'transparent', color: 'var(--muted)',
+            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+            <path d="M6 3.5l4.5 4.5L6 12.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
