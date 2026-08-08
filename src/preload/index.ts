@@ -104,6 +104,12 @@ const veridianAPI = {
     openExternal: (id: number) => call('attachments:openExternal', id),
     openPath: (filePath: string) => call('attachments:openPath', filePath),
   },
+  app: {
+    version: () => call<string>('app:version'),
+  },
+  updates: {
+    check: () => call('updates:check'),
+  },
   import: {
     openDialog: (collectionId?: number) => call('import:openDialog', collectionId),
     paths: (filePaths: string[], collectionId?: number) =>

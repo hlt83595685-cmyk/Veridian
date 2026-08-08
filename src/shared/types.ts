@@ -26,6 +26,15 @@ export interface Item {
   tags?: string[]  // populated by getAllItemsWithTags
 }
 
+// Result of a manual "check for updates" (About panel). Reuses electron-updater
+// under the hood; 'available' means a newer release exists and is now
+// downloading (the existing update-downloaded prompt handles install).
+export type UpdateCheckResult =
+  | { status: 'dev' }
+  | { status: 'not-available'; version: string }
+  | { status: 'available'; version: string }
+  | { status: 'error'; message: string }
+
 export type ItemType =
   | 'journalArticle'
   | 'book'

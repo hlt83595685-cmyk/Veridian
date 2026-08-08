@@ -5,6 +5,7 @@ import { StorageTab, LanguageTab } from '../tools/SettingsDialog'
 import { WorkspaceSettingsTab } from '../workspace/WorkspaceSettingsTab'
 import { KnowledgeSettingsTab } from '../knowledge/KnowledgeSettingsTab'
 import { SkillsSettingsTab } from '../knowledge/SkillsSettingsTab'
+import { AboutDialog } from './AboutDialog'
 
 type Tab = 'storage' | 'language' | 'github' | 'knowledge' | 'skills'
 
@@ -15,6 +16,7 @@ export function SettingsPage(): JSX.Element {
   const { t } = useTranslation('common')
   const setPage = useUiStore((s) => s.setPage)
   const [tab, setTab] = useState<Tab>('storage')
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   useEffect(() => {
     const h = (e: KeyboardEvent): void => { if (e.key === 'Escape') setPage('library') }
@@ -58,7 +60,24 @@ export function SettingsPage(): JSX.Element {
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--foreground)' }}>
           {t('settings.title')}
         </span>
+        <div style={{ flex: 1 }} />
+        {/* Help / About: version, repo, manual update check */}
+        <button
+          onClick={() => setAboutOpen(true)}
+          title={t('about.title')}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 30, height: 30, borderRadius: '50%',
+            border: '1px solid var(--border)', background: 'var(--surface)',
+            color: 'var(--foreground-2)', fontSize: 15, fontWeight: 700,
+            cursor: 'pointer', boxShadow: 'var(--shadow-xs)', flexShrink: 0,
+          }}
+        >
+          ?
+        </button>
       </div>
+
+      {aboutOpen && <AboutDialog onClose={() => setAboutOpen(false)} />}
 
       {/* Tab bar */}
       <div style={{

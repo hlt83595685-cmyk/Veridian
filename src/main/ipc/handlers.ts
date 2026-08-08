@@ -1,7 +1,7 @@
 // Thin IPC handlers: parameter shapes are already validated by the gateway
 // against shared/ipc-contract.ts, so each entry only forwards to a Service
 // (or shows a native dialog). No business logic lives here.
-import { dialog, shell, BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { app, dialog, shell, BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { readFileSync, writeFileSync, readdirSync, statSync, renameSync, copyFileSync, unlinkSync, existsSync } from 'fs'
 import { join, extname } from 'path'
 import * as Items from '../services/ItemService'
@@ -22,6 +22,7 @@ import { startDeviceLogin, cancelDeviceLogin } from '../services/OAuthService'
 import { getAvatarPath } from '../services/AvatarService'
 import type { LocalWorkspaceKind } from '../../shared/types'
 import { manualConvertPdfToMd } from '../services/ConversionService'
+import { checkForUpdatesNow } from '../services/UpdateService'
 import * as Agent from '../knowledge/agent'
 import { rebuildIndex, getIndexStatus } from '../knowledge/indexer'
 import { testProvider } from '../knowledge/providers'
@@ -93,6 +94,10 @@ export const handlers: Record<IpcChannel, Handler> = {
   'items:search':          (_e, query: string) => Items.search(query),
   'items:fetchMetadata':   (_e, itemId: number) => Metadata.fetchMetadataForItem(itemId),
   'items:setStarred':      (_e, id: number, starred: boolean) => Items.setStarred(id, starred),
+
+  // App info / updates (About panel)
+  'app:version':   () => app.getVersion(),
+  'updates:check': () => checkForUpdatesNow(),
 
   // Creators
   'creators:getByItem':  (_e, itemId: number) => Creators.listByItem(itemId),

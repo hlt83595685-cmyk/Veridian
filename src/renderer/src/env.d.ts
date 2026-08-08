@@ -3,6 +3,7 @@
 import type {
   Item, Creator, Collection, Tag, Attachment, ImportResult,
   LocalWorkspace, LocalWorkspaceKind, GitHubRepoInfo, RepoTreeNode,
+  UpdateCheckResult,
 } from '../../shared/types'
 import type { DomainEvent } from '../../shared/events'
 import type { KnowledgeRef } from '../../shared/ipc-contract'
@@ -133,6 +134,12 @@ interface VeridianAPI {
     progress?: number
   }) => void) => void
   offPdf2mdStatus: () => void
+  app: {
+    version: () => Promise<string>
+  }
+  updates: {
+    check: () => Promise<UpdateCheckResult>
+  }
   import: {
     openDialog: (collectionId?: number) => Promise<ImportResult>
     paths: (filePaths: string[], collectionId?: number) => Promise<ImportResult>

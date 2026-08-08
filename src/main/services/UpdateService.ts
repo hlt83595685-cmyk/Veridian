@@ -7,6 +7,7 @@
 import { dialog, BrowserWindow } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
+import type { UpdateCheckResult } from '../../shared/types'
 
 let started = false
 
@@ -53,5 +54,35 @@ export function initAutoUpdater(): void {
 
   autoUpdater.checkForUpdates().catch((err) => {
     console.warn('[updater] checkForUpdates threw:', err?.message ?? err)
+  })
+}
+
+// Manual, on-demand check (About panel). Auto-update only runs once at startup,
+// so a long-running app (kept alive by the tray) would otherwise never notice a
+// new release. Resolves with the outcome; if a newer version exists it starts
+// downloading (autoDownload) and the startup 'update-downloaded' handler will
+// prompt to install. One-shot listeners + a 30s timeout so it always settles.
+export async function checkForUpdatesNow(): Promise<UpdateCheckResult> {
+  if (is.dev) return { status: 'dev' }
+  return new Promise<UpdateCheckResult>((resolve) => {
+    let settled = false
+    const finish = (r: UpdateCheckResult): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      autoUpdater.removeListener('update-available', onAvail)
+      autoUpdater.removeListener('update-not-available', onNot)
+      autoUpdater.removeListener('error', onErr)
+      resolve(r)
+    }
+    const onAvail = (info: { version: string }): void => finish({ status: 'available', version: info.version })
+    const onNot = (info: { version: string }): void => finish({ status: 'not-available', version: info.version })
+    const onErr = (err: Error): void => finish({ status: 'error', message: err?.message ?? String(err) })
+    const timer = setTimeout(() => finish({ status: 'error', message: 'timeout' }), 30_000)
+    autoUpdater.on('update-available', onAvail)
+    autoUpdater.on('update-not-available', onNot)
+    autoUpdater.on('error', onErr)
+    autoUpdater.checkForUpdates().catch((err: Error) =>
+      finish({ status: 'error', message: err?.message ?? String(err) }))
   })
 }

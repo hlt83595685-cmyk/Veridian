@@ -61,6 +61,10 @@ export const contract = {
   'items:fetchMetadata':   z.tuple([id]),
   'items:setStarred':      z.tuple([id, z.boolean()]),
 
+  // App info / updates
+  'app:version':   z.tuple([]),
+  'updates:check': z.tuple([]),
+
   // Creators
   'creators:getByItem':    z.tuple([id]),
   'creators:setForItem':   z.tuple([id, z.array(creator).max(200)]),

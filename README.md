@@ -4,7 +4,7 @@
 
 **A local-first reference manager with a built-in AI research assistant.**
 
-![version](https://img.shields.io/badge/version-0.1.9-7c5cff)
+![version](https://img.shields.io/badge/version-0.1.10-7c5cff)
 ![platform](https://img.shields.io/badge/platform-Windows-0078d4)
 
 **[English](#english)** ・ **[中文](#中文)**
