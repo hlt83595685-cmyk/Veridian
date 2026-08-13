@@ -159,7 +159,7 @@ export const contract = {
 
   // AI knowledge base (RAG). ask returns a conversation id immediately; the
   // streamed answer arrives via knowledge.chatDelta / chatState domain events.
-  'knowledge:ask':                z.tuple([z.string().min(1).max(4000), id.nullable(), z.array(knowledgeRef).max(5).optional()]),
+  'knowledge:ask':                z.tuple([z.string().min(1).max(4000), id.nullable(), z.array(knowledgeRef).max(5).optional(), z.number().int().positive().nullable().optional()]),
   'knowledge:stop':               z.tuple([id]),
   'knowledge:listConversations':  z.tuple([]),
   'knowledge:getMessages':        z.tuple([id]),

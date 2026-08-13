@@ -171,11 +171,11 @@ const veridianAPI = {
         'github:listCollaborators', owner, repo),
   },
   knowledge: {
-    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[]) =>
-      call<number>('knowledge:ask', question, conversationId, refs),
+    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null) =>
+      call<number>('knowledge:ask', question, conversationId, refs, scopeCollectionId),
     stop: (conversationId: number) => call('knowledge:stop', conversationId),
     listConversations: () =>
-      call<Array<{ id: number; title: string; created_at: number }>>('knowledge:listConversations'),
+      call<Array<{ id: number; title: string; created_at: number; scope_collection_id: number | null }>>('knowledge:listConversations'),
     getMessages: (conversationId: number) =>
       call<Array<{ id: number; conversation_id: number; role: string; content: string; citations: string; created_at: number }>>(
         'knowledge:getMessages', conversationId),

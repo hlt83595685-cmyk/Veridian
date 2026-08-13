@@ -281,8 +281,8 @@ export const handlers: Record<IpcChannel, Handler> = {
   'github:listCollaborators': (_e, owner: string, repo: string) => GitHub.listCollaborators(owner, repo),
 
   // AI knowledge base
-  'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[]) =>
-    Agent.ask(question, conversationId, refs),
+  'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null) =>
+    Agent.ask(question, conversationId, refs, scopeCollectionId),
   'knowledge:stop':               (_e, conversationId: number) => Agent.stopGeneration(conversationId),
   'knowledge:listConversations':  () => Agent.listConversations(),
   'knowledge:getMessages':        (_e, conversationId: number) => Agent.getMessages(conversationId),

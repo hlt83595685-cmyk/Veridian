@@ -103,9 +103,9 @@ interface VeridianAPI {
     }>
   }
   knowledge: {
-    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[]) => Promise<number>
+    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null) => Promise<number>
     stop: (conversationId: number) => Promise<void>
-    listConversations: () => Promise<Array<{ id: number; title: string; created_at: number }>>
+    listConversations: () => Promise<Array<{ id: number; title: string; created_at: number; scope_collection_id: number | null }>>
     getMessages: (conversationId: number) => Promise<Array<{
       id: number; conversation_id: number; role: string; content: string
       citations: string; created_at: number
