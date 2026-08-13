@@ -73,6 +73,11 @@ export interface Collection {
   key: string
 }
 
+// AI-chat search-scope sentinel: a reserved (negative, never a real collection
+// id) value meaning "only important-marked (starred) papers". Whole library is
+// null; a positive value is a real collection id.
+export const IMPORTANT_SCOPE = -1
+
 export interface Tag {
   id: number
   name: string

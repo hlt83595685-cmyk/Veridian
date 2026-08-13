@@ -6,6 +6,7 @@ import { useCollectionStore } from '../../stores/collectionStore'
 import type { DomainEvent } from '../../../../shared/events'
 import type { KnowledgeRef } from '../../../../shared/ipc-contract'
 import type { Item } from '../../../../shared/types'
+import { IMPORTANT_SCOPE } from '../../../../shared/types'
 import { ChatMessageView, type CitationInfo } from './ChatMessage'
 
 interface ConversationRow { id: number; title: string; created_at: number; scope_collection_id: number | null }
@@ -244,7 +245,8 @@ export function KnowledgePage(): JSX.Element {
 	async function openConversation(id: number): Promise<void> {
 		const row = conversations.find((c) => c.id === id)
 		const saved = row?.scope_collection_id ?? null
-		setScopeCollectionId(saved !== null && collections.some((c) => c.id === saved) ? saved : null)
+		const valid = saved === IMPORTANT_SCOPE || collections.some((c) => c.id === saved)
+		setScopeCollectionId(valid ? saved : null)
 		setConversationId(id)
 		await refreshMessages(id)
 	}
@@ -406,6 +408,7 @@ export function KnowledgePage(): JSX.Element {
 								}}
 							>
 								<option value="">{t('knowledge.scopeWholeLibrary')}</option>
+								<option value={IMPORTANT_SCOPE}>{t('knowledge.scopeImportant')}</option>
 								{collections.map((c) => (
 									<option key={c.id} value={c.id}>{c.name}</option>
 								))}

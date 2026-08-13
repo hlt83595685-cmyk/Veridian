@@ -300,6 +300,7 @@ const zh = {
     mentionItem: '文献',
     mentionFile: '文件',
     scopeWholeLibrary: '全库',
+    scopeImportant: '重要',
     scopeSelectTitle: '搜索范围',
   },
 }
@@ -603,6 +604,7 @@ const en = {
     mentionItem: 'paper',
     mentionFile: 'file',
     scopeWholeLibrary: 'Whole library',
+    scopeImportant: 'Important',
     scopeSelectTitle: 'Search scope',
   },
 }

@@ -15,6 +15,7 @@ import { listInstalledSkills, getSkillBody } from './skills'
 import { readFileSync } from 'fs'
 import { basename } from 'path'
 import type { KnowledgeRef } from '../../shared/ipc-contract'
+import { IMPORTANT_SCOPE } from '../../shared/types'
 
 const MAX_ROUNDS = 8
 const abortControllers = new Map<number, AbortController>()
@@ -269,9 +270,13 @@ export async function ask(question: string, conversationId: number | null, refs?
 		return convId
 	}
 
-	// Resolve the collection scope (main library DB) to a chunk item-id filter.
+	// Resolve the scope (main library DB) to a chunk item-id filter. IMPORTANT_SCOPE
+	// = only starred papers; a positive id = a collection; null = whole library.
 	let filter: import('./search').ScopeFilter | undefined
-	if (scope !== null) {
+	if (scope === IMPORTANT_SCOPE) {
+		const ids = getDb().prepare('SELECT id FROM items WHERE starred = 1 AND deleted = 0').all() as { id: number }[]
+		filter = { itemIds: ids.map((r) => r.id) }
+	} else if (scope !== null) {
 		const ids = getDb().prepare('SELECT item_id FROM collection_items WHERE collection_id = ?')
 			.all(scope) as { item_id: number }[]
 		filter = { itemIds: ids.map((r) => r.item_id) }
