@@ -173,7 +173,7 @@ export function MarkdownViewer({ filePath }: Props): JSX.Element {
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' })
         el.classList.add('md-cite-flash')
-        setTimeout(() => el.classList.remove('md-cite-flash'), 1600)
+        setTimeout(() => el.classList.remove('md-cite-flash'), 2400)
       }
       setMdScrollTarget(null)
     }, 120)

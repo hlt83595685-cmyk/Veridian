@@ -264,9 +264,17 @@ button:active { opacity: 0.75; transform: scale(0.97); }
 /* Long display equations scroll horizontally instead of widening the bubble. */
 .chat-markdown .katex-display { overflow-x: auto; overflow-y: hidden; margin: 8px 0; }
 
-/* Briefly highlight the paragraph a clicked citation scrolls to. */
+/* Briefly highlight the paragraph a clicked citation scrolls to. Holds a clearly
+   visible tint through the smooth-scroll travel, then fades. box-decoration-break
+   keeps the tint continuous when the target is an inline element across lines. */
 @keyframes md-cite-flash {
-  0%   { background: var(--primary-light); }
-  100% { background: transparent; }
+  0%   { background-color: rgba(109, 93, 251, 0.30); }
+  60%  { background-color: rgba(109, 93, 251, 0.30); }
+  100% { background-color: transparent; }
 }
-.md-cite-flash { animation: md-cite-flash 1.6s ease-out; border-radius: 4px; }
+.md-cite-flash {
+  animation: md-cite-flash 2.4s ease-out;
+  border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
