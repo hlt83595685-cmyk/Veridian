@@ -39,14 +39,16 @@ async function openCitation(
 	c: CitationInfo | undefined,
 	setPage: (p: 'library') => void,
 	openMarkdown: (path: string, filename: string) => void,
-	setScrollTarget: (t: { text: string; headingPath: string } | null) => void
+	setScrollTarget: (t: { text: string; headingPath: string } | null) => void,
+	scroll: boolean
 ): Promise<void> {
 	if (!c || c.itemId === null) return
 	const atts = await window.veridian.attachments.getByItem(c.itemId)
 	const md = atts.find((a) => a.type === 'markdown')
 	if (!md?.path) return
-	// Resolve the cited chunk so the reader can scroll to its exact spot.
-	setScrollTarget(await window.veridian.knowledge.getChunk(c.itemKey, c.seq))
+	// Inline [n] markers jump to the cited spot; the sources list just opens the
+	// paper (scroll=false, and clear any stale target so it lands at the top).
+	setScrollTarget(scroll ? await window.veridian.knowledge.getChunk(c.itemKey, c.seq) : null)
 	setPage('library')
 	openMarkdown(md.path, md.filename ?? 'Full.md')
 }
@@ -100,7 +102,7 @@ export function ChatMessageView({ role, content, citations, streaming }: {
 									const c = byKeySeq.get(`${key}:${seq}`)
 									return (
 										<button
-											onClick={() => void openCitation(c, setPage, openMarkdown, setMdScrollTarget)}
+											onClick={() => void openCitation(c, setPage, openMarkdown, setMdScrollTarget, true)}
 											title={c?.title ?? key}
 											style={{
 												border: 'none', background: 'none', padding: 0, margin: 0,
@@ -129,7 +131,7 @@ export function ChatMessageView({ role, content, citations, streaming }: {
 					{uniqueSources.map((c, i) => (
 						<button
 							key={`${c.itemKey}:${c.seq}`}
-							onClick={() => void openCitation(c, setPage, openMarkdown, setMdScrollTarget)}
+							onClick={() => void openCitation(c, setPage, openMarkdown, setMdScrollTarget, false)}
 							style={{
 								display: 'flex', alignItems: 'center', gap: 6, textAlign: 'left',
 								border: 'none', background: 'none', padding: '2px 0', cursor: 'pointer',
