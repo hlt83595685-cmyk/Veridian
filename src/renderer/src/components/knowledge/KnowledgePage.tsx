@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useUiStore } from '../../stores/uiStore'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
+import { useCollectionStore } from '../../stores/collectionStore'
 import type { DomainEvent } from '../../../../shared/events'
 import type { KnowledgeRef } from '../../../../shared/ipc-contract'
-import type { Item, Collection } from '../../../../shared/types'
+import type { Item } from '../../../../shared/types'
 import { ChatMessageView, type CitationInfo } from './ChatMessage'
 
 interface ConversationRow { id: number; title: string; created_at: number; scope_collection_id: number | null }
@@ -32,7 +33,10 @@ export function KnowledgePage(): JSX.Element {
 
 	const [conversations, setConversations] = useState<ConversationRow[]>([])
 	const [conversationId, setConversationId] = useState<number | null>(null)
-	const [collections, setCollections] = useState<Collection[]>([])
+	// Reuse the app-wide collection store: it's loaded by App on workspace.dataRefreshed
+	// and reloaded on switches -- a local mount-time fetch here races app boot and
+	// comes back empty (this page is kept mounted, so it never retries).
+	const collections = useCollectionStore((s) => s.collections)
 	const [scopeCollectionId, setScopeCollectionId] = useState<number | null>(null)
 	const [messages, setMessages] = useState<DisplayMessage[]>([])
 	const [input, setInput] = useState('')
@@ -66,9 +70,6 @@ export function KnowledgePage(): JSX.Element {
 		void checkChatConfigured()
 	}, [])
 
-	useEffect(() => {
-		window.veridian.collections.getAll().then((c) => setCollections(c as Collection[])).catch(() => setCollections([]))
-	}, [])
 
 	async function checkChatConfigured(): Promise<void> {
 		const [b, m, k] = await Promise.all([
