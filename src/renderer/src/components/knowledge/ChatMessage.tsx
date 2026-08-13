@@ -1,16 +1,35 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useUiStore } from '../../stores/uiStore'
 
 export interface CitationInfo { itemKey: string; itemId: number | null; seq: number; title: string | null }
 
+// remark-math only understands $...$ / $$...$$. Models frequently emit the
+// other common LaTeX delimiters (\(...\) inline, \[...\] display), so
+// normalize those first -- otherwise the formula shows up as raw backslash
+// text instead of a rendered equation.
+function normalizeMathDelimiters(text: string): string {
+	return text
+		.replace(/\\\[([\s\S]+?)\\\]/g, (_m, body: string) => `$$${body}$$`)
+		.replace(/\\\(([\s\S]+?)\\\)/g, (_m, body: string) => `$${body}$`)
+		// \tag only compiles in top-level display math -- KaTeX rejects it in
+		// inline math AND inside aligned/align/array environments, both of which
+		// models emit often ("\tag works only in display equations"). Rewrite
+		// \tag{X} / \tag*{X} to "\quad (X)", which renders in every mode and
+		// environment while keeping the equation number.
+		.replace(/\\tag\*?\s*\{([^{}]*)\}/g, (_m, label: string) => `\\quad (${label})`)
+}
+
 // The agent is prompted to emit [^KEY:seq] inline. Rewrite those into a
 // markdown link with a private scheme so ReactMarkdown renders a clickable
 // citation chip instead of literal bracket text, without a custom parser.
 function toMarkdownLinks(text: string): string {
-	return text.replace(/\[\^([A-Za-z0-9_-]+):(\d+)\]/g, (_m, key: string, seq: string) =>
+	return normalizeMathDelimiters(text).replace(/\[\^([A-Za-z0-9_-]+):(\d+)\]/g, (_m, key: string, seq: string) =>
 		`[[${Number(seq) + 1}]](veridian-cite://${key}/${seq})`
 	)
 }
@@ -61,7 +80,8 @@ export function ChatMessageView({ role, content, citations, streaming }: {
 			}}>
 				<div className="chat-markdown">
 					<ReactMarkdown
-						remarkPlugins={[remarkGfm]}
+						remarkPlugins={[remarkGfm, remarkMath]}
+						rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
 						components={{
 							a: ({ href, children }) => {
 								if (href?.startsWith('veridian-cite://')) {

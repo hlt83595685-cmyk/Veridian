@@ -184,7 +184,8 @@ Rules:
 - ALWAYS search the library before answering; never answer from general knowledge alone. If the library has nothing relevant, say so plainly.
 - Cite every claim with the marker [^item_key:seq] taken from search results (e.g. [^AB12CD34:5]). Place markers inline right after the claim they support.
 - Answer in the same language the user asked in.
-- Be concise and factual. Quote numbers and findings exactly as the excerpts state them.`
+- Be concise and factual. Quote numbers and findings exactly as the excerpts state them.
+- Write every mathematical variable, symbol, or formula in LaTeX: inline as $...$ (e.g. the coefficient $\\beta_1$) and standalone equations as $$...$$. Never write math as plain text.`
 
 /** Appends an installed-skills catalog (name + one-line description) so the
  *  model can decide on its own when a skill's procedure applies -- mirrors
