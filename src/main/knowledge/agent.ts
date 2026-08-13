@@ -203,19 +203,29 @@ const MAX_REF_CHARS = 8000
 /** Resolves @/`/`-mention refs into extra hidden context messages, injected
  *  right after the system prompt and kept out of the 4000-char question cap
  *  the visible chat bubble is limited to. */
-function resolveRefs(refs: KnowledgeRef[] | undefined, ws: number): ChatMessage[] {
+function resolveRefs(refs: KnowledgeRef[] | undefined): ChatMessage[] {
 	if (!refs?.length) return []
 	const out: ChatMessage[] = []
 	for (const ref of refs) {
 		if (ref.type === 'item') {
-			const item = getDb().prepare('SELECT title FROM items WHERE key = ? AND deleted = 0')
-				.get(ref.itemKey) as { title: string | null } | undefined
-			const rows = getKnowledgeDb().prepare(
-				'SELECT heading_path, text FROM chunks WHERE workspace_id = ? AND item_key = ? ORDER BY seq'
-			).all(ws, ref.itemKey) as { heading_path: string; text: string }[]
-			if (!rows.length) continue
-			const text = rows.map((r) => (r.heading_path ? `## ${r.heading_path}\n${r.text}` : r.text)).join('\n\n').slice(0, MAX_REF_CHARS)
-			out.push({ role: 'system', content: `[Attached paper: ${item?.title ?? ref.itemKey}]\n${text}` })
+			// Read the paper's markdown attachment directly (source of truth) rather
+			// than the derived chunk index -- an @-mention must carry the paper's
+			// text even before the background indexer has run on it.
+			const item = getDb().prepare('SELECT id, title FROM items WHERE key = ? AND deleted = 0')
+				.get(ref.itemKey) as { id: number; title: string | null } | undefined
+			if (!item) continue
+			const title = item.title ?? ref.itemKey
+			const md = getDb().prepare(
+				"SELECT path FROM attachments WHERE item_id = ? AND type = 'markdown' AND path IS NOT NULL LIMIT 1"
+			).get(item.id) as { path: string } | undefined
+			if (md) {
+				try {
+					const text = readFileSync(assertReadable(md.path), 'utf-8').slice(0, MAX_REF_CHARS)
+					out.push({ role: 'system', content: `[Attached paper: ${title}]\n${text}` })
+					continue
+				} catch { /* fall through to the no-text note */ }
+			}
+			out.push({ role: 'system', content: `[Attached paper: ${title} -- no converted markdown text is available for it yet]` })
 		} else if (ref.type === 'file') {
 			try {
 				const real = assertReadable(ref.path)
@@ -260,7 +270,7 @@ export async function ask(question: string, conversationId: number | null, refs?
 	const history = getMessages(convId)
 	const messages: ChatMessage[] = [
 		{ role: 'system', content: buildSystemPrompt() },
-		...resolveRefs(refs, ws),
+		...resolveRefs(refs),
 		...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
 	]
 
