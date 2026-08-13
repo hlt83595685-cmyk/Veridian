@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useItemStore } from '../../stores/itemStore'
+import { citationPhrase, citationHeading, normalizeForMatch } from './citeLocate'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -33,17 +34,11 @@ interface Props {
   filePath: string
 }
 
-// Strip markdown punctuation and collapse whitespace so a chunk's raw text can
-// be matched against the reader's rendered (syntax-free) text.
-function normalizeForMatch(s: string): string {
-  return s.replace(/[#*_`~>|[\]()]/g, ' ').replace(/\s+/g, ' ').toLowerCase()
-}
-
 // Find the rendered element holding the start of a cited chunk: match the
-// chunk's leading text against the visible text; fall back to its section
+// chunk's body prose against the visible text; fall back to its section
 // heading. Returns null when neither is found (reader stays put).
 function locateCitation(container: HTMLElement, target: { text: string; headingPath: string }): HTMLElement | null {
-  const phrase = normalizeForMatch(target.text).trim().slice(0, 30)
+  const phrase = citationPhrase(target)
   if (phrase.length >= 8) {
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
     const parts: { node: Text; start: number }[] = []
@@ -60,11 +55,11 @@ function locateCitation(container: HTMLElement, target: { text: string; headingP
       if (hit?.node.parentElement) return hit.node.parentElement
     }
   }
-  const head = normalizeForMatch(target.headingPath).trim()
+  const head = citationHeading(target)
   if (head) {
     for (const h of Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6'))) {
       const ht = normalizeForMatch(h.textContent ?? '').trim()
-      if (ht && (head.includes(ht) || ht.includes(head))) return h as HTMLElement
+      if (ht && (ht === head || ht.includes(head) || head.includes(ht))) return h as HTMLElement
     }
   }
   return null
