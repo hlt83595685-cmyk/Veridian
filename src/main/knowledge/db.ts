@@ -76,7 +76,8 @@ export function getKnowledgeDb(): Database.Database {
 			id           INTEGER PRIMARY KEY AUTOINCREMENT,
 			workspace_id INTEGER NOT NULL,
 			title        TEXT NOT NULL,
-			created_at   INTEGER NOT NULL DEFAULT (unixepoch())
+			created_at   INTEGER NOT NULL DEFAULT (unixepoch()),
+			scope_collection_id INTEGER
 		);
 		CREATE TABLE IF NOT EXISTS messages (
 			id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,6 +88,13 @@ export function getKnowledgeDb(): Database.Database {
 			created_at      INTEGER NOT NULL DEFAULT (unixepoch())
 		);
 	`)
+
+	// Additive migration: older DBs have `conversations` without this column.
+	const convCols = db.prepare('PRAGMA table_info(conversations)').all() as { name: string }[]
+	if (!convCols.some((c) => c.name === 'scope_collection_id')) {
+		db.exec('ALTER TABLE conversations ADD COLUMN scope_collection_id INTEGER')
+	}
+
 	return db
 }
 

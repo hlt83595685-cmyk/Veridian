@@ -86,14 +86,14 @@ const LOAD_SKILL_TOOL: ToolDef = {
 	},
 }
 
-async function runTool(name: string, argsJson: string): Promise<string> {
+async function runTool(name: string, argsJson: string, filter?: import('./search').ScopeFilter): Promise<string> {
 	let args: Record<string, unknown>
 	try { args = JSON.parse(argsJson || '{}') } catch { return 'error: invalid arguments' }
 
 	if (name === 'search_library') {
 		const q = String(args.query ?? '').trim()
 		if (!q) return 'error: empty query'
-		const hits = await hybridSearch(wsId(), q, 8)
+		const hits = await hybridSearch(wsId(), q, 8, filter)
 		if (!hits.length) return 'no results'
 		return hits.map((h) =>
 			`[${h.itemKey}:${h.seq}] (${h.headingPath || 'text'})\n${h.text.slice(0, 700)}`
@@ -140,7 +140,7 @@ async function runTool(name: string, argsJson: string): Promise<string> {
 
 // ── Conversation persistence ─────────────────────────────────────────────────
 
-export interface ConversationRow { id: number; title: string; created_at: number }
+export interface ConversationRow { id: number; title: string; created_at: number; scope_collection_id: number | null }
 export interface MessageRow {
 	id: number; conversation_id: number; role: string; content: string
 	citations: string; created_at: number
@@ -148,7 +148,7 @@ export interface MessageRow {
 
 export function listConversations(): ConversationRow[] {
 	return getKnowledgeDb().prepare(
-		'SELECT id, title, created_at FROM conversations WHERE workspace_id = ? ORDER BY id DESC LIMIT 100'
+		'SELECT id, title, created_at, scope_collection_id FROM conversations WHERE workspace_id = ? ORDER BY id DESC LIMIT 100'
 	).all(wsId()) as ConversationRow[]
 }
 
@@ -247,15 +247,18 @@ function resolveRefs(refs: KnowledgeRef[] | undefined): ChatMessage[] {
 	return out
 }
 
-export async function ask(question: string, conversationId: number | null, refs?: KnowledgeRef[]): Promise<number> {
+export async function ask(question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null): Promise<number> {
 	const kdb = getKnowledgeDb()
 	const ws = wsId()
 
 	let convId = conversationId
+	const scope = scopeCollectionId ?? null
 	if (convId === null) {
-		const info = kdb.prepare('INSERT INTO conversations (workspace_id, title) VALUES (?, ?)')
-			.run(ws, question.slice(0, 60))
+		const info = kdb.prepare('INSERT INTO conversations (workspace_id, title, scope_collection_id) VALUES (?, ?, ?)')
+			.run(ws, question.slice(0, 60), scope)
 		convId = Number(info.lastInsertRowid)
+	} else {
+		kdb.prepare('UPDATE conversations SET scope_collection_id = ? WHERE id = ?').run(scope, convId)
 	}
 	kdb.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)')
 		.run(convId, 'user', question)
@@ -264,6 +267,14 @@ export async function ask(question: string, conversationId: number | null, refs?
 	if (!cfg) {
 		emit({ type: 'knowledge.chatState', conversationId: convId, state: 'error', detail: 'not_configured' })
 		return convId
+	}
+
+	// Resolve the collection scope (main library DB) to a chunk item-id filter.
+	let filter: import('./search').ScopeFilter | undefined
+	if (scope !== null) {
+		const ids = getDb().prepare('SELECT item_id FROM collection_items WHERE collection_id = ?')
+			.all(scope) as { item_id: number }[]
+		filter = { itemIds: ids.map((r) => r.item_id) }
 	}
 
 	// History (previous turns) + this question
@@ -298,7 +309,7 @@ export async function ask(question: string, conversationId: number | null, refs?
 						type: 'knowledge.chatState', conversationId: convId!, state: 'searching',
 						detail: tc.function.name,
 					})
-					const toolResult = await runTool(tc.function.name, tc.function.arguments)
+					const toolResult = await runTool(tc.function.name, tc.function.arguments, filter)
 					messages.push({ role: 'tool', content: toolResult, tool_call_id: tc.id })
 				}
 				// Loop continues; if we hit MAX_ROUNDS the last content stands.
