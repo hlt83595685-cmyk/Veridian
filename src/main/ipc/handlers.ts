@@ -146,6 +146,12 @@ export const handlers: Record<IpcChannel, Handler> = {
   'attachments:openPath': (_e, filePath: string) => {
     shell.openPath(assertReadable(filePath))
   },
+  // Reveal the attachment in the OS file manager (Explorer/Finder), with the
+  // file selected. Path comes from the trusted DB, not the renderer.
+  'attachments:reveal': (_e, id: number) => {
+    const p = Attachments.attachmentPath(id)
+    if (p) shell.showItemInFolder(p)
+  },
 
   // Import
   'import:openDialog': async (e, collectionId?: number) => {

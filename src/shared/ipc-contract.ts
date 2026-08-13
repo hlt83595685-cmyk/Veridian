@@ -90,6 +90,7 @@ export const contract = {
   'attachments:getPath':      z.tuple([id]),
   'attachments:openExternal': z.tuple([id]),
   'attachments:openPath':     z.tuple([pathString]),
+  'attachments:reveal':       z.tuple([id]),
 
   // Import
   'import:openDialog': z.tuple([id.optional()]),

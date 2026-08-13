@@ -351,6 +351,22 @@ export function ItemListPane(): JSX.Element {
     }
   }
 
+  // Reveal the item's file in the OS file manager (Explorer/Finder). Prefers
+  // the PDF; falls back to the first attachment. Nothing local -> notify.
+  const handleRevealFile = async (itemId: number): Promise<void> => {
+    setContextMenu(null)
+    try {
+      const atts = await window.veridian.attachments.getByItem(itemId)
+      if (atts.length === 0) { alert(t('item.noLocalFile')); return }
+      const pdf = atts.find(
+        (a) => a.mime_type === 'application/pdf' || a.filename?.toLowerCase().endsWith('.pdf')
+      )
+      await window.veridian.attachments.reveal((pdf ?? atts[0]).id)
+    } catch (err) {
+      console.error('[ItemListPane] reveal file failed:', err)
+    }
+  }
+
   const handleMoveToCollection = async (itemId: number, colId: number): Promise<void> => {
     // Remove from current collection (if in one), add to target
     if (activeColId !== null) {
@@ -571,6 +587,8 @@ export function ItemListPane(): JSX.Element {
                     onClick={() => handleFetchMetadata(contextMenu.itemId!)} />
                   <ContextItem label={t('item.pdf2md')}
                     onClick={() => handlePdf2md(contextMenu.itemId!)} />
+                  <ContextItem label={t('item.revealInFolder')}
+                    onClick={() => handleRevealFile(contextMenu.itemId!)} />
                 </>
               )}
               {contextMenu.itemId !== null && collections.filter(c => c.id !== activeColId).length > 0 && (
@@ -594,6 +612,8 @@ export function ItemListPane(): JSX.Element {
                     onClick={() => handleFetchMetadata(contextMenu.itemId!)} />
                   <ContextItem label={t('item.pdf2md')}
                     onClick={() => handlePdf2md(contextMenu.itemId!)} />
+                  <ContextItem label={t('item.revealInFolder')}
+                    onClick={() => handleRevealFile(contextMenu.itemId!)} />
                 </>
               )}
               {collections.length > 0 && contextMenu.itemId !== null && (

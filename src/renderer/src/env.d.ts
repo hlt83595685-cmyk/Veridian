@@ -49,6 +49,7 @@ interface VeridianAPI {
     getPath: (id: number) => Promise<string | null>
     openExternal: (id: number) => Promise<void>
     openPath: (filePath: string) => Promise<void>
+    reveal: (id: number) => Promise<void>
   }
   settings: {
     get: (key: string) => Promise<unknown>

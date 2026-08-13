@@ -103,6 +103,7 @@ const veridianAPI = {
     getPath: (id: number) => call('attachments:getPath', id),
     openExternal: (id: number) => call('attachments:openExternal', id),
     openPath: (filePath: string) => call('attachments:openPath', filePath),
+    reveal: (id: number) => call('attachments:reveal', id),
   },
   app: {
     version: () => call<string>('app:version'),
