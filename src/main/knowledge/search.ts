@@ -5,6 +5,7 @@
 import { getKnowledgeDb, isVecAvailable, getMeta } from './db'
 import { getEmbeddingConfig, embedBatch } from './providers'
 import { rerankHits } from './rerank'
+import { translateForSearch } from './queryTranslate'
 
 export interface SearchHit {
 	chunkId: number
@@ -113,12 +114,25 @@ export function getChunkBySeq(wsId: number, itemKey: string, seq: number): Chunk
 	return row ? { headingPath: row.heading_path, text: row.text } : null
 }
 
-export async function hybridSearch(wsId: number, query: string, topK = 8): Promise<SearchHit[]> {
-	const [ftsIds, vecIds] = await Promise.all([
+/** FTS + vector rank lists for one query string. */
+async function runQuery(wsId: number, query: string): Promise<number[][]> {
+	const [fts, vec] = await Promise.all([
 		Promise.resolve(ftsSearch(wsId, query)),
 		vectorSearch(wsId, query),
 	])
-	const fused = rrfFuse([ftsIds, vecIds])
+	return [fts, vec]
+}
+
+export async function hybridSearch(wsId: number, query: string, topK = 8): Promise<SearchHit[]> {
+	// Retrieve the original query while translating it in parallel; a Chinese
+	// query also gets an English pass so BM25 can match English papers. Fuse all
+	// rank lists. Non-Chinese queries / translation failure => original only.
+	const [origLists, translated] = await Promise.all([
+		runQuery(wsId, query),
+		translateForSearch(query),
+	])
+	const rankLists = translated ? [...origLists, ...(await runQuery(wsId, translated))] : origLists
+	const fused = rrfFuse(rankLists)
 	// Over-select a rerank pool; the reranker narrows it to topK. If reranking is
 	// unavailable it falls back to this RRF order, so behaviour degrades safely.
 	const pool = [...fused.entries()].sort((a, b) => b[1] - a[1]).slice(0, RERANK_POOL)
