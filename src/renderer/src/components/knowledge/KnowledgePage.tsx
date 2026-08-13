@@ -4,10 +4,10 @@ import { useUiStore } from '../../stores/uiStore'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 import type { DomainEvent } from '../../../../shared/events'
 import type { KnowledgeRef } from '../../../../shared/ipc-contract'
-import type { Item } from '../../../../shared/types'
+import type { Item, Collection } from '../../../../shared/types'
 import { ChatMessageView, type CitationInfo } from './ChatMessage'
 
-interface ConversationRow { id: number; title: string; created_at: number }
+interface ConversationRow { id: number; title: string; created_at: number; scope_collection_id: number | null }
 interface DisplayMessage {
 	id: number | 'streaming'
 	role: 'user' | 'assistant'
@@ -32,6 +32,8 @@ export function KnowledgePage(): JSX.Element {
 
 	const [conversations, setConversations] = useState<ConversationRow[]>([])
 	const [conversationId, setConversationId] = useState<number | null>(null)
+	const [collections, setCollections] = useState<Collection[]>([])
+	const [scopeCollectionId, setScopeCollectionId] = useState<number | null>(null)
 	const [messages, setMessages] = useState<DisplayMessage[]>([])
 	const [input, setInput] = useState('')
 	const [chatState, setChatState] = useState<ChatState>('idle')
@@ -62,6 +64,10 @@ export function KnowledgePage(): JSX.Element {
 	useEffect(() => {
 		void refreshConversations()
 		void checkChatConfigured()
+	}, [])
+
+	useEffect(() => {
+		window.veridian.collections.getAll().then((c) => setCollections(c as Collection[])).catch(() => setCollections([]))
 	}, [])
 
 	async function checkChatConfigured(): Promise<void> {
@@ -231,9 +237,13 @@ export function KnowledgePage(): JSX.Element {
 		setChatState('idle')
 		setPendingRefs([])
 		setMention(null)
+		setScopeCollectionId(null)
 	}
 
 	async function openConversation(id: number): Promise<void> {
+		const row = conversations.find((c) => c.id === id)
+		const saved = row?.scope_collection_id ?? null
+		setScopeCollectionId(saved !== null && collections.some((c) => c.id === saved) ? saved : null)
 		setConversationId(id)
 		await refreshMessages(id)
 	}
@@ -258,7 +268,7 @@ export function KnowledgePage(): JSX.Element {
 		streamingRef.current = ''
 		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [] }])
 		setChatState('searching')
-		const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined)
+		const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined, scopeCollectionId)
 		setConversationId(id)
 	}
 
@@ -383,7 +393,23 @@ export function KnowledgePage(): JSX.Element {
 						</div>
 					)}
 					<div style={{ display: 'flex', gap: 8 }}>
-						<textarea
+						<div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+							<select
+								value={scopeCollectionId ?? ''}
+								onChange={(e) => setScopeCollectionId(e.target.value ? Number(e.target.value) : null)}
+								title={t('knowledge.scopeSelectTitle')}
+								style={{
+									alignSelf: 'flex-start', marginBottom: 6, height: 26, padding: '0 8px',
+									borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
+									background: 'var(--surface)', color: 'var(--foreground-2)', fontSize: 12,
+								}}
+							>
+								<option value="">{t('knowledge.scopeWholeLibrary')}</option>
+								{collections.map((c) => (
+									<option key={c.id} value={c.id}>{c.name}</option>
+								))}
+							</select>
+							<textarea
 							ref={textareaRef}
 							value={input}
 							onChange={onInputChange}
@@ -401,6 +427,7 @@ export function KnowledgePage(): JSX.Element {
 							rows={1}
 							style={inputStyle}
 						/>
+						</div>
 						{busy ? (
 							<button onClick={() => void stop()} style={stopBtnStyle}>{t('knowledge.stop')}</button>
 						) : (

@@ -299,6 +299,8 @@ const zh = {
     error: '出错了：{{detail}}',
     mentionItem: '文献',
     mentionFile: '文件',
+    scopeWholeLibrary: '全库',
+    scopeSelectTitle: '搜索范围',
   },
 }
 
@@ -600,6 +602,8 @@ const en = {
     error: 'Error: {{detail}}',
     mentionItem: 'paper',
     mentionFile: 'file',
+    scopeWholeLibrary: 'Whole library',
+    scopeSelectTitle: 'Search scope',
   },
 }
 
