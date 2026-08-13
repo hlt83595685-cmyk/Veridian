@@ -76,6 +76,10 @@ const zh = {
       rebuilding: '重建中...',
       rebuildConfirm: '重建索引会清空现有的检索数据并重新生成，确定继续吗？',
       modelChangedHint: 'Embedding 模型已变更，需要重建索引才能生效',
+      retrievalTitle: '检索',
+      retrievalDesc: '控制每次搜索返回给 AI 的命中条数与每条摘录长度。',
+      resultCount: '检索结果数',
+      excerptChars: '摘录长度（字）',
     },
     skills: {
       title: 'Skill',
@@ -380,6 +384,10 @@ const en = {
       rebuilding: 'Rebuilding...',
       rebuildConfirm: 'Rebuilding clears the existing search index and regenerates it. Continue?',
       modelChangedHint: 'Embedding model changed -- rebuild the index for it to take effect',
+      retrievalTitle: 'Retrieval',
+      retrievalDesc: 'How many hits and how much of each excerpt are sent to the AI per search.',
+      resultCount: 'Result count',
+      excerptChars: 'Excerpt length (chars)',
     },
     skills: {
       title: 'Skills',

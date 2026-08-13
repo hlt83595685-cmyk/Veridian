@@ -43,13 +43,15 @@ export function KnowledgeSettingsTab(): JSX.Element {
 		embeddingModel: string | null; vecAvailable: boolean
 	} | null>(null)
 	const [rebuilding, setRebuilding] = useState(false)
+	const [resultCount, setResultCount] = useState('6')
+	const [excerptChars, setExcerptChars] = useState('1200')
 
 	useEffect(() => {
 		void loadAll()
 	}, [])
 
 	async function loadAll(): Promise<void> {
-		const [sp, cPreset, cBase, cModel, cKey, ePreset, eBase, eModel, eKey, reuse, st] = await Promise.all([
+		const [sp, cPreset, cBase, cModel, cKey, ePreset, eBase, eModel, eKey, reuse, st, rc, ec] = await Promise.all([
 			window.veridian.settings.get('knowledge.storagePath'),
 			window.veridian.settings.get('knowledge.chat.preset'),
 			window.veridian.settings.get('knowledge.chat.baseURL'),
@@ -61,6 +63,8 @@ export function KnowledgeSettingsTab(): JSX.Element {
 			window.veridian.settings.get('knowledge.embedding.apiKey'),
 			window.veridian.settings.get('knowledge.embedding.reuseChatKey'),
 			window.veridian.knowledge.indexStatus().catch(() => null),
+			window.veridian.settings.get('knowledge.search.resultCount'),
+			window.veridian.settings.get('knowledge.search.excerptChars'),
 		])
 		setStoragePath(typeof sp === 'string' ? sp : '')
 		setChat({
@@ -77,6 +81,8 @@ export function KnowledgeSettingsTab(): JSX.Element {
 		})
 		setReuseChatKey(reuse === true)
 		setStatus(st)
+		setResultCount(typeof rc === 'number' ? String(rc) : '6')
+		setExcerptChars(typeof ec === 'number' ? String(ec) : '1200')
 	}
 
 	const browseStorage = async (): Promise<void> => {
@@ -94,7 +100,7 @@ export function KnowledgeSettingsTab(): JSX.Element {
 		else setEmbedding(next)
 	}
 
-	async function saveField(key: string, value: string | boolean): Promise<void> {
+	async function saveField(key: string, value: string | boolean | number): Promise<void> {
 		await window.veridian.settings.set(key, value)
 	}
 
@@ -136,6 +142,32 @@ export function KnowledgeSettingsTab(): JSX.Element {
 					<button onClick={browseStorage} style={primaryBtnStyle}>
 						{t('settings.knowledge.browse')}
 					</button>
+				</div>
+			</Section>
+
+			<Section label={t('settings.knowledge.retrievalTitle')}>
+				<div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+					{t('settings.knowledge.retrievalDesc')}
+				</div>
+				<div style={{ display: 'flex', gap: 16 }}>
+					<label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--foreground-2)' }}>
+						{t('settings.knowledge.resultCount')}
+						<input
+							type="number" min={1} max={12} value={resultCount}
+							onChange={(e) => setResultCount(e.target.value)}
+							onBlur={() => void saveField('knowledge.search.resultCount', Number(resultCount) || 6)}
+							style={{ width: 90, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)' }}
+						/>
+					</label>
+					<label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--foreground-2)' }}>
+						{t('settings.knowledge.excerptChars')}
+						<input
+							type="number" min={200} max={4000} step={100} value={excerptChars}
+							onChange={(e) => setExcerptChars(e.target.value)}
+							onBlur={() => void saveField('knowledge.search.excerptChars', Number(excerptChars) || 1200)}
+							style={{ width: 110, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)' }}
+						/>
+					</label>
 				</div>
 			</Section>
 
