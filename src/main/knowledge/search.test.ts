@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rrfFuse, toFtsQuery } from './search'
+import { rrfFuse, toFtsQuery, scopeClause } from './search'
 
 describe('rrfFuse', () => {
 	it('ranks items appearing in both lists above single-list items', () => {
@@ -29,5 +29,17 @@ describe('toFtsQuery', () => {
 	})
 	it('handles empty input', () => {
 		expect(toFtsQuery('  ')).toBe('""')
+	})
+})
+
+describe('scopeClause', () => {
+	it('is empty for no filter', () => {
+		expect(scopeClause('c.item_id', undefined)).toBe('')
+	})
+	it('is empty for empty itemIds', () => {
+		expect(scopeClause('c.item_id', { itemIds: [] })).toBe('')
+	})
+	it('builds an IN clause from itemIds', () => {
+		expect(scopeClause('c.item_id', { itemIds: [3, 7] })).toBe(' AND c.item_id IN (3,7)')
 	})
 })

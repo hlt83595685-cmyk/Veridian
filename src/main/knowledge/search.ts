@@ -21,6 +21,14 @@ const CANDIDATES = 30
 const RRF_K = 60
 const RERANK_POOL = 20   // fused candidates handed to the reranker; it returns topK
 
+export interface ScopeFilter { itemIds: number[] }
+
+/** SQL `AND <col> IN (...)` fragment restricting to a collection's items, or ''
+ *  for whole-library / empty scope. itemIds are trusted DB integers. */
+export function scopeClause(col: string, filter?: ScopeFilter): string {
+	return filter && filter.itemIds.length ? ` AND ${col} IN (${filter.itemIds.join(',')})` : ''
+}
+
 /** Fuse ranked id lists: score(id) = sum over lists of 1/(k + rank). Exported for tests. */
 export function rrfFuse(rankLists: number[][], k = RRF_K): Map<number, number> {
 	const scores = new Map<number, number>()
@@ -39,14 +47,14 @@ export function toFtsQuery(q: string): string {
 	return tokens.map((t) => `"${t}"`).join(' OR ')
 }
 
-function ftsSearch(wsId: number, query: string): number[] {
+function ftsSearch(wsId: number, query: string, filter?: ScopeFilter): number[] {
 	const kdb = getKnowledgeDb()
 	try {
 		return (kdb.prepare(`
 			SELECT f.rowid AS id
 			FROM fts_chunks f
 			JOIN chunks c ON c.id = f.rowid
-			WHERE fts_chunks MATCH ? AND c.workspace_id = ?
+			WHERE fts_chunks MATCH ? AND c.workspace_id = ?${scopeClause('c.item_id', filter)}
 			ORDER BY bm25(fts_chunks)
 			LIMIT ${CANDIDATES}
 		`).all(toFtsQuery(query), wsId) as { id: number }[]).map((r) => r.id)
@@ -55,7 +63,7 @@ function ftsSearch(wsId: number, query: string): number[] {
 	}
 }
 
-async function vectorSearch(wsId: number, query: string): Promise<number[]> {
+async function vectorSearch(wsId: number, query: string, filter?: ScopeFilter): Promise<number[]> {
 	const cfg = getEmbeddingConfig()
 	if (!cfg) return []
 	// Vectors indexed under a different model are incomparable garbage.
@@ -80,7 +88,7 @@ async function vectorSearch(wsId: number, query: string): Promise<number[]> {
 			const ids = rows.map((r) => Number(r.id))
 			if (!ids.length) return []
 			const inWs = new Set((kdb.prepare(
-				`SELECT id FROM chunks WHERE workspace_id = ? AND id IN (${ids.join(',')})`
+				`SELECT id FROM chunks WHERE workspace_id = ? AND id IN (${ids.join(',')})${scopeClause('item_id', filter)}`
 			).all(wsId) as { id: number }[]).map((r) => r.id))
 			return ids.filter((id) => inWs.has(id)).slice(0, CANDIDATES)
 		} catch (err) {
@@ -91,7 +99,7 @@ async function vectorSearch(wsId: number, query: string): Promise<number[]> {
 
 	// JS cosine fallback over BLOB embeddings (fine below a few thousand papers)
 	const rows = kdb.prepare(
-		'SELECT id, embedding FROM chunks WHERE workspace_id = ? AND embedded = 1 AND embedding IS NOT NULL'
+		`SELECT id, embedding FROM chunks WHERE workspace_id = ? AND embedded = 1 AND embedding IS NOT NULL${scopeClause('item_id', filter)}`
 	).all(wsId) as { id: number; embedding: Buffer }[]
 	const scored = rows.map((r) => {
 		const v = new Float32Array(r.embedding.buffer, r.embedding.byteOffset, r.embedding.byteLength / 4)
@@ -114,24 +122,26 @@ export function getChunkBySeq(wsId: number, itemKey: string, seq: number): Chunk
 	return row ? { headingPath: row.heading_path, text: row.text } : null
 }
 
-/** FTS + vector rank lists for one query string. */
-async function runQuery(wsId: number, query: string): Promise<number[][]> {
+/** FTS + vector rank lists for one query string, optionally scoped. */
+async function runQuery(wsId: number, query: string, filter?: ScopeFilter): Promise<number[][]> {
 	const [fts, vec] = await Promise.all([
-		Promise.resolve(ftsSearch(wsId, query)),
-		vectorSearch(wsId, query),
+		Promise.resolve(ftsSearch(wsId, query, filter)),
+		vectorSearch(wsId, query, filter),
 	])
 	return [fts, vec]
 }
 
-export async function hybridSearch(wsId: number, query: string, topK = 8): Promise<SearchHit[]> {
+export async function hybridSearch(wsId: number, query: string, topK = 8, filter?: ScopeFilter): Promise<SearchHit[]> {
+	// Scope set but the collection is empty (or deleted) => no results.
+	if (filter && !filter.itemIds.length) return []
 	// Retrieve the original query while translating it in parallel; a Chinese
 	// query also gets an English pass so BM25 can match English papers. Fuse all
 	// rank lists. Non-Chinese queries / translation failure => original only.
 	const [origLists, translated] = await Promise.all([
-		runQuery(wsId, query),
+		runQuery(wsId, query, filter),
 		translateForSearch(query),
 	])
-	const rankLists = translated ? [...origLists, ...(await runQuery(wsId, translated))] : origLists
+	const rankLists = translated ? [...origLists, ...(await runQuery(wsId, translated, filter))] : origLists
 	const fused = rrfFuse(rankLists)
 	// Over-select a rerank pool; the reranker narrows it to topK. If reranking is
 	// unavailable it falls back to this RRF order, so behaviour degrades safely.
