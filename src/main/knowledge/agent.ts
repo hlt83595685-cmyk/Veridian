@@ -7,8 +7,10 @@ import { getDb } from '../db'
 import { emit } from '../core/Notifier'
 import { getActiveWorkspace } from '../services/WorkspaceContextService'
 import { assertReadable } from '../security/pathGuard'
+import { getSetting } from '../services/SettingsService'
 import { getKnowledgeDb } from './db'
 import { hybridSearch } from './search'
+import { truncateAtBoundary } from './truncate'
 import { getChatConfig, chatStream, type ChatMessage, type ToolDef } from './providers'
 import { extractCitations } from './citations'
 import { listInstalledSkills, getSkillBody } from './skills'
@@ -22,6 +24,13 @@ const abortControllers = new Map<number, AbortController>()
 
 function wsId(): number {
 	return getActiveWorkspace().id ?? 0
+}
+
+/** Read a numeric setting, clamped to [min,max]; falls back to def when unset/invalid. */
+function tunedInt(key: string, def: number, min: number, max: number): number {
+	const v = getSetting(key)
+	const n = typeof v === 'number' ? v : Number(v)
+	return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : def
 }
 
 // ── Tools ────────────────────────────────────────────────────────────────────
@@ -94,10 +103,12 @@ async function runTool(name: string, argsJson: string, filter?: import('./search
 	if (name === 'search_library') {
 		const q = String(args.query ?? '').trim()
 		if (!q) return 'error: empty query'
-		const hits = await hybridSearch(wsId(), q, 8, filter)
+		const count = tunedInt('knowledge.search.resultCount', 6, 1, 12)
+		const chars = tunedInt('knowledge.search.excerptChars', 1200, 200, 4000)
+		const hits = await hybridSearch(wsId(), q, count, filter)
 		if (!hits.length) return 'no results'
 		return hits.map((h) =>
-			`[${h.itemKey}:${h.seq}] (${h.headingPath || 'text'})\n${h.text.slice(0, 700)}`
+			`[${h.itemKey}:${h.seq}] (${h.headingPath || 'text'})\n${truncateAtBoundary(h.text, chars)}`
 		).join('\n\n---\n\n')
 	}
 
