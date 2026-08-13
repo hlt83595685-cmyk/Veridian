@@ -163,6 +163,7 @@ export const contract = {
   'knowledge:stop':               z.tuple([id]),
   'knowledge:listConversations':  z.tuple([]),
   'knowledge:getMessages':        z.tuple([id]),
+  'knowledge:getChunk':           z.tuple([z.string().min(1), z.number().int().nonnegative()]),
   'knowledge:deleteConversation': z.tuple([id]),
   'knowledge:rebuildIndex':       z.tuple([]),
   'knowledge:indexStatus':        z.tuple([]),

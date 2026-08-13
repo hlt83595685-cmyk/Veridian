@@ -102,6 +102,17 @@ async function vectorSearch(wsId: number, query: string): Promise<number[]> {
 	return scored.sort((a, b) => b.s - a.s).slice(0, CANDIDATES).map((r) => r.id)
 }
 
+export interface ChunkLocation { headingPath: string; text: string }
+
+/** Look up a single chunk's heading + raw text by (item, seq). Used to scroll a
+ *  clicked citation to its exact spot in the markdown reader. */
+export function getChunkBySeq(wsId: number, itemKey: string, seq: number): ChunkLocation | null {
+	const row = getKnowledgeDb().prepare(
+		'SELECT heading_path, text FROM chunks WHERE workspace_id = ? AND item_key = ? AND seq = ?'
+	).get(wsId, itemKey, seq) as { heading_path: string; text: string } | undefined
+	return row ? { headingPath: row.heading_path, text: row.text } : null
+}
+
 export async function hybridSearch(wsId: number, query: string, topK = 8): Promise<SearchHit[]> {
 	const [ftsIds, vecIds] = await Promise.all([
 		Promise.resolve(ftsSearch(wsId, query)),

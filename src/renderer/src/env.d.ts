@@ -110,6 +110,7 @@ interface VeridianAPI {
       id: number; conversation_id: number; role: string; content: string
       citations: string; created_at: number
     }>>
+    getChunk: (itemKey: string, seq: number) => Promise<{ headingPath: string; text: string } | null>
     deleteConversation: (conversationId: number) => Promise<void>
     rebuildIndex: () => Promise<void>
     indexStatus: () => Promise<{

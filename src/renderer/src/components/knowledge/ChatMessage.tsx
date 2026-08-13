@@ -35,11 +35,18 @@ function toMarkdownLinks(text: string): string {
 	)
 }
 
-async function openCitation(itemId: number | null, setPage: (p: 'library') => void, openMarkdown: (path: string, filename: string) => void): Promise<void> {
-	if (itemId === null) return
-	const atts = await window.veridian.attachments.getByItem(itemId)
+async function openCitation(
+	c: CitationInfo | undefined,
+	setPage: (p: 'library') => void,
+	openMarkdown: (path: string, filename: string) => void,
+	setScrollTarget: (t: { text: string; headingPath: string } | null) => void
+): Promise<void> {
+	if (!c || c.itemId === null) return
+	const atts = await window.veridian.attachments.getByItem(c.itemId)
 	const md = atts.find((a) => a.type === 'markdown')
 	if (!md?.path) return
+	// Resolve the cited chunk so the reader can scroll to its exact spot.
+	setScrollTarget(await window.veridian.knowledge.getChunk(c.itemKey, c.seq))
 	setPage('library')
 	openMarkdown(md.path, md.filename ?? 'Full.md')
 }
@@ -53,6 +60,7 @@ export function ChatMessageView({ role, content, citations, streaming }: {
 	const { t } = useTranslation('common')
 	const setPage = useUiStore((s) => s.setPage)
 	const openMarkdown = useItemStore((s) => s.openMarkdown)
+	const setMdScrollTarget = useItemStore((s) => s.setMdScrollTarget)
 	const byKeySeq = new Map(citations.map((c) => [`${c.itemKey}:${c.seq}`, c]))
 	// The sources list is per-paper, not per-excerpt -- citing the same paper
 	// at several seqs shouldn't repeat its title several times in the list.
@@ -92,7 +100,7 @@ export function ChatMessageView({ role, content, citations, streaming }: {
 									const c = byKeySeq.get(`${key}:${seq}`)
 									return (
 										<button
-											onClick={() => void openCitation(c?.itemId ?? null, setPage, openMarkdown)}
+											onClick={() => void openCitation(c, setPage, openMarkdown, setMdScrollTarget)}
 											title={c?.title ?? key}
 											style={{
 												border: 'none', background: 'none', padding: 0, margin: 0,
@@ -121,7 +129,7 @@ export function ChatMessageView({ role, content, citations, streaming }: {
 					{uniqueSources.map((c, i) => (
 						<button
 							key={`${c.itemKey}:${c.seq}`}
-							onClick={() => void openCitation(c.itemId, setPage, openMarkdown)}
+							onClick={() => void openCitation(c, setPage, openMarkdown, setMdScrollTarget)}
 							style={{
 								display: 'flex', alignItems: 'center', gap: 6, textAlign: 'left',
 								border: 'none', background: 'none', padding: '2px 0', cursor: 'pointer',

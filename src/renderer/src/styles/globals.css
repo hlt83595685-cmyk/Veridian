@@ -263,3 +263,10 @@ button:active { opacity: 0.75; transform: scale(0.97); }
 .chat-markdown .katex code { background: none; padding: 0; }
 /* Long display equations scroll horizontally instead of widening the bubble. */
 .chat-markdown .katex-display { overflow-x: auto; overflow-y: hidden; margin: 8px 0; }
+
+/* Briefly highlight the paragraph a clicked citation scrolls to. */
+@keyframes md-cite-flash {
+  0%   { background: var(--primary-light); }
+  100% { background: transparent; }
+}
+.md-cite-flash { animation: md-cite-flash 1.6s ease-out; border-radius: 4px; }

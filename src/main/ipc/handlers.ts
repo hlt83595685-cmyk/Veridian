@@ -25,6 +25,7 @@ import { manualConvertPdfToMd } from '../services/ConversionService'
 import { checkForUpdatesNow } from '../services/UpdateService'
 import * as Agent from '../knowledge/agent'
 import { rebuildIndex, getIndexStatus } from '../knowledge/indexer'
+import { getChunkBySeq } from '../knowledge/search'
 import { testProvider } from '../knowledge/providers'
 import { closeKnowledgeDb, knowledgeDir } from '../knowledge/db'
 import * as Skills from '../knowledge/skills'
@@ -285,6 +286,8 @@ export const handlers: Record<IpcChannel, Handler> = {
   'knowledge:stop':               (_e, conversationId: number) => Agent.stopGeneration(conversationId),
   'knowledge:listConversations':  () => Agent.listConversations(),
   'knowledge:getMessages':        (_e, conversationId: number) => Agent.getMessages(conversationId),
+  'knowledge:getChunk':           (_e, itemKey: string, seq: number) =>
+    getChunkBySeq(WorkspaceContext.getActiveWorkspace().id ?? 0, itemKey, seq),
   'knowledge:deleteConversation': (_e, conversationId: number) => Agent.deleteConversation(conversationId),
   'knowledge:rebuildIndex':       () => rebuildIndex(),
   'knowledge:indexStatus':        () => getIndexStatus(),

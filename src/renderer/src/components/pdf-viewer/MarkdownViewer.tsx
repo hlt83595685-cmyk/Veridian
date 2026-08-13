@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useItemStore } from '../../stores/itemStore'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -30,6 +31,43 @@ const sanitizeSchema = {
 
 interface Props {
   filePath: string
+}
+
+// Strip markdown punctuation and collapse whitespace so a chunk's raw text can
+// be matched against the reader's rendered (syntax-free) text.
+function normalizeForMatch(s: string): string {
+  return s.replace(/[#*_`~>|[\]()]/g, ' ').replace(/\s+/g, ' ').toLowerCase()
+}
+
+// Find the rendered element holding the start of a cited chunk: match the
+// chunk's leading text against the visible text; fall back to its section
+// heading. Returns null when neither is found (reader stays put).
+function locateCitation(container: HTMLElement, target: { text: string; headingPath: string }): HTMLElement | null {
+  const phrase = normalizeForMatch(target.text).trim().slice(0, 30)
+  if (phrase.length >= 8) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+    const parts: { node: Text; start: number }[] = []
+    let full = ''
+    let n: Node | null
+    while ((n = walker.nextNode())) {
+      parts.push({ node: n as Text, start: full.length })
+      full += normalizeForMatch((n as Text).data)
+    }
+    const idx = full.indexOf(phrase)
+    if (idx !== -1) {
+      let hit = parts[0]
+      for (const p of parts) { if (p.start <= idx) hit = p; else break }
+      if (hit?.node.parentElement) return hit.node.parentElement
+    }
+  }
+  const head = normalizeForMatch(target.headingPath).trim()
+  if (head) {
+    for (const h of Array.from(container.querySelectorAll('h1, h2, h3, h4, h5, h6'))) {
+      const ht = normalizeForMatch(h.textContent ?? '').trim()
+      if (ht && (head.includes(ht) || ht.includes(head))) return h as HTMLElement
+    }
+  }
+  return null
 }
 
 // path-browserify's isAbsolute is POSIX-only (checks leading /).
@@ -113,6 +151,9 @@ function LocalImage({ src, alt, mdDir }: { src?: string; alt?: string; mdDir: st
 export function MarkdownViewer({ filePath }: Props): JSX.Element {
   const [content, setContent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const mdScrollTarget = useItemStore((s) => s.mdScrollTarget)
+  const setMdScrollTarget = useItemStore((s) => s.setMdScrollTarget)
 
   // Normalise to forward slashes BEFORE dirname — path-browserify uses POSIX rules
   // and returns '.' for paths that contain only backslashes (Windows default).
@@ -125,6 +166,24 @@ export function MarkdownViewer({ filePath }: Props): JSX.Element {
       .then(setContent)
       .catch((e: unknown) => setError(String(e)))
   }, [filePath])
+
+  // Once the markdown is rendered, scroll a clicked citation to its spot and
+  // flash it. Delay a beat so the DOM has painted. One-shot: clear the target.
+  useEffect(() => {
+    if (content === null || !mdScrollTarget || !containerRef.current) return
+    const container = containerRef.current
+    const target = mdScrollTarget
+    const timer = setTimeout(() => {
+      const el = locateCitation(container, target)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('md-cite-flash')
+        setTimeout(() => el.classList.remove('md-cite-flash'), 1600)
+      }
+      setMdScrollTarget(null)
+    }, 120)
+    return () => clearTimeout(timer)
+  }, [content, mdScrollTarget, setMdScrollTarget])
 
   if (error) {
     return (
@@ -143,7 +202,7 @@ export function MarkdownViewer({ filePath }: Props): JSX.Element {
   }
 
   return (
-    <div style={{
+    <div ref={containerRef} style={{
       padding: '24px 32px',
       maxWidth: 860,
       margin: '0 auto',

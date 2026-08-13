@@ -13,6 +13,11 @@ interface ItemStore {
   viewerPath: string | null
   viewerFilename: string | null
   viewerType: ViewerType
+  // Transient one-shot target for scrolling the markdown reader to a clicked
+  // citation. Consumed once by MarkdownViewer then cleared, so it is NOT part
+  // of the persisted session (reopening a file later must not re-scroll).
+  mdScrollTarget: { text: string; headingPath: string } | null
+  setMdScrollTarget: (t: { text: string; headingPath: string } | null) => void
   loadItems: () => Promise<void>
   setSelectedId: (id: number | null) => void
   setActiveCollection: (id: string) => void
@@ -33,6 +38,9 @@ export const useItemStore = create<ItemStore>((set) => ({
   viewerPath: null,
   viewerFilename: null,
   viewerType: 'pdf',
+  mdScrollTarget: null,
+
+  setMdScrollTarget: (t) => set({ mdScrollTarget: t }),
 
   loadItems: async () => {
     try {

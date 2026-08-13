@@ -179,6 +179,8 @@ const veridianAPI = {
     getMessages: (conversationId: number) =>
       call<Array<{ id: number; conversation_id: number; role: string; content: string; citations: string; created_at: number }>>(
         'knowledge:getMessages', conversationId),
+    getChunk: (itemKey: string, seq: number) =>
+      call<{ headingPath: string; text: string } | null>('knowledge:getChunk', itemKey, seq),
     deleteConversation: (conversationId: number) => call('knowledge:deleteConversation', conversationId),
     rebuildIndex: () => call('knowledge:rebuildIndex'),
     indexStatus: () =>
