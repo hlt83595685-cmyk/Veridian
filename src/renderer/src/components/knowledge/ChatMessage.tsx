@@ -95,11 +95,8 @@ export function ChatMessageView({ role, content, citations, streaming }: {
 											onClick={() => void openCitation(c?.itemId ?? null, setPage, openMarkdown)}
 											title={c?.title ?? key}
 											style={{
-												display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-												minWidth: 16, height: 16, padding: '0 4px', margin: '0 1px',
-												borderRadius: 4, border: 'none', background: 'var(--primary)',
-												color: '#fff', fontSize: 10, fontWeight: 700, cursor: 'pointer',
-												verticalAlign: 'super', lineHeight: 1,
+												border: 'none', background: 'none', padding: 0, margin: 0,
+												color: 'var(--primary)', font: 'inherit', cursor: 'pointer',
 											}}
 										>
 											{children}

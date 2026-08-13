@@ -4,7 +4,7 @@ import { useUiStore } from '../../stores/uiStore'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
 import type { DomainEvent } from '../../../../shared/events'
 import type { KnowledgeRef } from '../../../../shared/ipc-contract'
-import type { Item, RepoTreeNode } from '../../../../shared/types'
+import type { Item } from '../../../../shared/types'
 import { ChatMessageView, type CitationInfo } from './ChatMessage'
 
 interface ConversationRow { id: number; title: string; created_at: number }
@@ -17,23 +17,12 @@ interface DisplayMessage {
 
 type ChatState = 'idle' | 'searching' | 'answering' | 'error'
 
-// @-mention (library items + workspace text files) and /-mention (installed
-// skills) both resolve to one of these; `token` is the literal text spliced
-// into the input so send() can tell whether the user later deleted it.
+// @-mention (library items) and /-mention (installed skills) both resolve to
+// one of these; `token` is the literal text spliced into the input so send()
+// can tell whether the user later deleted it.
 interface PendingRef { ref: KnowledgeRef; token: string }
 interface MentionCandidate { label: string; sub: string; ref: KnowledgeRef; token: string }
 type MentionTrigger = { kind: 'at' | 'slash'; start: number; query: string } | null
-
-const TEXT_FILE_EXTS = new Set(['.md', '.txt'])
-
-function flattenTextFiles(nodes: RepoTreeNode[]): { name: string; absPath: string }[] {
-	const out: { name: string; absPath: string }[] = []
-	for (const n of nodes) {
-		if (n.isDir) out.push(...flattenTextFiles(n.children ?? []))
-		else if (TEXT_FILE_EXTS.has('.' + (n.name.split('.').pop()?.toLowerCase() ?? ''))) out.push({ name: n.name, absPath: n.absPath })
-	}
-	return out
-}
 
 export function KnowledgePage(): JSX.Element {
 	const { t } = useTranslation('common')
@@ -108,22 +97,19 @@ export function KnowledgePage(): JSX.Element {
 			return
 		}
 
-		Promise.all([
-			window.veridian.workspace.listRepoTree().catch(() => []),
-			// Empty-query search returns nothing (FTS needs a term) -- fall back
-			// to the most recently touched items so a bare "@" isn't empty.
-			q ? window.veridian.items.search(mention.query).catch(() => []) : window.veridian.items.getAll().catch(() => []),
-		]).then(([tree, items]: [RepoTreeNode[], Item[]]) => {
+		// Empty-query search returns nothing (FTS needs a term) -- fall back to the
+		// most recently touched items so a bare "@" isn't empty. @ mentions a
+		// library item by title; the agent reads that item's markdown behind the
+		// scenes (resolveRefs), so raw .md files are never surfaced here.
+		const lookup = q
+			? window.veridian.items.search(mention.query).catch(() => [])
+			: window.veridian.items.getAll().catch(() => [])
+		lookup.then((items: Item[]) => {
 			if (mentionReqRef.current !== reqId) return
-			const files: MentionCandidate[] = flattenTextFiles(tree)
-				.filter((f) => f.name.toLowerCase().includes(q))
-				.slice(0, 5)
-				.map((f) => ({ label: f.name, sub: t('knowledge.mentionFile'), ref: { type: 'file', path: f.absPath }, token: `@${f.name} ` }))
-			const itemCands: MentionCandidate[] = items.slice(0, 5).map((it) => ({
+			setMentionCandidates(items.slice(0, 8).map((it) => ({
 				label: it.title ?? it.key, sub: t('knowledge.mentionItem'),
 				ref: { type: 'item', itemKey: it.key }, token: `@${it.title ?? it.key} `,
-			}))
-			setMentionCandidates([...itemCands, ...files])
+			})))
 			setMentionIndex(0)
 		})
 	}, [mention, t])
