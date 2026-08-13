@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { citeUrlTransform } from './citeUrl'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
@@ -82,6 +83,7 @@ export function ChatMessageView({ role, content, citations, streaming }: {
 					<ReactMarkdown
 						remarkPlugins={[remarkGfm, remarkMath]}
 						rehypePlugins={[[rehypeKatex, { throwOnError: false }]]}
+						urlTransform={citeUrlTransform}
 						components={{
 							a: ({ href, children }) => {
 								if (href?.startsWith('veridian-cite://')) {
