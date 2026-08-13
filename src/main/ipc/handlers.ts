@@ -64,6 +64,8 @@ const RENDERER_WRITABLE_SETTINGS = new Set([
   'ui.itemList',
   // Pane widths (draggable sidebar/detail resizers) -- pure UI state.
   'ui.layout',
+  // AI retrieval tuning (result count + excerpt length) -- plain numbers.
+  'knowledge.search.resultCount', 'knowledge.search.excerptChars',
 ])
 
 function collectImages(dir: string): string[] {
