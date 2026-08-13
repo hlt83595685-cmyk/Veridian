@@ -4,6 +4,7 @@
 // never need normalizing.
 import { getKnowledgeDb, isVecAvailable, getMeta } from './db'
 import { getEmbeddingConfig, embedBatch } from './providers'
+import { rerankHits } from './rerank'
 
 export interface SearchHit {
 	chunkId: number
@@ -17,6 +18,7 @@ export interface SearchHit {
 
 const CANDIDATES = 30
 const RRF_K = 60
+const RERANK_POOL = 20   // fused candidates handed to the reranker; it returns topK
 
 /** Fuse ranked id lists: score(id) = sum over lists of 1/(k + rank). Exported for tests. */
 export function rrfFuse(rankLists: number[][], k = RRF_K): Map<number, number> {
@@ -106,19 +108,22 @@ export async function hybridSearch(wsId: number, query: string, topK = 8): Promi
 		vectorSearch(wsId, query),
 	])
 	const fused = rrfFuse([ftsIds, vecIds])
-	const top = [...fused.entries()].sort((a, b) => b[1] - a[1]).slice(0, topK)
-	if (!top.length) return []
+	// Over-select a rerank pool; the reranker narrows it to topK. If reranking is
+	// unavailable it falls back to this RRF order, so behaviour degrades safely.
+	const pool = [...fused.entries()].sort((a, b) => b[1] - a[1]).slice(0, RERANK_POOL)
+	if (!pool.length) return []
 
 	const kdb = getKnowledgeDb()
 	const rows = kdb.prepare(
-		`SELECT id, item_id, item_key, heading_path, seq, text FROM chunks WHERE id IN (${top.map(([id]) => id).join(',')})`
+		`SELECT id, item_id, item_key, heading_path, seq, text FROM chunks WHERE id IN (${pool.map(([id]) => id).join(',')})`
 	).all() as { id: number; item_id: number; item_key: string; heading_path: string; seq: number; text: string }[]
 	const byId = new Map(rows.map((r) => [r.id, r]))
-	return top.flatMap(([id, score]) => {
+	const candidates = pool.flatMap(([id, score]) => {
 		const r = byId.get(id)
 		return r ? [{
 			chunkId: r.id, itemId: r.item_id, itemKey: r.item_key,
 			headingPath: r.heading_path, seq: r.seq, text: r.text, score,
 		}] : []
 	})
+	return rerankHits(query, candidates, topK)
 }
