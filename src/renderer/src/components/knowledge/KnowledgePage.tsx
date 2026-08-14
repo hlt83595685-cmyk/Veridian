@@ -125,8 +125,18 @@ export function KnowledgePage(): JSX.Element {
 
 	function detectMention(text: string, cursor: number): MentionTrigger {
 		const head = text.slice(0, cursor)
-		const at = head.match(/(?:^|\s)@([^\s@]*)$/)
-		if (at) return { kind: 'at', start: cursor - at[1].length - 1, query: at[1] }
+		// Allow spaces in the query so multi-word titles are searchable. The query
+		// is everything after the last `@` (preceded by start/space) up to the
+		// cursor, excluding `@`/newline.
+		const at = head.match(/(?:^|\s)@([^@\n]*)$/)
+		if (at) {
+			const query = at[1]
+			// Skip if this @-region is (the start of) an already-chosen mention
+			// token -- the user is typing after a picked item, not searching.
+			const region = '@' + query
+			const committed = pendingRefs.some((p) => region === p.token || region.startsWith(p.token + ' '))
+			if (!committed) return { kind: 'at', start: cursor - query.length - 1, query }
+		}
 		const slash = head.match(/^\/(\S*)$/)
 		if (slash) return { kind: 'slash', start: 0, query: slash[1] }
 		return null
