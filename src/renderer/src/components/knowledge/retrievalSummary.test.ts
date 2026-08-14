@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { summarizeSteps } from './retrievalTrace'
+import { summarizeSteps } from './retrievalSummary'
 import type { RetrievalStep } from '../../../../shared/types'
 
 const steps: RetrievalStep[] = [

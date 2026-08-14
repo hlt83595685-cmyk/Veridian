@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RetrievalStep } from '../../../../shared/types'
-import { summarizeSteps } from './retrievalTrace'
+import { summarizeSteps } from './retrievalSummary'
 
 const ICON: Record<RetrievalStep['tool'], string> = {
 	search_library: '🔍', read_context: '📄', get_item_info: 'ℹ️', load_skill: '📎',
