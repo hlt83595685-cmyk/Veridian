@@ -5,7 +5,7 @@ import { useWorkspaceStore } from '../../stores/workspaceStore'
 import { useCollectionStore } from '../../stores/collectionStore'
 import type { DomainEvent } from '../../../../shared/events'
 import type { KnowledgeRef } from '../../../../shared/ipc-contract'
-import type { Item } from '../../../../shared/types'
+import type { Item, RetrievalStep } from '../../../../shared/types'
 import { IMPORTANT_SCOPE } from '../../../../shared/types'
 import { ChatMessageView, type CitationInfo } from './ChatMessage'
 
@@ -15,6 +15,7 @@ interface DisplayMessage {
 	role: 'user' | 'assistant'
 	content: string
 	citations: CitationInfo[]
+	steps?: RetrievalStep[]
 }
 
 type ChatState = 'idle' | 'searching' | 'answering' | 'error'
@@ -165,6 +166,15 @@ export function KnowledgePage(): JSX.Element {
 					}
 					return [...prev, { id: 'streaming', role: 'assistant', content: streamingRef.current, citations: [] }]
 				})
+			} else if (e.type === 'knowledge.step') {
+				if (e.conversationId !== activeConvIdRef.current) return
+				setMessages((prev) => {
+					const last = prev[prev.length - 1]
+					if (last?.id === 'streaming') {
+						return [...prev.slice(0, -1), { ...last, steps: [...(last.steps ?? []), e.step] }]
+					}
+					return [...prev, { id: 'streaming', role: 'assistant', content: streamingRef.current, citations: [], steps: [e.step] }]
+				})
 			} else if (e.type === 'knowledge.chatState') {
 				if (e.conversationId !== activeConvIdRef.current) return
 				setStateDetail(e.detail ?? null)
@@ -230,6 +240,7 @@ export function KnowledgePage(): JSX.Element {
 		setMessages(rows.map((r) => ({
 			id: r.id, role: r.role as 'user' | 'assistant', content: r.content,
 			citations: JSON.parse(r.citations || '[]'),
+			steps: JSON.parse(r.steps || '[]'),
 		})))
 	}
 
@@ -354,6 +365,7 @@ export function KnowledgePage(): JSX.Element {
 							role={m.role}
 							content={m.content}
 							citations={m.citations}
+							steps={m.steps}
 							streaming={m.id === 'streaming'}
 						/>
 					))}

@@ -306,6 +306,9 @@ const zh = {
     scopeWholeLibrary: '全库',
     scopeImportant: '重要',
     scopeSelectTitle: '搜索范围',
+    traceSummary: '🔍 检索 {{searches}} 次 · {{sources}} 篇来源',
+    traceSearch: '搜索 "{{query}}" → {{n}} 条',
+    traceChars: '{{n}} 字',
   },
 }
 
@@ -614,6 +617,9 @@ const en = {
     scopeWholeLibrary: 'Whole library',
     scopeImportant: 'Important',
     scopeSelectTitle: 'Search scope',
+    traceSummary: '🔍 {{searches}} searches · {{sources}} sources',
+    traceSearch: 'Search "{{query}}" → {{n}} hits',
+    traceChars: '{{n}} chars',
   },
 }
 
