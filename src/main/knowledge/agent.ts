@@ -18,6 +18,7 @@ import { readFileSync } from 'fs'
 import { basename } from 'path'
 import type { KnowledgeRef } from '../../shared/ipc-contract'
 import { IMPORTANT_SCOPE } from '../../shared/types'
+import type { RetrievalStep } from '../../shared/types'
 
 const MAX_ROUNDS = 8
 const abortControllers = new Map<number, AbortController>()
@@ -96,20 +97,32 @@ const LOAD_SKILL_TOOL: ToolDef = {
 	},
 }
 
-async function runTool(name: string, argsJson: string, filter?: import('./search').ScopeFilter): Promise<string> {
+async function runTool(name: string, argsJson: string, filter?: import('./search').ScopeFilter): Promise<{ result: string; step: RetrievalStep }> {
 	let args: Record<string, unknown>
-	try { args = JSON.parse(argsJson || '{}') } catch { return 'error: invalid arguments' }
+	try { args = JSON.parse(argsJson || '{}') } catch { return { result: 'error: invalid arguments', step: { tool: 'search_library', label: '(bad args)' } } }
 
 	if (name === 'search_library') {
 		const q = String(args.query ?? '').trim()
-		if (!q) return 'error: empty query'
+		if (!q) return { result: 'error: empty query', step: { tool: 'search_library', label: '(empty)' } }
 		const count = tunedInt('knowledge.search.resultCount', 6, 1, 12)
 		const chars = tunedInt('knowledge.search.excerptChars', 1200, 200, 4000)
 		const hits = await hybridSearch(wsId(), q, count, filter)
-		if (!hits.length) return 'no results'
-		return hits.map((h) =>
-			`[${h.itemKey}:${h.seq}] (${h.headingPath || 'text'})\n${truncateAtBoundary(h.text, chars)}`
-		).join('\n\n---\n\n')
+		const titleOf = new Map<string, string | null>()
+		if (hits.length) {
+			const keys = [...new Set(hits.map((h) => h.itemKey))]
+			for (const r of getDb().prepare(`SELECT key, title FROM items WHERE key IN (${keys.map(() => '?').join(',')})`).all(...keys) as { key: string; title: string | null }[]) {
+				titleOf.set(r.key, r.title)
+			}
+		}
+		const excerpts = hits.map((h) => ({ h, text: truncateAtBoundary(h.text, chars) }))
+		const step: RetrievalStep = {
+			tool: 'search_library', label: q,
+			hits: excerpts.map(({ h, text }) => ({ key: h.itemKey, title: titleOf.get(h.itemKey) ?? h.itemKey, chars: text.length })),
+		}
+		const result = hits.length
+			? excerpts.map(({ h, text }) => `[${h.itemKey}:${h.seq}] (${h.headingPath || 'text'})\n${text}`).join('\n\n---\n\n')
+			: 'no results'
+		return { result, step }
 	}
 
 	if (name === 'get_item_info') {
@@ -117,37 +130,40 @@ async function runTool(name: string, argsJson: string, filter?: import('./search
 		const item = getDb().prepare(
 			'SELECT id, title, year, journal, doi FROM items WHERE key = ? AND deleted = 0'
 		).get(key) as { id: number; title: string | null; year: number | null; journal: string | null; doi: string | null } | undefined
-		if (!item) return 'not found'
+		const step: RetrievalStep = { tool: 'get_item_info', label: key }
+		if (!item) return { result: 'not found', step }
 		const creators = getDb().prepare(`
 			SELECT c.last_name, c.first_name FROM creators c
 			JOIN item_creators ic ON ic.creator_id = c.id
 			WHERE ic.item_id = ? ORDER BY ic.position LIMIT 10
 		`).all(item.id) as { last_name: string; first_name: string | null }[]
-		return JSON.stringify({
+		return { result: JSON.stringify({
 			title: item.title, year: item.year, journal: item.journal, doi: item.doi,
 			authors: creators.map((c) => [c.first_name, c.last_name].filter(Boolean).join(' ')),
-		})
+		}), step }
 	}
 
 	if (name === 'read_context') {
 		const key = String(args.item_key ?? '')
 		const seq = Number(args.seq)
-		if (!key || !Number.isFinite(seq)) return 'error: bad arguments'
+		const step: RetrievalStep = { tool: 'read_context', label: `${key}:${Number.isFinite(seq) ? seq : '?'}` }
+		if (!key || !Number.isFinite(seq)) return { result: 'error: bad arguments', step }
 		const rows = getKnowledgeDb().prepare(`
 			SELECT seq, heading_path, text FROM chunks
 			WHERE workspace_id = ? AND item_key = ? AND seq BETWEEN ? AND ?
 			ORDER BY seq
 		`).all(wsId(), key, seq - 1, seq + 1) as { seq: number; heading_path: string; text: string }[]
-		if (!rows.length) return 'not found'
-		return rows.map((r) => `[${key}:${r.seq}] (${r.heading_path || 'text'})\n${r.text}`).join('\n\n')
+		if (!rows.length) return { result: 'not found', step }
+		return { result: rows.map((r) => `[${key}:${r.seq}] (${r.heading_path || 'text'})\n${r.text}`).join('\n\n'), step }
 	}
 
 	if (name === 'load_skill') {
-		const body = getSkillBody(String(args.name ?? ''))
-		return body ?? 'not found'
+		const skillName = String(args.name ?? '')
+		const body = getSkillBody(skillName)
+		return { result: body ?? 'not found', step: { tool: 'load_skill', label: skillName } }
 	}
 
-	return 'error: unknown tool'
+	return { result: 'error: unknown tool', step: { tool: 'search_library', label: `(unknown: ${name})` } }
 }
 
 // ── Conversation persistence ─────────────────────────────────────────────────
@@ -155,7 +171,7 @@ async function runTool(name: string, argsJson: string, filter?: import('./search
 export interface ConversationRow { id: number; title: string; created_at: number; scope_collection_id: number | null }
 export interface MessageRow {
 	id: number; conversation_id: number; role: string; content: string
-	citations: string; created_at: number
+	citations: string; created_at: number; steps: string
 }
 
 export function listConversations(): ConversationRow[] {
@@ -306,6 +322,7 @@ export async function ask(question: string, conversationId: number | null, refs?
 	const ac = new AbortController()
 	abortControllers.set(convId, ac)
 
+	const steps: RetrievalStep[] = []
 	void (async () => {
 		try {
 			let finalText = ''
@@ -325,7 +342,9 @@ export async function ask(question: string, conversationId: number | null, refs?
 						type: 'knowledge.chatState', conversationId: convId!, state: 'searching',
 						detail: tc.function.name,
 					})
-					const toolResult = await runTool(tc.function.name, tc.function.arguments, filter)
+					const { result: toolResult, step } = await runTool(tc.function.name, tc.function.arguments, filter)
+					steps.push(step)
+					emit({ type: 'knowledge.step', conversationId: convId!, step })
 					messages.push({ role: 'tool', content: toolResult, tool_call_id: tc.id })
 				}
 				// Loop continues; if we hit MAX_ROUNDS the last content stands.
@@ -333,8 +352,8 @@ export async function ask(question: string, conversationId: number | null, refs?
 			}
 
 			const citations = resolveCitations(extractCitations(finalText))
-			kdb.prepare('INSERT INTO messages (conversation_id, role, content, citations) VALUES (?, ?, ?, ?)')
-				.run(convId, 'assistant', finalText, JSON.stringify(citations))
+			kdb.prepare('INSERT INTO messages (conversation_id, role, content, citations, steps) VALUES (?, ?, ?, ?, ?)')
+				.run(convId, 'assistant', finalText, JSON.stringify(citations), JSON.stringify(steps))
 			emit({ type: 'knowledge.chatState', conversationId: convId!, state: 'done' })
 		} catch (err) {
 			const aborted = (err as Error).name === 'AbortError'

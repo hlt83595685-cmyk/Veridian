@@ -85,7 +85,8 @@ export function getKnowledgeDb(): Database.Database {
 			role            TEXT NOT NULL,           -- 'user' | 'assistant'
 			content         TEXT NOT NULL,
 			citations       TEXT NOT NULL DEFAULT '[]',  -- JSON [{itemKey,seq,title}]
-			created_at      INTEGER NOT NULL DEFAULT (unixepoch())
+			created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
+			steps           TEXT NOT NULL DEFAULT '[]'
 		);
 	`)
 
@@ -93,6 +94,12 @@ export function getKnowledgeDb(): Database.Database {
 	const convCols = db.prepare('PRAGMA table_info(conversations)').all() as { name: string }[]
 	if (!convCols.some((c) => c.name === 'scope_collection_id')) {
 		db.exec('ALTER TABLE conversations ADD COLUMN scope_collection_id INTEGER')
+	}
+
+	// Additive migration: older DBs have `messages` without this column.
+	const msgCols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]
+	if (!msgCols.some((c) => c.name === 'steps')) {
+		db.exec("ALTER TABLE messages ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'")
 	}
 
 	return db
