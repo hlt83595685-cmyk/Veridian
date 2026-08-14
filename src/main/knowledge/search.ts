@@ -116,9 +116,17 @@ export interface ChunkLocation { headingPath: string; text: string }
 /** Look up a single chunk's heading + raw text by (item, seq). Used to scroll a
  *  clicked citation to its exact spot in the markdown reader. */
 export function getChunkBySeq(wsId: number, itemKey: string, seq: number): ChunkLocation | null {
-	const row = getKnowledgeDb().prepare(
+	const kdb = getKnowledgeDb()
+	let row = kdb.prepare(
 		'SELECT heading_path, text FROM chunks WHERE workspace_id = ? AND item_key = ? AND seq = ?'
 	).get(wsId, itemKey, seq) as { heading_path: string; text: string } | undefined
+	if (!row) {
+		// Citations may carry a truncated (first-segment) UUID key -- match by prefix.
+		const like = itemKey.replace(/[\\%_]/g, '\\$&') + '%'
+		row = kdb.prepare(
+			"SELECT heading_path, text FROM chunks WHERE workspace_id = ? AND item_key LIKE ? ESCAPE '\\' AND seq = ? LIMIT 1"
+		).get(wsId, like, seq) as { heading_path: string; text: string } | undefined
+	}
 	return row ? { headingPath: row.heading_path, text: row.text } : null
 }
 

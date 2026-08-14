@@ -197,9 +197,18 @@ export function deleteConversation(conversationId: number): void {
 export interface Citation { itemKey: string; itemId: number | null; seq: number; title: string | null }
 
 function resolveCitations(raw: { itemKey: string; seq: number }[]): Citation[] {
-	const stmt = getDb().prepare('SELECT id, title FROM items WHERE key = ?')
+	const exact = getDb().prepare('SELECT id, title FROM items WHERE key = ?')
+	// Folder-backed libraries key items by full UUID, but the model tends to cite
+	// only the first segment (mimicking the short example key). Fall back to a
+	// unique prefix match so those citations still resolve.
+	const prefix = getDb().prepare("SELECT id, title FROM items WHERE key LIKE ? ESCAPE '\\' LIMIT 2")
 	return raw.map((c) => {
-		const row = stmt.get(c.itemKey) as { id: number; title: string | null } | undefined
+		let row = exact.get(c.itemKey) as { id: number; title: string | null } | undefined
+		if (!row) {
+			const like = c.itemKey.replace(/[\\%_]/g, '\\$&') + '%'
+			const hits = prefix.all(like) as { id: number; title: string | null }[]
+			if (hits.length === 1) row = hits[0]
+		}
 		return { ...c, itemId: row?.id ?? null, title: row?.title ?? null }
 	})
 }
