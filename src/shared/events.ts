@@ -1,3 +1,5 @@
+import type { RetrievalStep } from './types'
+
 // Domain events -- the single vocabulary shared by main-process subscribers
 // (sync engine, indexers) and the renderer query cache. Every write that goes
 // through a Service MUST emit one of these; UI refresh is driven entirely by
@@ -40,6 +42,7 @@ export type DomainEvent =
       conversationId: number
       state: 'searching' | 'answering' | 'done' | 'error'
       detail?: string }
+  | { type: 'knowledge.step'; conversationId: number; step: RetrievalStep }
   | { type: 'skills.changed' }
 
 export type DomainEventType = DomainEvent['type']

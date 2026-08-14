@@ -189,3 +189,10 @@ export interface ControlPlaneStatus {
   signedIn: boolean
   email: string | null
 }
+
+// One agent action during a chat turn, shown in the retrieval-trace panel.
+export interface RetrievalStep {
+  tool: 'search_library' | 'read_context' | 'get_item_info' | 'load_skill'
+  label: string                                          // query / itemKey:seq / itemKey / skill name
+  hits?: { key: string; title: string; chars: number }[] // search_library only: hit papers + real excerpt length
+}
