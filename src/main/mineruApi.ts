@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync, copyFileSync } from 'fs'
-import { basename, join, dirname } from 'path'
+import { basename, join, dirname, sep } from 'path'
 import { tmpdir } from 'os'
 import { randomUUID } from 'crypto'
 import { PDFDocument } from 'pdf-lib'
@@ -360,9 +360,25 @@ async function precisionExtractZip(
 
   // Extract entire zip into stem_mineru/ preserving the original directory structure.
   // This keeps relative image paths in full.md intact — no rewriting needed.
+  //
+  // Decode entry names as UTF-8 ourselves rather than using extractAllTo:
+  // adm-zip falls back to CP437 when the archive omits the UTF-8 flag (MinerU
+  // does), which mangles non-ASCII titles (e.g. U+2010 hyphen -> "â€\x90")
+  // and scatters images into a wrongly-named folder next to the real one.
   const extractDir = join(outputDir, `${stem}_mineru`)
   mkdirSync(extractDir, { recursive: true })
-  zip.extractAllTo(extractDir, /* overwrite */ true)
+  for (const entry of zip.getEntries()) {
+    const rel = entry.rawEntryName.toString('utf8').replace(/\\/g, '/')
+    const dest = join(extractDir, rel)
+    // zip-slip guard: never write outside extractDir
+    if (dest !== extractDir && !dest.startsWith(extractDir + sep)) continue
+    if (entry.isDirectory) {
+      mkdirSync(dest, { recursive: true })
+    } else {
+      mkdirSync(dirname(dest), { recursive: true })
+      writeFileSync(dest, entry.getData())
+    }
+  }
 
   // Locate full.md — it may be at the root or inside a subdirectory
   const mdPath = findFile(extractDir, 'full.md')
