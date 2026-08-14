@@ -108,7 +108,7 @@ interface VeridianAPI {
     listConversations: () => Promise<Array<{ id: number; title: string; created_at: number; scope_collection_id: number | null }>>
     getMessages: (conversationId: number) => Promise<Array<{
       id: number; conversation_id: number; role: string; content: string
-      citations: string; created_at: number
+      citations: string; created_at: number; steps: string
     }>>
     getChunk: (itemKey: string, seq: number) => Promise<{ headingPath: string; text: string } | null>
     deleteConversation: (conversationId: number) => Promise<void>
