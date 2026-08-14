@@ -214,10 +214,22 @@ export function searchItems(query: string): Item[] {
   const terms = query.split(/\s+/).filter(Boolean)
   if (terms.length === 0) return []
   const safe = terms.map((t) => `"${t.replace(/"/g, '""')}"*`).join(' ')
-  return getDb().prepare(`
+  const db = getDb()
+  const fts = db.prepare(`
     SELECT i.* FROM items i
     JOIN items_fts ON items_fts.rowid = i.id
     WHERE items_fts MATCH ? AND i.deleted = 0
     ORDER BY rank
   `).all(safe) as Item[]
+  // FTS5 only prefix-matches whole tokens, so mid-word substrings and terms
+  // split by punctuation (e.g. "Anti-Tumor" -> anti/tumor) are missed. Add a
+  // case-insensitive substring fallback on the title so typing any part of a
+  // title finds it. Merge after FTS (which keeps relevance ranking first).
+  const like = '%' + query.trim().replace(/[\\%_]/g, '\\$&') + '%'
+  const sub = db.prepare(`
+    SELECT * FROM items WHERE deleted = 0 AND title LIKE ? ESCAPE '\\'
+    ORDER BY updated_at DESC LIMIT 50
+  `).all(like) as Item[]
+  const seen = new Set(fts.map((i) => i.id))
+  return [...fts, ...sub.filter((i) => !seen.has(i.id))]
 }

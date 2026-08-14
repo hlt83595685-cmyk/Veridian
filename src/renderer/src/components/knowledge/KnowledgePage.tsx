@@ -115,7 +115,7 @@ export function KnowledgePage(): JSX.Element {
 			: window.veridian.items.getAll().catch(() => [])
 		lookup.then((items: Item[]) => {
 			if (mentionReqRef.current !== reqId) return
-			setMentionCandidates(items.slice(0, 8).map((it) => ({
+			setMentionCandidates(items.slice(0, 20).map((it) => ({
 				label: it.title ?? it.key, sub: t('knowledge.mentionItem'),
 				ref: { type: 'item', itemKey: it.key }, token: `@${it.title ?? it.key} `,
 			})))
