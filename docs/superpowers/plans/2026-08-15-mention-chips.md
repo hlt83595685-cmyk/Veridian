@@ -1,8 +1,8 @@
-# @ 提及改 chips 区 Implementation Plan
+# @ 提及改 chips 区(可复用 Chip)Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** 选中 @ 文献即在输入框内成 📎 chip(textarea 不留 @文字);发送后气泡内部显示 chip,去掉气泡上方独立模块。全前端,不上 contenteditable。
+**Goal:** 抽出可复用 `Chip`/`PaperclipIcon`;选中 @ 文献即在输入框内成可删 chip(textarea 不留 @文字);发送后气泡内部显示 chip,去掉气泡上方模块。全前端,不上 contenteditable。
 
 **Tech Stack:** TypeScript(strict, tabs, 无 `any`)、React。
 
@@ -10,16 +10,87 @@
 
 ---
 
-## Task 1: 输入区改 chips(`KnowledgePage.tsx`)
+## Task 1: 可复用 `Chip` 组件
 
-**Files:** Modify `src/renderer/src/components/knowledge/KnowledgePage.tsx`
+**Files:** Create `src/renderer/src/components/knowledge/Chip.tsx`
 
-- [ ] **Step 1: PendingRef 改型** —— 接口由 `{ ref: KnowledgeRef; token: string }` 改为:
+- [ ] **Step 1: 建文件**(tab 缩进):
+```tsx
+import type { JSX } from 'react'
+
+/** Shared paperclip line-icon (currentColor), used by ref chips. */
+export function PaperclipIcon({ size = 11 }: { size?: number }): JSX.Element {
+	return (
+		<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+			<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+		</svg>
+	)
+}
+
+/** Reusable pill: optional leading icon, ellipsis label, optional remove (×)
+ *  and/or whole-chip click. Reuse across composer / bubble / future filters. */
+export function Chip({ label, icon, onRemove, onClick, title, size = 'md', maxWidth = 240 }: {
+	label: string
+	icon?: JSX.Element
+	onRemove?: () => void
+	onClick?: () => void
+	title?: string
+	size?: 'sm' | 'md'
+	maxWidth?: number
+}): JSX.Element {
+	const fs = size === 'sm' ? 11 : 11.5
+	return (
+		<span
+			onClick={onClick}
+			title={title ?? label}
+			style={{
+				display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth,
+				padding: onRemove ? '2px 4px 2px 8px' : '1px 8px', borderRadius: 999,
+				background: 'var(--muted-bg)', border: '1px solid var(--border)',
+				color: 'var(--foreground-3)', fontSize: fs, cursor: onClick ? 'pointer' : 'default',
+			}}
+		>
+			{icon}
+			<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+			{onRemove && (
+				<button
+					onClick={(e) => { e.stopPropagation(); onRemove() }}
+					style={{ border: 'none', background: 'none', padding: '0 2px', cursor: 'pointer', color: 'var(--muted)', display: 'inline-flex', flexShrink: 0 }}
+					aria-label="remove"
+				>
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+				</button>
+			)}
+		</span>
+	)
+}
+```
+
+- [ ] **Step 2: typecheck** —— `npm run typecheck` → 无输出。（若 `import type { JSX }` 报错,改为不 import、直接用全局 `JSX.Element`——本项目其它 .tsx 用的是全局 `JSX.Element`,与之保持一致即可。）
+
+- [ ] **Step 3: Commit**:
+```bash
+git add src/renderer/src/components/knowledge/Chip.tsx
+git commit -m "feat: reusable Chip + PaperclipIcon components"
+```
+
+---
+
+## Task 2: 输入区改 chips（`KnowledgePage.tsx`）
+
+**Files:** Modify `src/renderer/src/components/knowledge/KnowledgePage.tsx`, `src/renderer/src/i18n/index.ts`
+
+- [ ] **Step 1: import** —— 顶部加:
+```ts
+import { Chip, PaperclipIcon } from './Chip'
+```
+
+- [ ] **Step 2: PendingRef 改型**:
 ```ts
 interface PendingRef { ref: KnowledgeRef; label: string }
 ```
 
-- [ ] **Step 2: applyMention 改为删 @文字 + 加 chip(去重)** —— 整体替换:
+- [ ] **Step 3: applyMention 删 @文字 + 加 chip(去重)** —— 整体替换:
 ```ts
 	function applyMention(cand: MentionCandidate): void {
 		if (!mention) return
@@ -38,7 +109,7 @@ interface PendingRef { ref: KnowledgeRef; label: string }
 	}
 ```
 
-- [ ] **Step 3: detectMention 去掉已提交判断** —— 整体替换(不再引用 pendingRefs):
+- [ ] **Step 4: detectMention 去掉 committed 判断** —— 整体替换:
 ```ts
 	function detectMention(text: string, cursor: number): MentionTrigger {
 		const head = text.slice(0, cursor)
@@ -50,7 +121,7 @@ interface PendingRef { ref: KnowledgeRef; label: string }
 	}
 ```
 
-- [ ] **Step 4: send 用全部 pendingRefs** —— 替换 `send` 里从 `const refs = ...` 到 `setMessages(...)` 之间的几行为:
+- [ ] **Step 5: send 用全部 pendingRefs** —— 替换 `send` 里 `const refs = ...` 到 `setMessages(...)` 之间为:
 ```ts
 		const refs = pendingRefs.map((p) => p.ref)
 		const sentRefs = pendingRefs.map((p) => ({ type: p.ref.type, label: p.label }))
@@ -60,54 +131,48 @@ interface PendingRef { ref: KnowledgeRef; label: string }
 		streamingRef.current = ''
 		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [], refs: sentRefs }])
 ```
-（其后 `setChatState('searching')` 与 `knowledge.ask(q, conversationId, refs.length ? refs : undefined, scopeCollectionId)` 不变。）
+（其后 `setChatState` 与 `knowledge.ask(...)` 不变。）
 
-- [ ] **Step 5: chips 区 UI** —— 在输入列里 `</select>` 之后、`<textarea` 之前插入:
+- [ ] **Step 6: chips 区 UI** —— 在输入列 `</select>` 之后、`<textarea` 之前插入:
 ```tsx
 							{pendingRefs.length > 0 && (
 								<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
 									{pendingRefs.map((p, i) => (
-										<span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: 260, padding: '2px 4px 2px 8px', borderRadius: 999, background: 'var(--muted-bg)', border: '1px solid var(--border)', color: 'var(--foreground-3)', fontSize: 11.5 }}>
-											<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
-											<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.label}</span>
-											<button onClick={() => setPendingRefs((prev) => prev.filter((_, j) => j !== i))} title={t('knowledge.removeRef')} style={{ border: 'none', background: 'none', padding: '0 2px', cursor: 'pointer', color: 'var(--muted)', display: 'inline-flex', flexShrink: 0 }}>
-												<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
-											</button>
-										</span>
+										<Chip key={i} icon={<PaperclipIcon />} label={p.label} maxWidth={260}
+											onRemove={() => setPendingRefs((prev) => prev.filter((_, j) => j !== i))} />
 									))}
 								</div>
 							)}
 ```
 
-- [ ] **Step 6: i18n** —— `i18n/index.ts` 顶层 `knowledge` 段 zh/en 各加 `removeRef: '移除',` / `removeRef: 'Remove',`。
+- [ ] **Step 7: i18n** —— 顶层 `knowledge` 段 zh/en 加 `removeRef: '移除',` / `removeRef: 'Remove',`（Chip 的 × 用固定 aria-label 即可,无需 i18n;此键留作 title 备用,可省。若不用则跳过本步）。
 
-- [ ] **Step 7: 清理** —— 若 `MentionCandidate` 的 `token` 字段现在只用于下拉 `key`,保留即可(不必删);确认没有其它地方仍引用 `PendingRef.token`(全局搜 `.token` 于本文件,除 MentionCandidate 的 token 外应无 PendingRef.token 残留)。
+- [ ] **Step 8: 残留检查** —— 全局搜本文件 `p.token` / `PendingRef` 旧用法,确保无残留。
 
-- [ ] **Step 8: typecheck + build** —— `npm run typecheck`(无输出);`npm run build`(成功)。修掉任何 `p.token`/类型残留报错。
+- [ ] **Step 9: typecheck + build** —— `npm run typecheck`;`npm run build`。
 
-- [ ] **Step 9: Commit**:
+- [ ] **Step 10: Commit**:
 ```bash
 git add src/renderer/src/components/knowledge/KnowledgePage.tsx src/renderer/src/i18n/index.ts
-git commit -m "feat: @-mentions become removable chips in the composer (no inline @-text)"
+git commit -m "feat: @-mentions become removable chips in the composer (reuse Chip)"
 ```
 
 ---
 
-## Task 2: 气泡内 chip(`ChatMessage.tsx`)
+## Task 3: 气泡内 chip（`ChatMessage.tsx`,复用 Chip）
 
 **Files:** Modify `src/renderer/src/components/knowledge/ChatMessage.tsx`
 
-- [ ] **Step 1: 移除气泡上方 chips + 改到气泡内** —— 在用户分支非编辑态的 `<>...</>` 里:删除气泡 div **上方**那个 `{refs && refs.length > 0 && (<div ...>chips</div>)}` 块;把气泡 div 改为**内部**先渲染 chips、再渲染文字。整体把该 `<>` 内容替换为:
+- [ ] **Step 1: import** —— 加 `import { Chip, PaperclipIcon } from './Chip'`。
+
+- [ ] **Step 2: chip 移到气泡内** —— 用户分支非编辑态 `<>...</>` 整体替换为(删掉气泡上方旧 chips 块,气泡内先渲染 chips 再渲染文字):
 ```tsx
 					<>
 						<div style={{ padding: '9px 13px', borderRadius: '14px 14px 4px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--foreground)', fontSize: 13.5, lineHeight: 1.55 }}>
 							{refs && refs.length > 0 && (
 								<div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
 									{refs.map((r, i) => (
-										<span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: 240, padding: '1px 8px', borderRadius: 999, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--foreground-3)', fontSize: 11 }}>
-											<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
-											<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</span>
-										</span>
+										<Chip key={i} icon={<PaperclipIcon size={10} />} label={r.label} size="sm" maxWidth={240} />
 									))}
 								</div>
 							)}
@@ -120,32 +185,32 @@ git commit -m "feat: @-mentions become removable chips in the composer (no inlin
 						)}
 					</>
 ```
-(编辑态分支、`ActBtn`/`ICON_EDIT`、外层 `.msg-row` 容器均不动。)
+(编辑态分支、`ActBtn`/`ICON_EDIT`、外层 `.msg-row` 不动。)
 
-- [ ] **Step 2: typecheck + build** —— `npm run typecheck`(无输出);`npm run build`(成功)。
+- [ ] **Step 3: typecheck + build** —— `npm run typecheck`;`npm run build`。
 
-- [ ] **Step 3: Commit**:
+- [ ] **Step 4: Commit**:
 ```bash
 git add src/renderer/src/components/knowledge/ChatMessage.tsx
-git commit -m "feat: show @-ref chips inside the user bubble (drop the above-bubble module)"
+git commit -m "feat: @-ref chips inside the user bubble via shared Chip"
 ```
 
 ---
 
-## Task 3: App 内手动验证
+## Task 4: App 内手动验证
 
 **Files:** 无。
 
 - [ ] **Step 1** —— dev server 未开则启动(先问用户)。
-- [ ] **Step 2 输入成 chip** —— 输入 `@` 选一篇 → 输入框内出现 📎 标题 chip,textarea 里**没有**"@标题"文字;可点 × 删除;可再 @ 加第二篇(重复同一篇不会重复加)。
-- [ ] **Step 3 多词/技能** —— `@gold nano` 多词能搜到并成 chip;`/技能` 也成 chip。
-- [ ] **Step 4 发送 + 气泡** —— 打问题文字 + chip → 发送 → 气泡**内**顶部显示 chip、下面是问题文字;气泡上方**无**独立模块。
-- [ ] **Step 5 端到端** —— 该消息重新生成/编辑仍带 refs(直接读 md);刷新对话 chip 仍在。
+- [ ] **Step 2 输入成 chip** —— `@` 选一篇 → 输入框内出现 📎 标题 chip,textarea 无"@标题"文字;× 可删;重复同一篇不重复加。
+- [ ] **Step 3 多词/技能** —— `@gold nano` 多词成 chip;`/技能` 成 chip。
+- [ ] **Step 4 发送 + 气泡** —— 问题文字 + chip → 发送 → 气泡**内**顶部显示 chip、下面文字;上方无独立模块。
+- [ ] **Step 5 端到端** —— 重新生成/编辑仍带 refs(直接读 md);刷新 chip 仍在。
 - [ ] **Step 6: 无需提交**。
 
 ---
 
 ## Self-Review
-- **Spec 覆盖**:PendingRef 改 label(Task 1)✅;applyMention 删@文字+加chip去重(Task 1)✅;detectMention 去掉 committed 判断(Task 1)✅;send 用全部 pendingRefs(Task 1)✅;输入 chips 区 + × 删除(Task 1)✅;气泡内 chip + 去上方模块(Task 2)✅;/ 技能同样成 chip(走同一 applyMention)✅。
+- **Spec 覆盖**:可复用 `Chip`/`PaperclipIcon`(Task 1)✅;输入区复用 Chip + 删@文字+去重(Task 2)✅;detectMention 去 committed(Task 2)✅;send 用全部 pendingRefs(Task 2)✅;气泡内 chip 复用 Chip、去上方模块(Task 3)✅;/ 技能同样成 chip✅。
 - **占位符扫描**:无 TBD/TODO;代码步骤含完整代码。
-- **类型一致性**:`PendingRef.label` 替换 `.token`;`refKey` 覆盖 item/file/skill;`sentRefs`/`DisplayMessage.refs` 与气泡 `refs` 一致;确认无 `p.token` 残留。
+- **类型一致性**:`Chip` props 在两处调用一致;`PendingRef.label` 替 `.token`;`refKey` 覆盖三类;`JSX.Element` 用法与项目一致(Task 1 Step 2 备注)。

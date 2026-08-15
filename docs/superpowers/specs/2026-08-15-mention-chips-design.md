@@ -15,6 +15,13 @@
 
 ## 架构(全前端)
 
+### 可复用组件(新增,供本功能与后续复用)
+
+新增 `src/renderer/src/components/knowledge/Chip.tsx`:
+- `Chip({ label, icon?, onRemove?, onClick?, title?, size?, maxWidth? })`:统一的小药丸——`inline-flex`,`--muted-bg`/`--border`,可选前置 icon、末尾 × 删除按钮、整体点击;label 溢出省略。`onRemove` 存在则显示 ×;`onClick` 存在则整体可点。`size?: 'sm'|'md'` 控制字号/内距。
+- `PaperclipIcon()`:统一的 📎 线性 SVG(currentColor)。
+- 输入区 chip = `<Chip icon={<PaperclipIcon/>} label onRemove/>`;气泡 chip = `<Chip icon={<PaperclipIcon/>} label/>`(无 ×)。后续任何需要"标签/引用/过滤"小块的功能直接复用 `Chip`。
+
 ### `KnowledgePage.tsx`
 
 - **`PendingRef`** 由 `{ ref, token }` 改为 `{ ref: KnowledgeRef; label: string }`(label 供 chip 显示)。
