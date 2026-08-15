@@ -171,7 +171,7 @@ async function runTool(name: string, argsJson: string, filter?: import('./search
 export interface ConversationRow { id: number; title: string; created_at: number; scope_collection_id: number | null }
 export interface MessageRow {
 	id: number; conversation_id: number; role: string; content: string
-	citations: string; created_at: number; steps: string
+	citations: string; created_at: number; steps: string; refs: string
 }
 
 export function listConversations(): ConversationRow[] {
@@ -285,6 +285,27 @@ function resolveRefs(refs: KnowledgeRef[] | undefined): ChatMessage[] {
 	return out
 }
 
+interface StoredRef { type: 'item' | 'file' | 'skill'; itemKey?: string; path?: string; name?: string; label: string }
+
+// Enrich refs with a human label for display, resolved once at store time.
+function enrichRefs(refs: KnowledgeRef[] | undefined): StoredRef[] {
+	if (!refs?.length) return []
+	return refs.map((r): StoredRef => {
+		if (r.type === 'item') {
+			const row = getDb().prepare('SELECT title FROM items WHERE key = ?').get(r.itemKey) as { title: string | null } | undefined
+			return { type: 'item', itemKey: r.itemKey, label: row?.title ?? r.itemKey }
+		}
+		if (r.type === 'file') return { type: 'file', path: r.path, label: basename(r.path) }
+		return { type: 'skill', name: r.name, label: r.name }
+	})
+}
+
+function lastUserRefs(convId: number): KnowledgeRef[] {
+	const row = getKnowledgeDb().prepare("SELECT refs FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1")
+		.get(convId) as { refs: string } | undefined
+	try { return JSON.parse(row?.refs || '[]') as KnowledgeRef[] } catch { return [] }
+}
+
 function scopeToFilter(scope: number | null): import('./search').ScopeFilter | undefined {
 	if (scope === IMPORTANT_SCOPE) {
 		const ids = getDb().prepare('SELECT id FROM items WHERE starred = 1 AND deleted = 0').all() as { id: number }[]
@@ -365,8 +386,8 @@ export async function ask(question: string, conversationId: number | null, refs?
 	} else {
 		kdb.prepare('UPDATE conversations SET scope_collection_id = ? WHERE id = ?').run(scope, convId)
 	}
-	kdb.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)')
-		.run(convId, 'user', question)
+	kdb.prepare('INSERT INTO messages (conversation_id, role, content, refs) VALUES (?, ?, ?, ?)')
+		.run(convId, 'user', question, JSON.stringify(enrichRefs(refs)))
 
 	runTurn(convId, refs, scopeToFilter(scope))
 	return convId
@@ -382,15 +403,18 @@ export function regenerate(conversationId: number): void {
 		.get(conversationId) as { id: number; role: string } | undefined
 	if (!last) return
 	if (last.role === 'assistant') kdb.prepare('DELETE FROM messages WHERE id = ?').run(last.id)
-	runTurn(conversationId, [], conversationFilter(conversationId))
+	runTurn(conversationId, lastUserRefs(conversationId), conversationFilter(conversationId))
 }
 
 export function editLastAndResend(conversationId: number, newQuestion: string): void {
 	const kdb = getKnowledgeDb()
-	const lastUser = kdb.prepare("SELECT MAX(id) AS id FROM messages WHERE conversation_id = ? AND role = 'user'")
-		.get(conversationId) as { id: number | null }
-	if (lastUser?.id == null) return
+	const lastUser = kdb.prepare("SELECT id, refs FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1")
+		.get(conversationId) as { id: number; refs: string } | undefined
+	if (!lastUser) return
+	let refs: KnowledgeRef[] = []
+	try { refs = JSON.parse(lastUser.refs || '[]') as KnowledgeRef[] } catch { /* [] */ }
 	kdb.prepare('DELETE FROM messages WHERE conversation_id = ? AND id >= ?').run(conversationId, lastUser.id)
-	kdb.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)').run(conversationId, 'user', newQuestion)
-	runTurn(conversationId, [], conversationFilter(conversationId))
+	kdb.prepare('INSERT INTO messages (conversation_id, role, content, refs) VALUES (?, ?, ?, ?)')
+		.run(conversationId, 'user', newQuestion, JSON.stringify(refs))
+	runTurn(conversationId, refs, conversationFilter(conversationId))
 }

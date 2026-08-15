@@ -86,7 +86,8 @@ export function getKnowledgeDb(): Database.Database {
 			content         TEXT NOT NULL,
 			citations       TEXT NOT NULL DEFAULT '[]',  -- JSON [{itemKey,seq,title}]
 			created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
-			steps           TEXT NOT NULL DEFAULT '[]'
+			steps           TEXT NOT NULL DEFAULT '[]',
+			refs            TEXT NOT NULL DEFAULT '[]'
 		);
 	`)
 
@@ -100,6 +101,12 @@ export function getKnowledgeDb(): Database.Database {
 	const msgCols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]
 	if (!msgCols.some((c) => c.name === 'steps')) {
 		db.exec("ALTER TABLE messages ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'")
+	}
+
+	// Additive migration: older DBs have `messages` without this column.
+	const msgRefCols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]
+	if (!msgRefCols.some((c) => c.name === 'refs')) {
+		db.exec("ALTER TABLE messages ADD COLUMN refs TEXT NOT NULL DEFAULT '[]'")
 	}
 
 	return db
