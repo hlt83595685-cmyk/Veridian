@@ -285,6 +285,73 @@ function resolveRefs(refs: KnowledgeRef[] | undefined): ChatMessage[] {
 	return out
 }
 
+function scopeToFilter(scope: number | null): import('./search').ScopeFilter | undefined {
+	if (scope === IMPORTANT_SCOPE) {
+		const ids = getDb().prepare('SELECT id FROM items WHERE starred = 1 AND deleted = 0').all() as { id: number }[]
+		return { itemIds: ids.map((r) => r.id) }
+	}
+	if (scope !== null) {
+		const ids = getDb().prepare('SELECT item_id FROM collection_items WHERE collection_id = ?').all(scope) as { item_id: number }[]
+		return { itemIds: ids.map((r) => r.item_id) }
+	}
+	return undefined
+}
+
+function conversationFilter(convId: number): import('./search').ScopeFilter | undefined {
+	const row = getKnowledgeDb().prepare('SELECT scope_collection_id FROM conversations WHERE id = ?')
+		.get(convId) as { scope_collection_id: number | null } | undefined
+	return scopeToFilter(row?.scope_collection_id ?? null)
+}
+
+function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: import('./search').ScopeFilter | undefined): void {
+	const cfg = getChatConfig()
+	if (!cfg) {
+		emit({ type: 'knowledge.chatState', conversationId: convId, state: 'error', detail: 'not_configured' })
+		return
+	}
+	const kdb = getKnowledgeDb()
+	const messages: ChatMessage[] = [
+		{ role: 'system', content: buildSystemPrompt() },
+		...resolveRefs(refs),
+		...getMessages(convId).map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+	]
+	const tools = listInstalledSkills().length ? [...BASE_TOOLS, LOAD_SKILL_TOOL] : BASE_TOOLS
+	const ac = new AbortController()
+	abortControllers.set(convId, ac)
+	const steps: RetrievalStep[] = []
+	void (async () => {
+		try {
+			let finalText = ''
+			for (let round = 0; round < MAX_ROUNDS; round++) {
+				emit({ type: 'knowledge.chatState', conversationId: convId, state: round === 0 ? 'searching' : 'answering' })
+				const result = await chatStream(cfg, messages, tools, (delta) => {
+					emit({ type: 'knowledge.chatDelta', conversationId: convId, delta })
+				}, ac.signal)
+				if (result.toolCalls.length === 0) { finalText = result.content; break }
+				messages.push({ role: 'assistant', content: result.content || null, tool_calls: result.toolCalls })
+				for (const tc of result.toolCalls) {
+					emit({ type: 'knowledge.chatState', conversationId: convId, state: 'searching', detail: tc.function.name })
+					const { result: toolResult, step } = await runTool(tc.function.name, tc.function.arguments, filter)
+					steps.push(step)
+					emit({ type: 'knowledge.step', conversationId: convId, step })
+					messages.push({ role: 'tool', content: toolResult, tool_call_id: tc.id })
+				}
+				finalText = result.content
+			}
+			const citations = resolveCitations(extractCitations(finalText))
+			kdb.prepare('INSERT INTO messages (conversation_id, role, content, citations, steps) VALUES (?, ?, ?, ?, ?)')
+				.run(convId, 'assistant', finalText, JSON.stringify(citations), JSON.stringify(steps))
+			emit({ type: 'knowledge.chatState', conversationId: convId, state: 'done' })
+		} catch (err) {
+			const aborted = (err as Error).name === 'AbortError'
+			if (!aborted) console.error('[knowledge] runTurn failed:', err)
+			emit({ type: 'knowledge.chatState', conversationId: convId, state: aborted ? 'done' : 'error', detail: aborted ? 'stopped' : (err as Error).message })
+		} finally {
+			abortControllers.delete(convId)
+		}
+	})()
+}
+
 export async function ask(question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null): Promise<number> {
 	const kdb = getKnowledgeDb()
 	const ws = wsId()
@@ -301,86 +368,29 @@ export async function ask(question: string, conversationId: number | null, refs?
 	kdb.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)')
 		.run(convId, 'user', question)
 
-	const cfg = getChatConfig()
-	if (!cfg) {
-		emit({ type: 'knowledge.chatState', conversationId: convId, state: 'error', detail: 'not_configured' })
-		return convId
-	}
-
-	// Resolve the scope (main library DB) to a chunk item-id filter. IMPORTANT_SCOPE
-	// = only starred papers; a positive id = a collection; null = whole library.
-	let filter: import('./search').ScopeFilter | undefined
-	if (scope === IMPORTANT_SCOPE) {
-		const ids = getDb().prepare('SELECT id FROM items WHERE starred = 1 AND deleted = 0').all() as { id: number }[]
-		filter = { itemIds: ids.map((r) => r.id) }
-	} else if (scope !== null) {
-		const ids = getDb().prepare('SELECT item_id FROM collection_items WHERE collection_id = ?')
-			.all(scope) as { item_id: number }[]
-		filter = { itemIds: ids.map((r) => r.item_id) }
-	}
-
-	// History (previous turns) + this question
-	const history = getMessages(convId)
-	const messages: ChatMessage[] = [
-		{ role: 'system', content: buildSystemPrompt() },
-		...resolveRefs(refs),
-		...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-	]
-
-	const tools = listInstalledSkills().length ? [...BASE_TOOLS, LOAD_SKILL_TOOL] : BASE_TOOLS
-
-	const ac = new AbortController()
-	abortControllers.set(convId, ac)
-
-	const steps: RetrievalStep[] = []
-	void (async () => {
-		try {
-			let finalText = ''
-			for (let round = 0; round < MAX_ROUNDS; round++) {
-				emit({ type: 'knowledge.chatState', conversationId: convId!, state: round === 0 ? 'searching' : 'answering' })
-				const result = await chatStream(cfg, messages, tools, (delta) => {
-					emit({ type: 'knowledge.chatDelta', conversationId: convId!, delta })
-				}, ac.signal)
-
-				if (result.toolCalls.length === 0) {
-					finalText = result.content
-					break
-				}
-				messages.push({ role: 'assistant', content: result.content || null, tool_calls: result.toolCalls })
-				for (const tc of result.toolCalls) {
-					emit({
-						type: 'knowledge.chatState', conversationId: convId!, state: 'searching',
-						detail: tc.function.name,
-					})
-					const { result: toolResult, step } = await runTool(tc.function.name, tc.function.arguments, filter)
-					steps.push(step)
-					emit({ type: 'knowledge.step', conversationId: convId!, step })
-					messages.push({ role: 'tool', content: toolResult, tool_call_id: tc.id })
-				}
-				// Loop continues; if we hit MAX_ROUNDS the last content stands.
-				finalText = result.content
-			}
-
-			const citations = resolveCitations(extractCitations(finalText))
-			kdb.prepare('INSERT INTO messages (conversation_id, role, content, citations, steps) VALUES (?, ?, ?, ?, ?)')
-				.run(convId, 'assistant', finalText, JSON.stringify(citations), JSON.stringify(steps))
-			emit({ type: 'knowledge.chatState', conversationId: convId!, state: 'done' })
-		} catch (err) {
-			const aborted = (err as Error).name === 'AbortError'
-			if (!aborted) console.error('[knowledge] ask failed:', err)
-			emit({
-				type: 'knowledge.chatState', conversationId: convId!,
-				state: aborted ? 'done' : 'error',
-				detail: aborted ? 'stopped' : (err as Error).message,
-			})
-		} finally {
-			abortControllers.delete(convId!)
-		}
-	})()
-
+	runTurn(convId, refs, scopeToFilter(scope))
 	return convId
 }
 
 export function stopGeneration(conversationId: number): void {
 	abortControllers.get(conversationId)?.abort()
+}
+
+export function regenerate(conversationId: number): void {
+	const kdb = getKnowledgeDb()
+	const last = kdb.prepare('SELECT id, role FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1')
+		.get(conversationId) as { id: number; role: string } | undefined
+	if (!last) return
+	if (last.role === 'assistant') kdb.prepare('DELETE FROM messages WHERE id = ?').run(last.id)
+	runTurn(conversationId, [], conversationFilter(conversationId))
+}
+
+export function editLastAndResend(conversationId: number, newQuestion: string): void {
+	const kdb = getKnowledgeDb()
+	const lastUser = kdb.prepare("SELECT MAX(id) AS id FROM messages WHERE conversation_id = ? AND role = 'user'")
+		.get(conversationId) as { id: number | null }
+	if (lastUser?.id == null) return
+	kdb.prepare('DELETE FROM messages WHERE conversation_id = ? AND id >= ?').run(conversationId, lastUser.id)
+	kdb.prepare('INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)').run(conversationId, 'user', newQuestion)
+	runTurn(conversationId, [], conversationFilter(conversationId))
 }
