@@ -314,6 +314,8 @@ const zh = {
     edit: '编辑',
     resend: '重新发送',
     cancel: '取消',
+    update: '更新',
+    editingNote: '编辑中',
   },
 }
 
@@ -630,6 +632,8 @@ const en = {
     edit: 'Edit',
     resend: 'Resend',
     cancel: 'Cancel',
+    update: 'Update',
+    editingNote: 'Editing',
   },
 }
 

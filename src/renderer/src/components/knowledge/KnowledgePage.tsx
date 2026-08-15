@@ -17,7 +17,7 @@ interface DisplayMessage {
 	content: string
 	citations: CitationInfo[]
 	steps?: RetrievalStep[]
-	refs?: { type: string; label: string }[]
+	refs?: { type: string; itemKey?: string; path?: string; name?: string; label: string }[]
 }
 
 type ChatState = 'idle' | 'searching' | 'answering' | 'error'
@@ -62,6 +62,7 @@ export function KnowledgePage(): JSX.Element {
 	// @/`/`-mention state. `pendingRefs` is the source of truth sent to ask();
 	// the textarea's own text is just what the user sees and can freely edit.
 	const [pendingRefs, setPendingRefs] = useState<PendingRef[]>([])
+	const [editing, setEditing] = useState<number | null>(null)
 	const [mention, setMention] = useState<MentionTrigger>(null)
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([])
 	const [mentionIndex, setMentionIndex] = useState(0)
@@ -276,15 +277,21 @@ export function KnowledgePage(): JSX.Element {
 		if (!q || busyRef.current) return
 		busyRef.current = true
 		const refs = pendingRefs.map((p) => p.ref)
-		const sentRefs = pendingRefs.map((p) => ({ type: p.ref.type, label: p.label }))
+		const sentRefs = pendingRefs.map((p) => ({ ...p.ref, label: p.label }))
+		const wasEditing = editing !== null
 		setInput('')
 		setPendingRefs([])
 		setMention(null)
+		setEditing(null)
 		streamingRef.current = ''
 		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [], refs: sentRefs }])
 		setChatState('searching')
-		const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined, scopeCollectionId)
-		setConversationId(id)
+		if (wasEditing && conversationId !== null) {
+			await window.veridian.knowledge.editResend(conversationId, q, refs.length ? refs : undefined, scopeCollectionId)
+		} else {
+			const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined, scopeCollectionId)
+			setConversationId(id)
+		}
 	}
 
 	async function stop(): Promise<void> {
@@ -303,19 +310,28 @@ export function KnowledgePage(): JSX.Element {
 		void window.veridian.knowledge.regenerate(conversationId)
 	}
 
-	function editResend(text: string): void {
-		if (conversationId === null || busyRef.current) return
-		busyRef.current = true
-		streamingRef.current = ''
+	function startEdit(msg: DisplayMessage): void {
+		if (busyRef.current) return
+		setInput(msg.content)
+		setPendingRefs((msg.refs ?? []).map((r) => ({
+			ref: r.type === 'item' ? { type: 'item', itemKey: r.itemKey ?? '' }
+				: r.type === 'file' ? { type: 'file', path: r.path ?? '' }
+				: { type: 'skill', name: r.name ?? '' },
+			label: r.label,
+		})))
+		setEditing(typeof msg.id === 'number' ? msg.id : null)
 		setMessages((prev) => {
-			const lastUser = [...prev].reverse().find((m) => m.role === 'user')
-			if (!lastUser) return prev
-			return prev
-				.filter((m) => !(m.role === 'assistant' && typeof m.id === 'number' && typeof lastUser.id === 'number' && m.id > lastUser.id))
-				.map((m) => (m.id === lastUser.id ? { ...m, content: text } : m))
+			const idx = prev.findIndex((m) => m.id === msg.id)
+			return idx === -1 ? prev : prev.slice(0, idx)
 		})
-		setChatState('searching')
-		void window.veridian.knowledge.editResend(conversationId, text)
+		requestAnimationFrame(() => textareaRef.current?.focus())
+	}
+
+	function cancelEdit(): void {
+		setEditing(null)
+		setInput('')
+		setPendingRefs([])
+		if (conversationId !== null) void refreshMessages(conversationId)
 	}
 
 	const busy = chatState === 'searching' || chatState === 'answering'
@@ -400,7 +416,7 @@ export function KnowledgePage(): JSX.Element {
 							streaming={m.id === 'streaming'}
 							isLast={!busy && (m.role === 'assistant' ? m.id === lastId : m.id === lastUserId)}
 							onRegenerate={m.role === 'assistant' && m.id === lastId ? regenerate : undefined}
-							onEditResend={m.role === 'user' && m.id === lastUserId ? editResend : undefined}
+							onEdit={m.role === 'user' && m.id === lastUserId ? () => startEdit(m) : undefined}
 						/>
 					))}
 					{busy && (
@@ -459,6 +475,12 @@ export function KnowledgePage(): JSX.Element {
 									<option key={c.id} value={c.id}>{c.name}</option>
 								))}
 							</select>
+							{editing !== null && (
+								<div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 11.5, color: 'var(--muted)' }}>
+									<span>{t('knowledge.editingNote')}</span>
+									<button onClick={cancelEdit} style={{ border: 'none', background: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', fontSize: 11.5 }}>{t('knowledge.cancel')}</button>
+								</div>
+							)}
 							{pendingRefs.length > 0 && (
 								<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
 									{pendingRefs.map((p, i) => (
@@ -490,7 +512,7 @@ export function KnowledgePage(): JSX.Element {
 							<button onClick={() => void stop()} style={stopBtnStyle}>{t('knowledge.stop')}</button>
 						) : (
 							<button onClick={() => void send()} disabled={!input.trim() || chatConfigured === false} style={sendBtnStyle}>
-								{t('knowledge.send')}
+								{editing !== null ? t('knowledge.update') : t('knowledge.send')}
 							</button>
 						)}
 					</div>
