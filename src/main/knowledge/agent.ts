@@ -406,15 +406,15 @@ export function regenerate(conversationId: number): void {
 	runTurn(conversationId, lastUserRefs(conversationId), conversationFilter(conversationId))
 }
 
-export function editLastAndResend(conversationId: number, newQuestion: string): void {
+export function editLastAndResend(conversationId: number, newQuestion: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null): void {
 	const kdb = getKnowledgeDb()
-	const lastUser = kdb.prepare("SELECT id, refs FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1")
-		.get(conversationId) as { id: number; refs: string } | undefined
+	const lastUser = kdb.prepare("SELECT id FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1")
+		.get(conversationId) as { id: number } | undefined
 	if (!lastUser) return
-	let refs: KnowledgeRef[] = []
-	try { refs = JSON.parse(lastUser.refs || '[]') as KnowledgeRef[] } catch { /* [] */ }
+	const scope = scopeCollectionId ?? null
+	kdb.prepare('UPDATE conversations SET scope_collection_id = ? WHERE id = ?').run(scope, conversationId)
 	kdb.prepare('DELETE FROM messages WHERE conversation_id = ? AND id >= ?').run(conversationId, lastUser.id)
 	kdb.prepare('INSERT INTO messages (conversation_id, role, content, refs) VALUES (?, ?, ?, ?)')
-		.run(conversationId, 'user', newQuestion, JSON.stringify(refs))
-	runTurn(conversationId, refs, conversationFilter(conversationId))
+		.run(conversationId, 'user', newQuestion, JSON.stringify(enrichRefs(refs)))
+	runTurn(conversationId, refs, scopeToFilter(scope))
 }
