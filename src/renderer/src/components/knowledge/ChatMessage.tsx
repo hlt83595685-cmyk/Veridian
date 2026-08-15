@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useUiStore } from '../../stores/uiStore'
 import { RetrievalTrace } from './RetrievalTrace'
+import { Chip, PaperclipIcon } from './Chip'
 import type { RetrievalStep } from '../../../../shared/types'
 
 export interface CitationInfo { itemKey: string; itemId: number | null; seq: number; title: string | null }
@@ -106,20 +107,15 @@ export function ChatMessageView({ role, content, citations, streaming, steps, is
 					</div>
 				) : (
 					<>
-						{refs && refs.length > 0 && (
-							<div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', maxWidth: '100%' }}>
-								{refs.map((r, i) => (
-									<span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: 220, padding: '2px 8px', borderRadius: 999, background: 'var(--muted-bg)', border: '1px solid var(--border)', color: 'var(--foreground-3)', fontSize: 11 }}>
-										<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-											<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-										</svg>
-										<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</span>
-									</span>
-								))}
-							</div>
-						)}
-						<div style={{ padding: '9px 13px', borderRadius: '14px 14px 4px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--foreground)', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-							{content}
+						<div style={{ padding: '9px 13px', borderRadius: '14px 14px 4px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--foreground)', fontSize: 13.5, lineHeight: 1.55 }}>
+							{refs && refs.length > 0 && (
+								<div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+									{refs.map((r, i) => (
+										<Chip key={i} icon={<PaperclipIcon size={10} />} label={r.label} size="sm" maxWidth={240} />
+									))}
+								</div>
+							)}
+							<div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{content}</div>
 						</div>
 						{isLast && onEditResend && (
 							<div className="msg-actions">
