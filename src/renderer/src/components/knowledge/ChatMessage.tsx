@@ -97,6 +97,13 @@ export function ChatMessageView({ role, content, citations, streaming, steps, is
 			<div className="msg-row" style={{ alignSelf: 'flex-end', maxWidth: '80%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
 				{editing ? (
 					<div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 360, maxWidth: '80vw' }}>
+						{refs && refs.length > 0 && (
+							<div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end' }}>
+								{refs.map((r, i) => (
+									<Chip key={i} icon={<PaperclipIcon size={10} />} label={r.label} size="sm" maxWidth={240} />
+								))}
+							</div>
+						)}
 						<textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3}
 							style={{ padding: 8, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--foreground)', fontSize: 13.5, resize: 'vertical' }} />
 						<div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
