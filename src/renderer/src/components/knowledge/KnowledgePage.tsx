@@ -8,6 +8,7 @@ import type { KnowledgeRef } from '../../../../shared/ipc-contract'
 import type { Item, RetrievalStep } from '../../../../shared/types'
 import { IMPORTANT_SCOPE } from '../../../../shared/types'
 import { ChatMessageView, type CitationInfo } from './ChatMessage'
+import { Chip, PaperclipIcon } from './Chip'
 
 interface ConversationRow { id: number; title: string; created_at: number; scope_collection_id: number | null }
 interface DisplayMessage {
@@ -22,9 +23,8 @@ interface DisplayMessage {
 type ChatState = 'idle' | 'searching' | 'answering' | 'error'
 
 // @-mention (library items) and /-mention (installed skills) both resolve to
-// one of these; `token` is the literal text spliced into the input so send()
-// can tell whether the user later deleted it.
-interface PendingRef { ref: KnowledgeRef; token: string }
+// one of these, rendered as a removable chip in the composer.
+interface PendingRef { ref: KnowledgeRef; label: string }
 interface MentionCandidate { label: string; sub: string; ref: KnowledgeRef; token: string }
 type MentionTrigger = { kind: 'at' | 'slash'; start: number; query: string } | null
 
@@ -126,18 +126,8 @@ export function KnowledgePage(): JSX.Element {
 
 	function detectMention(text: string, cursor: number): MentionTrigger {
 		const head = text.slice(0, cursor)
-		// Allow spaces in the query so multi-word titles are searchable. The query
-		// is everything after the last `@` (preceded by start/space) up to the
-		// cursor, excluding `@`/newline.
 		const at = head.match(/(?:^|\s)@([^@\n]*)$/)
-		if (at) {
-			const query = at[1]
-			// Skip if this @-region is (the start of) an already-chosen mention
-			// token -- the user is typing after a picked item, not searching.
-			const region = '@' + query
-			const committed = pendingRefs.some((p) => region === p.token || region.startsWith(p.token + ' '))
-			if (!committed) return { kind: 'at', start: cursor - query.length - 1, query }
-		}
+		if (at) return { kind: 'at', start: cursor - at[1].length - 1, query: at[1] }
 		const slash = head.match(/^\/(\S*)$/)
 		if (slash) return { kind: 'slash', start: 0, query: slash[1] }
 		return null
@@ -154,14 +144,14 @@ export function KnowledgePage(): JSX.Element {
 		const cursor = textareaRef.current?.selectionStart ?? input.length
 		const before = input.slice(0, mention.start)
 		const after = input.slice(cursor)
-		const next = before + cand.token + after
-		setInput(next)
-		setPendingRefs((prev) => [...prev, { ref: cand.ref, token: cand.token.trim() }])
+		setInput(before + after)
+		const refKey = (r: KnowledgeRef): string =>
+			r.type === 'item' ? `item:${r.itemKey}` : r.type === 'file' ? `file:${r.path}` : `skill:${r.name}`
+		setPendingRefs((prev) => prev.some((p) => refKey(p.ref) === refKey(cand.ref)) ? prev : [...prev, { ref: cand.ref, label: cand.label }])
 		setMention(null)
 		requestAnimationFrame(() => {
-			const pos = before.length + cand.token.length
 			textareaRef.current?.focus()
-			textareaRef.current?.setSelectionRange(pos, pos)
+			textareaRef.current?.setSelectionRange(before.length, before.length)
 		})
 	}
 
@@ -285,11 +275,8 @@ export function KnowledgePage(): JSX.Element {
 		const q = input.trim()
 		if (!q || busyRef.current) return
 		busyRef.current = true
-		// A ref only travels with the message if its token is still present --
-		// this is how deleting "@Some Paper " from the input drops the attachment.
-		const refs = pendingRefs.filter((p) => q.includes(p.token)).map((p) => p.ref)
-		const sentRefs = pendingRefs.filter((p) => q.includes(p.token))
-			.map((p) => ({ type: p.ref.type, label: p.token.replace(/^[@/]/, '') }))
+		const refs = pendingRefs.map((p) => p.ref)
+		const sentRefs = pendingRefs.map((p) => ({ type: p.ref.type, label: p.label }))
 		setInput('')
 		setPendingRefs([])
 		setMention(null)
@@ -472,6 +459,14 @@ export function KnowledgePage(): JSX.Element {
 									<option key={c.id} value={c.id}>{c.name}</option>
 								))}
 							</select>
+							{pendingRefs.length > 0 && (
+								<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+									{pendingRefs.map((p, i) => (
+										<Chip key={i} icon={<PaperclipIcon />} label={p.label} maxWidth={260}
+											onRemove={() => setPendingRefs((prev) => prev.filter((_, j) => j !== i))} />
+									))}
+								</div>
+							)}
 							<textarea
 							ref={textareaRef}
 							value={input}
