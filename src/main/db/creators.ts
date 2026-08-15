@@ -12,6 +12,10 @@ export interface ItemCreator extends Creator {
   position: number
 }
 
+// Input shape for writing creators: id/orcid are assigned/optional, so callers
+// (imports, metadata fetch, IPC) needn't supply them.
+export interface CreatorInput { first_name?: string | null; last_name: string; role?: string; position?: number }
+
 export function getCreatorsByItem(itemId: number): ItemCreator[] {
   return getDb().prepare(`
     SELECT c.*, ic.role, ic.position
@@ -22,10 +26,7 @@ export function getCreatorsByItem(itemId: number): ItemCreator[] {
   `).all(itemId) as ItemCreator[]
 }
 
-export function setCreatorsForItem(
-  itemId: number,
-  creators: Array<{ first_name?: string | null; last_name: string; role?: string; position?: number }>
-): void {
+export function setCreatorsForItem(itemId: number, creators: CreatorInput[]): void {
   const db = getDb()
   const deleteStmt = db.prepare('DELETE FROM item_creators WHERE item_id = ?')
   const findOrCreate = db.prepare(`

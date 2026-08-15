@@ -29,7 +29,7 @@ export function registerIpcGateway(ipcMain: IpcMain): void {
         return { ok: false, error: `Invalid arguments for ${channel}` }
       }
       try {
-        const data = await handler(event, ...(parsed.data as never[]))
+        const data = await handler(event, ...(parsed.data as unknown as never[]))
         return { ok: true, data }
       } catch (err) {
         console.error(`[ipc] ${channel} failed:`, err)

@@ -1,4 +1,4 @@
-import { getCreatorsByItem, setCreatorsForItem as repoSet, type ItemCreator } from '../db/creators'
+import { getCreatorsByItem, setCreatorsForItem as repoSet, type ItemCreator, type CreatorInput } from '../db/creators'
 import { appendOp } from '../db/oplog'
 import { emit } from '../core/Notifier'
 
@@ -6,7 +6,7 @@ export function listByItem(itemId: number): ItemCreator[] {
   return getCreatorsByItem(itemId)
 }
 
-export function setCreatorsForItem(itemId: number, creators: ItemCreator[]): void {
+export function setCreatorsForItem(itemId: number, creators: CreatorInput[]): void {
   repoSet(itemId, creators)
   appendOp('item', itemId, 'modify', { creators: creators.length })
   emit({ type: 'creator.changed', itemIds: [itemId] })

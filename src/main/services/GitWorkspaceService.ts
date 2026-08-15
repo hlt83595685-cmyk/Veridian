@@ -89,7 +89,7 @@ export async function commitAll(dir: string, message: string): Promise<boolean> 
     if (head === 1 && workdir === 0) {
       await git.remove({ fs, dir, filepath })
       dirty = true
-    } else if (head !== workdir || workdir === 2) {
+    } else if (head !== workdir) {
       await git.add({ fs, dir, filepath })
       dirty = true
     }
