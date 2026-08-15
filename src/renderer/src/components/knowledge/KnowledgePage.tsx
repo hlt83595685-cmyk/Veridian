@@ -300,8 +300,37 @@ export function KnowledgePage(): JSX.Element {
 		if (conversationId !== null) await window.veridian.knowledge.stop(conversationId)
 	}
 
+	function regenerate(): void {
+		if (conversationId === null || busyRef.current) return
+		busyRef.current = true
+		streamingRef.current = ''
+		setMessages((prev) => {
+			const last = prev[prev.length - 1]
+			return last?.role === 'assistant' ? prev.slice(0, -1) : prev
+		})
+		setChatState('searching')
+		void window.veridian.knowledge.regenerate(conversationId)
+	}
+
+	function editResend(text: string): void {
+		if (conversationId === null || busyRef.current) return
+		busyRef.current = true
+		streamingRef.current = ''
+		setMessages((prev) => {
+			const lastUser = [...prev].reverse().find((m) => m.role === 'user')
+			if (!lastUser) return prev
+			return prev
+				.filter((m) => !(m.role === 'assistant' && typeof m.id === 'number' && typeof lastUser.id === 'number' && m.id > lastUser.id))
+				.map((m) => (m.id === lastUser.id ? { ...m, content: text } : m))
+		})
+		setChatState('searching')
+		void window.veridian.knowledge.editResend(conversationId, text)
+	}
+
 	const busy = chatState === 'searching' || chatState === 'answering'
 	const scopeLabel = activeWs?.name ?? t('knowledge.personalLibrary')
+	const lastId = messages[messages.length - 1]?.id
+	const lastUserId = [...messages].reverse().find((m) => m.role === 'user')?.id
 
 	return (
 		<div style={{ display: 'flex', height: '100%' }}>
@@ -377,6 +406,9 @@ export function KnowledgePage(): JSX.Element {
 							citations={m.citations}
 							steps={m.steps}
 							streaming={m.id === 'streaming'}
+							isLast={!busy && (m.role === 'assistant' ? m.id === lastId : m.id === lastUserId)}
+							onRegenerate={m.role === 'assistant' && m.id === lastId ? regenerate : undefined}
+							onEditResend={m.role === 'user' && m.id === lastUserId ? editResend : undefined}
 						/>
 					))}
 					{busy && (

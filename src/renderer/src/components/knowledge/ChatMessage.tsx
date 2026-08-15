@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { citeUrlTransform } from './citeUrl'
@@ -11,6 +12,19 @@ import { RetrievalTrace } from './RetrievalTrace'
 import type { RetrievalStep } from '../../../../shared/types'
 
 export interface CitationInfo { itemKey: string; itemId: number | null; seq: number; title: string | null }
+
+function ActBtn({ title, onClick, path }: { title: string; onClick: () => void; path: string[] }): JSX.Element {
+	return (
+		<button className="msg-actbtn" title={title} onClick={onClick}>
+			<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+				{path.map((d, i) => <path key={i} d={d} />)}
+			</svg>
+		</button>
+	)
+}
+const ICON_COPY = ['M8 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z', 'M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2']
+const ICON_REGEN = ['M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8', 'M21 3v5h-5', 'M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16', 'M3 21v-5h5']
+const ICON_EDIT = ['M12 20h9', 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z']
 
 // remark-math only understands $...$ / $$...$$. Models frequently emit the
 // other common LaTeX delimiters (\(...\) inline, \[...\] display), so
@@ -55,12 +69,15 @@ async function openCitation(
 	openMarkdown(md.path, md.filename ?? 'Full.md')
 }
 
-export function ChatMessageView({ role, content, citations, streaming, steps }: {
+export function ChatMessageView({ role, content, citations, streaming, steps, isLast, onRegenerate, onEditResend }: {
 	role: 'user' | 'assistant'
 	content: string
 	citations: CitationInfo[]
 	streaming?: boolean
 	steps?: RetrievalStep[]
+	isLast?: boolean
+	onRegenerate?: () => void
+	onEditResend?: (text: string) => void
 }): JSX.Element {
 	const { t } = useTranslation('common')
 	const setPage = useUiStore((s) => s.setPage)
@@ -70,23 +87,40 @@ export function ChatMessageView({ role, content, citations, streaming, steps }: 
 	// The sources list is per-paper, not per-excerpt -- citing the same paper
 	// at several seqs shouldn't repeat its title several times in the list.
 	const uniqueSources = [...new Map(citations.map((c) => [c.itemKey, c])).values()]
+	const [editing, setEditing] = useState(false)
+	const [draft, setDraft] = useState(content)
 
 	if (role === 'user') {
 		return (
-			<div style={{ alignSelf: 'flex-end', maxWidth: '80%' }}>
-				<div style={{
-					padding: '9px 13px', borderRadius: '14px 14px 4px 14px',
-					background: 'var(--primary)', color: '#fff', fontSize: 13.5, lineHeight: 1.55,
-					whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-				}}>
-					{content}
-				</div>
+			<div className="msg-row" style={{ alignSelf: 'flex-end', maxWidth: '80%', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+				{editing ? (
+					<div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: 360, maxWidth: '80vw' }}>
+						<textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={3}
+							style={{ padding: 8, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--foreground)', fontSize: 13.5, resize: 'vertical' }} />
+						<div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+							<button className="msg-actbtn" onClick={() => { setEditing(false); setDraft(content) }}>{t('knowledge.cancel')}</button>
+							<button className="btn-primary" style={{ padding: '4px 12px', borderRadius: 8, color: '#fff', fontSize: 12 }}
+								onClick={() => { const v = draft.trim(); if (v) { setEditing(false); onEditResend?.(v) } }}>{t('knowledge.resend')}</button>
+						</div>
+					</div>
+				) : (
+					<>
+						<div style={{ padding: '9px 13px', borderRadius: '14px 14px 4px 14px', background: 'var(--primary)', color: '#fff', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+							{content}
+						</div>
+						{isLast && onEditResend && (
+							<div className="msg-actions">
+								<ActBtn title={t('knowledge.edit')} path={ICON_EDIT} onClick={() => { setDraft(content); setEditing(true) }} />
+							</div>
+						)}
+					</>
+				)}
 			</div>
 		)
 	}
 
 	return (
-		<div style={{ alignSelf: 'flex-start', maxWidth: '88%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+		<div className="msg-row" style={{ alignSelf: 'flex-start', maxWidth: '88%', display: 'flex', flexDirection: 'column', gap: 8 }}>
 			{role === 'assistant' && steps && steps.length > 0 && (
 				<RetrievalTrace steps={steps} streaming={streaming} />
 			)}
@@ -156,6 +190,13 @@ export function ChatMessageView({ role, content, citations, streaming, steps }: 
 							</span>
 						</button>
 					))}
+				</div>
+			)}
+
+			{!streaming && (
+				<div className="msg-actions" style={{ padding: '0 4px' }}>
+					<ActBtn title={t('knowledge.copy')} path={ICON_COPY} onClick={() => void navigator.clipboard.writeText(content)} />
+					{isLast && onRegenerate && <ActBtn title={t('knowledge.regenerate')} path={ICON_REGEN} onClick={onRegenerate} />}
 				</div>
 			)}
 		</div>

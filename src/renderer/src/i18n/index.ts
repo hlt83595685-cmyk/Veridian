@@ -309,6 +309,11 @@ const zh = {
     traceSummary: '检索 {{searches}} 次 · {{sources}} 篇来源',
     traceSearch: '搜索 "{{query}}" → {{n}} 条',
     traceChars: '{{n}} 字',
+    copy: '复制',
+    regenerate: '重新生成',
+    edit: '编辑',
+    resend: '重新发送',
+    cancel: '取消',
   },
 }
 
@@ -620,6 +625,11 @@ const en = {
     traceSummary: '{{searches}} searches · {{sources}} sources',
     traceSearch: 'Search "{{query}}" → {{n}} hits',
     traceChars: '{{n}} chars',
+    copy: 'Copy',
+    regenerate: 'Regenerate',
+    edit: 'Edit',
+    resend: 'Resend',
+    cancel: 'Cancel',
   },
 }
 

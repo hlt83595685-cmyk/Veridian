@@ -278,3 +278,9 @@ button:active { opacity: 0.75; transform: scale(0.97); }
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
+
+/* Message action buttons: revealed on hover of the message row. */
+.msg-row .msg-actions { opacity: 0; transition: opacity 120ms var(--ease); display: flex; gap: 6px; }
+.msg-row:hover .msg-actions { opacity: 1; }
+.msg-actbtn { border: none; background: none; padding: 2px; cursor: pointer; color: var(--muted); display: inline-flex; }
+.msg-actbtn:hover { color: var(--primary); }
