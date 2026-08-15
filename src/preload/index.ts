@@ -174,6 +174,8 @@ const veridianAPI = {
     ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null) =>
       call<number>('knowledge:ask', question, conversationId, refs, scopeCollectionId),
     stop: (conversationId: number) => call('knowledge:stop', conversationId),
+    regenerate: (conversationId: number) => call('knowledge:regenerate', conversationId),
+    editResend: (conversationId: number, question: string) => call('knowledge:editResend', conversationId, question),
     listConversations: () =>
       call<Array<{ id: number; title: string; created_at: number; scope_collection_id: number | null }>>('knowledge:listConversations'),
     getMessages: (conversationId: number) =>

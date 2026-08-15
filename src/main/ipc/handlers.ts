@@ -286,6 +286,8 @@ export const handlers: Record<IpcChannel, Handler> = {
   'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null) =>
     Agent.ask(question, conversationId, refs, scopeCollectionId),
   'knowledge:stop':               (_e, conversationId: number) => Agent.stopGeneration(conversationId),
+  'knowledge:regenerate':         (_e, conversationId: number) => Agent.regenerate(conversationId),
+  'knowledge:editResend':         (_e, conversationId: number, question: string) => Agent.editLastAndResend(conversationId, question),
   'knowledge:listConversations':  () => Agent.listConversations(),
   'knowledge:getMessages':        (_e, conversationId: number) => Agent.getMessages(conversationId),
   'knowledge:getChunk':           (_e, itemKey: string, seq: number) =>
