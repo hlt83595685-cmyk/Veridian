@@ -179,7 +179,7 @@ const veridianAPI = {
     listConversations: () =>
       call<Array<{ id: number; title: string; created_at: number; scope_collection_id: number | null }>>('knowledge:listConversations'),
     getMessages: (conversationId: number) =>
-      call<Array<{ id: number; conversation_id: number; role: string; content: string; citations: string; created_at: number; steps: string }>>(
+      call<Array<{ id: number; conversation_id: number; role: string; content: string; citations: string; created_at: number; steps: string; refs: string }>>(
         'knowledge:getMessages', conversationId),
     getChunk: (itemKey: string, seq: number) =>
       call<{ headingPath: string; text: string } | null>('knowledge:getChunk', itemKey, seq),
