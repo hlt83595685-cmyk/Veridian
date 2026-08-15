@@ -16,6 +16,7 @@ interface DisplayMessage {
 	content: string
 	citations: CitationInfo[]
 	steps?: RetrievalStep[]
+	refs?: { type: string; label: string }[]
 }
 
 type ChatState = 'idle' | 'searching' | 'answering' | 'error'
@@ -251,6 +252,7 @@ export function KnowledgePage(): JSX.Element {
 			id: r.id, role: r.role as 'user' | 'assistant', content: r.content,
 			citations: JSON.parse(r.citations || '[]'),
 			steps: JSON.parse(r.steps || '[]'),
+			refs: JSON.parse(r.refs || '[]'),
 		})))
 	}
 
@@ -286,11 +288,13 @@ export function KnowledgePage(): JSX.Element {
 		// A ref only travels with the message if its token is still present --
 		// this is how deleting "@Some Paper " from the input drops the attachment.
 		const refs = pendingRefs.filter((p) => q.includes(p.token)).map((p) => p.ref)
+		const sentRefs = pendingRefs.filter((p) => q.includes(p.token))
+			.map((p) => ({ type: p.ref.type, label: p.token.replace(/^[@/]/, '') }))
 		setInput('')
 		setPendingRefs([])
 		setMention(null)
 		streamingRef.current = ''
-		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [] }])
+		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [], refs: sentRefs }])
 		setChatState('searching')
 		const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined, scopeCollectionId)
 		setConversationId(id)
@@ -405,6 +409,7 @@ export function KnowledgePage(): JSX.Element {
 							content={m.content}
 							citations={m.citations}
 							steps={m.steps}
+							refs={m.refs}
 							streaming={m.id === 'streaming'}
 							isLast={!busy && (m.role === 'assistant' ? m.id === lastId : m.id === lastUserId)}
 							onRegenerate={m.role === 'assistant' && m.id === lastId ? regenerate : undefined}

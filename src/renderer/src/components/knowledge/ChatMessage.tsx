@@ -69,7 +69,7 @@ async function openCitation(
 	openMarkdown(md.path, md.filename ?? 'Full.md')
 }
 
-export function ChatMessageView({ role, content, citations, streaming, steps, isLast, onRegenerate, onEditResend }: {
+export function ChatMessageView({ role, content, citations, streaming, steps, isLast, onRegenerate, onEditResend, refs }: {
 	role: 'user' | 'assistant'
 	content: string
 	citations: CitationInfo[]
@@ -78,6 +78,7 @@ export function ChatMessageView({ role, content, citations, streaming, steps, is
 	isLast?: boolean
 	onRegenerate?: () => void
 	onEditResend?: (text: string) => void
+	refs?: { type: string; label: string }[]
 }): JSX.Element {
 	const { t } = useTranslation('common')
 	const setPage = useUiStore((s) => s.setPage)
@@ -105,7 +106,19 @@ export function ChatMessageView({ role, content, citations, streaming, steps, is
 					</div>
 				) : (
 					<>
-						<div style={{ padding: '9px 13px', borderRadius: '14px 14px 4px 14px', background: 'var(--primary)', color: '#fff', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+						{refs && refs.length > 0 && (
+							<div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'flex-end', maxWidth: '100%' }}>
+								{refs.map((r, i) => (
+									<span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: 220, padding: '2px 8px', borderRadius: 999, background: 'var(--muted-bg)', border: '1px solid var(--border)', color: 'var(--foreground-3)', fontSize: 11 }}>
+										<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+											<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+										</svg>
+										<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</span>
+									</span>
+								))}
+							</div>
+						)}
+						<div style={{ padding: '9px 13px', borderRadius: '14px 14px 4px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--foreground)', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
 							{content}
 						</div>
 						{isLast && onEditResend && (
