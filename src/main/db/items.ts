@@ -181,11 +181,17 @@ export function updateItem(id: number, data: Partial<Item>): void {
     'title','abstract','year','doi','url',
     'journal','publisher','volume','issue','pages','isbn','language','extra'
   ]
-  const setClauses = fields.map((f) => `${f} = COALESCE(@${f}, ${f})`).join(', ')
-  getDb().prepare(`
-    UPDATE items SET ${setClauses}, updated_at = @updated_at, version = version + 1
-    WHERE id = @id
-  `).run({ ...data, id, updated_at: now })
+  // Only touch fields actually provided. better-sqlite3 throws on any named
+  // parameter in the SQL text that isn't an own property of the bound object,
+  // so referencing all 13 fields would crash on partial updates (the AI's
+  // update_metadata tool, KeywordService passing just { title }, etc.).
+  // COALESCE(@f, f) keeps the existing "null = leave unchanged" semantics.
+  const provided = fields.filter((f) => (data as Record<string, unknown>)[f] !== undefined)
+  const setClauses = provided.map((f) => `${f} = COALESCE(@${f}, ${f})`)
+  setClauses.push('updated_at = @updated_at', 'version = version + 1')
+  const binds: Record<string, unknown> = { id, updated_at: now }
+  for (const f of provided) binds[f] = (data as Record<string, unknown>)[f]
+  getDb().prepare(`UPDATE items SET ${setClauses.join(', ')} WHERE id = @id`).run(binds)
 }
 
 export function trashItem(id: number): void {

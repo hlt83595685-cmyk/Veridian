@@ -22,7 +22,7 @@ vi.mock('./index', () => ({
   getDb: () => db,
 }))
 
-import { createItem } from './items'
+import { createItem, updateItem, getItemById } from './items'
 
 const suite = dbUsable ? describe : describe.skip
 
@@ -52,5 +52,13 @@ suite('createItem attribution', () => {
   it('writes null added_by when no attribution set', () => {
     const item = createItem({ title: 'Test' })
     expect(item.added_by).toBeNull()
+  })
+
+  it('updateItem updates only the provided fields', () => {
+    const item = createItem({ title: 'T', year: 2000 })
+    updateItem(item.id, { year: 2021 })
+    const row = getItemById(item.id)!
+    expect(row.year).toBe(2021)
+    expect(row.title).toBe('T')
   })
 })
