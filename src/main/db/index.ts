@@ -326,7 +326,9 @@ function runMigrations(db: Database.Database): void {
     db.exec(`INSERT INTO schema_version VALUES (8)`)
   }
   if (current < 9) {
-    db.exec(MIGRATION_9_SQL)
-    db.exec(`INSERT INTO schema_version VALUES (9)`)
+    db.transaction(() => {
+      db.exec(MIGRATION_9_SQL)
+      db.exec(`INSERT INTO schema_version VALUES (9)`)
+    })()
   }
 }

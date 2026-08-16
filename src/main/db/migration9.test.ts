@@ -38,6 +38,9 @@ suite('migration 9', () => {
     )
     const kept = db.prepare('SELECT content FROM notes WHERE id = 1').get() as { content: string }
     expect(kept.content).toBe('legacy note')
+    const prov = db.prepare('SELECT origin, updated_by FROM notes WHERE id = 1').get() as { origin: string; updated_by: string }
+    expect(prov.origin).toBe('user')
+    expect(prov.updated_by).toBe('user')
     // Standalone note (no item) is now allowed.
     expect(() => db.prepare("INSERT INTO notes (content) VALUES ('standalone')").run()).not.toThrow()
   })
