@@ -16,6 +16,41 @@ import { mkdirSync } from 'fs'
 // getDb() routes to whichever is active, which is the entire trick that lets
 // every existing repo/service work against a workspace unchanged (DIP: they
 // depend on this accessor, never on a concrete database identity).
+// Migration 9 SQL, exported so migration9.test.ts can exercise it against a bare
+// db. notes is rebuilt (SQLite cannot drop a NOT NULL constraint in-place) to
+// make it a first-class knowledge-base node: standalone (item_id NULL) allowed,
+// with a title and provenance flags. relations are the graph edges.
+export const MIGRATION_9_SQL = `
+  ALTER TABLE notes RENAME TO notes_old;
+  CREATE TABLE notes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id    INTEGER REFERENCES items(id) ON DELETE CASCADE,
+    title      TEXT,
+    content    TEXT,
+    origin     TEXT NOT NULL DEFAULT 'user',
+    updated_by TEXT NOT NULL DEFAULT 'user',
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+  INSERT INTO notes (id, item_id, content, created_at, updated_at)
+    SELECT id, item_id, content, created_at, updated_at FROM notes_old;
+  DROP TABLE notes_old;
+
+  CREATE TABLE IF NOT EXISTS relations (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    src_kind   TEXT NOT NULL,
+    src_id     INTEGER NOT NULL,
+    dst_kind   TEXT NOT NULL,
+    dst_id     INTEGER NOT NULL,
+    rel_type   TEXT NOT NULL,
+    origin     TEXT NOT NULL DEFAULT 'user',
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    UNIQUE (src_kind, src_id, dst_kind, dst_id, rel_type)
+  );
+  CREATE INDEX IF NOT EXISTS idx_relations_src ON relations(src_kind, src_id);
+  CREATE INDEX IF NOT EXISTS idx_relations_dst ON relations(dst_kind, dst_id);
+`
+
 let personalDb: Database.Database | null = null
 let workspaceDb: Database.Database | null = null
 
@@ -289,5 +324,9 @@ function runMigrations(db: Database.Database): void {
       db.exec(`ALTER TABLE items ADD COLUMN starred INTEGER NOT NULL DEFAULT 0`)
     }
     db.exec(`INSERT INTO schema_version VALUES (8)`)
+  }
+  if (current < 9) {
+    db.exec(MIGRATION_9_SQL)
+    db.exec(`INSERT INTO schema_version VALUES (9)`)
   }
 }
