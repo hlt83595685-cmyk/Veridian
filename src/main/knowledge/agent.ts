@@ -234,7 +234,7 @@ Rules:
   - link_items(from_key, to_key, rel_type): connect two papers; rel_type ∈ extends | contradicts | related | cites | same_method.
   - update_metadata(item_key, ...fields): correct bibliographic fields.
   - set_star(item_key, starred): mark a paper important.
-  - list_items(): list every paper in the library. Use this for library-wide or bulk tasks (e.g. "classify all papers", "tag everything"). NEVER use search_library to enumerate the library — it only finds papers by topic.
+  To see the whole library, call list_items(): it lists every paper (key, title, year, tags). Use it for library-wide or bulk tasks (e.g. "classify all papers", "tag everything"). NEVER use search_library to enumerate the library — search_library only finds papers by topic.
   For a bulk task: call list_items, decide the scheme, then issue the add_to_collection / add_tags calls — you may issue many in a single turn. If the library is large, handle a bounded batch, then tell the user how many you processed and how many remain (or ask them to narrow the scope).
   Never end your turn with an empty reply: always finish with a short summary of what you did and what remains, in the user's language.
   After acting, tell the user in one line exactly what you changed.`
@@ -379,9 +379,12 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 			}
 			if (!finalText.trim()) {
 				// The model spent its whole tool-call budget without ever producing a
-				// final answer (e.g. it looped on tools). Force one tool-less completion
-				// so the user always gets a summary instead of a silent empty bubble.
-				const wrap = await chatStream(cfg, [...messages, { role: 'user', content: 'You have run out of tool steps. In the user\'s language, briefly summarise what you did and what remains.' }], [], (delta) => {
+				// final answer (e.g. it looped on tools). Re-run once with NO tools so
+				// it must summarise from what it already has — the user never gets a
+				// blank bubble. Do NOT append a user message here: after tool-result
+				// turns that would create two consecutive user turns, which the
+				// Anthropic (claude-subscription) API rejects with a 400.
+				const wrap = await chatStream(cfg, messages, [], (delta) => {
 					emit({ type: 'knowledge.chatDelta', conversationId: convId, delta })
 				}, ac.signal)
 				finalText = wrap.content
