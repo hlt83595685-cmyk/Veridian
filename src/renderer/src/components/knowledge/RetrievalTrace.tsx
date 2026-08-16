@@ -22,6 +22,7 @@ const ICON_PATHS: Record<RetrievalStep['tool'], string[]> = {
 	list_items: ACTION_ICON,
 	list_tags: ACTION_ICON,
 	read_notes: ACTION_ICON,
+	read_item: ACTION_ICON,
 }
 
 function ToolIcon({ tool }: { tool: RetrievalStep['tool'] }): JSX.Element {

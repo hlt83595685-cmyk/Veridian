@@ -4,6 +4,7 @@
 // truncated UUID keys folder-backed libraries use), performs the mutation via a
 // Service (which emits a domain event), and returns a short confirmation plus a
 // RetrievalStep for the trace panel. AI-created notes/edges are tagged origin='ai'.
+import { readFileSync } from 'fs'
 import { getDb } from '../db'
 import { mergeTagsForItem, listAll as listAllTags } from '../services/TagService'
 import { listAll as listAllCollections, createCollection, addItemToCollection } from '../services/CollectionService'
@@ -11,8 +12,11 @@ import { updateItem, setStarred, listItems } from '../services/ItemService'
 import { createNote, listNotesByItem } from '../services/NoteService'
 import { linkItems } from '../services/RelationService'
 import { RELATION_TYPES } from '../db/relations'
+import { assertReadable } from '../security/pathGuard'
 import type { ToolDef } from './providers'
 import type { RetrievalStep } from '../../shared/types'
+
+const READ_ITEM_CHARS = 8000
 
 function resolveItem(key: string): { id: number; title: string | null } | null {
 	const db = getDb()
@@ -32,6 +36,10 @@ export const AGENT_READ_TOOLS: ToolDef[] = [
 			name: 'list_items',
 			description: 'List the papers in the current library (key, title, year, existing tags). Use this — NOT search_library — for library-wide or bulk tasks such as classifying or tagging every paper. search_library is only for finding papers by topic/content.',
 			parameters: { type: 'object', properties: {} } } },
+	{ type: 'function', function: {
+			name: 'read_item',
+			description: 'Read the full converted text (markdown) of ONE paper by its key, for direct analysis. Use this to read a paper you already know — do NOT use search_library to read a paper whose key you already have. search_library is only for discovering unknown papers by topic.',
+			parameters: { type: 'object', properties: { item_key: { type: 'string' } }, required: ['item_key'] } } },
 	{ type: 'function', function: {
 			name: 'list_collections',
 			description: 'List the collections (folders) in the current library, so you can file papers correctly.',
@@ -123,6 +131,18 @@ export async function executeAgentTool(name: string, argsJson: string): Promise<
 		const notes = listNotesByItem(item.id)
 		const body = notes.length ? notes.map((n) => `- ${n.title ?? '(untitled)'}: ${n.content ?? ''}`).join('\n') : '(no notes)'
 		return { result: body, step: step('read_notes', item.title ?? key) }
+	}
+	if (name === 'read_item') {
+		const item = resolveItem(key); if (!item) return { result: `item not found: ${key}`, step: step('read_item', key) }
+		const md = getDb().prepare("SELECT path FROM attachments WHERE item_id = ? AND type = 'markdown' AND path IS NOT NULL LIMIT 1")
+			.get(item.id) as { path: string } | undefined
+		if (!md) return { result: `no converted markdown text is available for "${item.title ?? key}" yet`, step: step('read_item', item.title ?? key) }
+		try {
+			const text = readFileSync(assertReadable(md.path), 'utf-8').slice(0, READ_ITEM_CHARS)
+			return { result: text, step: step('read_item', item.title ?? key) }
+		} catch (err) {
+			return { result: `could not read "${item.title ?? key}": ${(err as Error).message}`, step: step('read_item', item.title ?? key) }
+		}
 	}
 
 	if (name === 'create_note') {

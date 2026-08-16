@@ -29,6 +29,7 @@ suite('agent write tools', () => {
 				origin TEXT DEFAULT 'user', updated_by TEXT DEFAULT 'user', created_at INTEGER DEFAULT 0, updated_at INTEGER DEFAULT 0);
 			CREATE TABLE relations (id INTEGER PRIMARY KEY AUTOINCREMENT, src_kind TEXT, src_id INTEGER, dst_kind TEXT, dst_id INTEGER,
 				rel_type TEXT, origin TEXT DEFAULT 'user', created_at INTEGER DEFAULT 0, UNIQUE (src_kind, src_id, dst_kind, dst_id, rel_type));
+			CREATE TABLE attachments (id INTEGER PRIMARY KEY AUTOINCREMENT, item_id INTEGER, type TEXT, path TEXT);
 			INSERT INTO items (key, title) VALUES ('AAAA1111', 'Paper A'), ('BBBB2222', 'Paper B');
 		`)
 	})
@@ -86,6 +87,12 @@ suite('agent write tools', () => {
 		expect(step.tool).toBe('list_items')
 		expect(result).toMatch(/Paper A/)
 		expect(result).toMatch(/Paper B/)
+	})
+
+	it('read_item reports when a paper has no markdown yet', async () => {
+		const { result, step } = await executeAgentTool('read_item', JSON.stringify({ item_key: 'AAAA1111' }))
+		expect(step.tool).toBe('read_item')
+		expect(result).toMatch(/no converted markdown/i)
 	})
 
 	it('exposes the action tool name set', () => {
