@@ -99,7 +99,7 @@ const LOAD_SKILL_TOOL: ToolDef = {
 }
 
 async function runTool(name: string, argsJson: string, filter?: import('./search').ScopeFilter): Promise<{ result: string; step: RetrievalStep }> {
-	if (AGENT_ACTION_TOOL_NAMES.has(name)) return executeAgentTool(name, argsJson)
+	if (AGENT_ACTION_TOOL_NAMES.has(name)) return executeAgentTool(name, argsJson, filter)
 
 	let args: Record<string, unknown>
 	try { args = JSON.parse(argsJson || '{}') } catch { return { result: 'error: invalid arguments', step: { tool: 'search_library', label: '(bad args)' } } }
@@ -222,8 +222,7 @@ const BASE_SYSTEM_PROMPT = `You are the research assistant inside Veridian, a re
 
 Rules:
 - If the user has attached specific papers or files for this turn (they appear as "[Attached paper: ...]" or "[Attached file: ...]" system messages), answer directly from that attached content. Do NOT call search_library, and do NOT add [^...] citation markers for it -- the attached text has no seq numbers and none are needed. Only search if the attached material genuinely lacks what's asked.
-- Otherwise, ALWAYS search the library before answering; never answer from general knowledge alone. If the library has nothing relevant, say so plainly.
-  (This "always search" rule is for answering questions. For library-management actions on papers you can enumerate with list_items or that the user pointed at, do NOT search — read a specific paper's content with read_item when you need it.)
+- Otherwise, to ANSWER a question, use search_library: it finds the most relevant passages across the library and automatically honours any scope the user has selected. Never answer from general knowledge alone; if the library has nothing relevant, say so plainly.
 - For claims drawn from search_library results, cite with the marker [^item_key:seq] taken from those results (e.g. [^AB12CD34:5]), placed inline right after the claim.
 - Answer in the same language the user asked in.
 - Be concise and factual. Quote numbers and findings exactly as the excerpts state them.
@@ -235,9 +234,9 @@ Rules:
   - link_items(from_key, to_key, rel_type): connect two papers; rel_type ∈ extends | contradicts | related | cites | same_method.
   - update_metadata(item_key, ...fields): correct bibliographic fields.
   - set_star(item_key, starred): mark a paper important.
-  - read_item(item_key): read one paper's full text directly (for analysis/classification). Prefer this over search_library whenever you already have the paper's key. search_library is ONLY for discovering which papers exist on a topic — never to read a paper you can already list.
-  To see the whole library, call list_items(): it lists every paper (key, title, year, tags). Use it for library-wide or bulk tasks (e.g. "classify all papers", "tag everything"). NEVER use search_library to enumerate or read papers you already have the key for — search_library only finds unknown papers by topic.
-  For a bulk task like classification: call list_items, then for each paper use read_item (or its title, if that alone is enough to judge) to decide the scheme, then issue the add_to_collection / add_tags calls — you may issue many in a single turn. If the library is large, handle a bounded batch, then tell the user how many you processed and how many remain (or ask them to narrow the scope).
+  - read_item(item_key): read ONE specific paper's full text, when you already know which paper you want (e.g. from list_items or an @-mention). Don't use search_library to re-read a paper whose key you already have.
+  - list_items(): list the papers in the CURRENT SCOPE (key, title, year, tags). If the user has selected a collection/scope, this lists only those papers; otherwise the whole library. Use it for library-wide or bulk tasks (e.g. "classify these papers", "tag everything").
+  When the user has selected a scope/collection, BOTH search_library and list_items are confined to it — stay within the selected papers, never widen to the whole library. For a bulk task like classification: call list_items, judge each paper by its title or read_item, then issue the add_to_collection / add_tags calls (you may issue many in one turn). If there are many papers, handle a bounded batch and tell the user how many you processed and how many remain.
   Never end your turn with an empty reply: always finish with a short summary of what you did and what remains, in the user's language.
   After acting, tell the user in one line exactly what you changed.`
 

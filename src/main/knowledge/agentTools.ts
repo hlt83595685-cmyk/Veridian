@@ -15,6 +15,7 @@ import { RELATION_TYPES } from '../db/relations'
 import { assertReadable } from '../security/pathGuard'
 import type { ToolDef } from './providers'
 import type { RetrievalStep } from '../../shared/types'
+import type { ScopeFilter } from './search'
 
 const READ_ITEM_CHARS = 8000
 
@@ -105,13 +106,17 @@ function step(tool: Step, label: string): RetrievalStep {
 	return { tool, label }
 }
 
-export async function executeAgentTool(name: string, argsJson: string): Promise<{ result: string; step: RetrievalStep }> {
+export async function executeAgentTool(name: string, argsJson: string, filter?: ScopeFilter): Promise<{ result: string; step: RetrievalStep }> {
 	let a: Record<string, unknown>
 	try { a = JSON.parse(argsJson || '{}') } catch { return { result: 'error: invalid arguments', step: step(name as Step, '(bad args)') } }
 	const key = String(a.item_key ?? '')
 
 	if (name === 'list_items') {
-		const items = listItems()
+		let items = listItems()
+		if (filter) {
+			const inScope = new Set(filter.itemIds)
+			items = items.filter((it) => inScope.has(it.id))
+		}
 		const cap = 300
 		const shown = items.slice(0, cap)
 		const lines = shown.map((it) => `${it.key}\t${it.title ?? '(untitled)'}${it.year ? ` (${it.year})` : ''}${it.tags?.length ? ` [${it.tags.join(', ')}]` : ''}`)

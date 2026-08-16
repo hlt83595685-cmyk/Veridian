@@ -89,6 +89,12 @@ suite('agent write tools', () => {
 		expect(result).toMatch(/Paper B/)
 	})
 
+	it('list_items respects a scope filter', async () => {
+		const { result } = await executeAgentTool('list_items', '{}', { itemIds: [1] })
+		expect(result).toMatch(/Paper A/)
+		expect(result).not.toMatch(/Paper B/)
+	})
+
 	it('read_item reports when a paper has no markdown yet', async () => {
 		const { result, step } = await executeAgentTool('read_item', JSON.stringify({ item_key: 'AAAA1111' }))
 		expect(step.tool).toBe('read_item')
