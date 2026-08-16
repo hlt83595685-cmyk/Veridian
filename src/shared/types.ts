@@ -193,6 +193,8 @@ export interface ControlPlaneStatus {
 // One agent action during a chat turn, shown in the retrieval-trace panel.
 export interface RetrievalStep {
   tool: 'search_library' | 'read_context' | 'get_item_info' | 'load_skill'
+    | 'create_note' | 'add_tags' | 'add_to_collection' | 'link_items'
+    | 'update_metadata' | 'set_star' | 'list_collections' | 'list_items' | 'list_tags' | 'read_notes' | 'read_item'
   label: string                                          // query / itemKey:seq / itemKey / skill name
   hits?: { key: string; title: string; chars: number }[] // search_library only: hit papers + real excerpt length
 }

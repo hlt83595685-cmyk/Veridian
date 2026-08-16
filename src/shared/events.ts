@@ -26,6 +26,8 @@ export type DomainEvent =
   | { type: 'tag.changed'; itemIds: number[] }
   | { type: 'collection.changed'; ids: number[] }
   | { type: 'creator.changed'; itemIds: number[] }
+  | { type: 'note.changed'; itemIds: number[] }
+  | { type: 'relation.changed'; itemIds: number[] }
   | { type: 'settings.changed'; keys: string[] }
   | { type: 'job.progress'; job: JobStatus }
   | { type: 'workspace.changed'; ids: string[] }

@@ -14,6 +14,7 @@ import { truncateAtBoundary } from './truncate'
 import { getChatConfig, chatStream, type ChatMessage, type ToolDef } from './providers'
 import { extractCitations } from './citations'
 import { listInstalledSkills, getSkillBody } from './skills'
+import { AGENT_ACTION_TOOLS, AGENT_ACTION_TOOL_NAMES, executeAgentTool } from './agentTools'
 import { readFileSync } from 'fs'
 import { basename } from 'path'
 import type { KnowledgeRef } from '../../shared/ipc-contract'
@@ -98,6 +99,8 @@ const LOAD_SKILL_TOOL: ToolDef = {
 }
 
 async function runTool(name: string, argsJson: string, filter?: import('./search').ScopeFilter): Promise<{ result: string; step: RetrievalStep }> {
+	if (AGENT_ACTION_TOOL_NAMES.has(name)) return executeAgentTool(name, argsJson, filter)
+
 	let args: Record<string, unknown>
 	try { args = JSON.parse(argsJson || '{}') } catch { return { result: 'error: invalid arguments', step: { tool: 'search_library', label: '(bad args)' } } }
 
@@ -219,11 +222,23 @@ const BASE_SYSTEM_PROMPT = `You are the research assistant inside Veridian, a re
 
 Rules:
 - If the user has attached specific papers or files for this turn (they appear as "[Attached paper: ...]" or "[Attached file: ...]" system messages), answer directly from that attached content. Do NOT call search_library, and do NOT add [^...] citation markers for it -- the attached text has no seq numbers and none are needed. Only search if the attached material genuinely lacks what's asked.
-- Otherwise, ALWAYS search the library before answering; never answer from general knowledge alone. If the library has nothing relevant, say so plainly.
+- Otherwise, answer ONLY from the library's actual content — never from general knowledge, and never from paper titles alone. To get that content you MUST consult it: either call search_library (finds the most relevant passages across the library, honours the selected scope, and gives citable [^item_key:seq] markers), OR — when a small collection is selected and the user wants an overview/analysis of those specific papers — read them in full with read_item. Calling list_items only gives you titles; that is NOT enough to answer a question, so never answer from a list_items result alone. If the library has nothing relevant, say so plainly.
 - For claims drawn from search_library results, cite with the marker [^item_key:seq] taken from those results (e.g. [^AB12CD34:5]), placed inline right after the claim.
 - Answer in the same language the user asked in.
 - Be concise and factual. Quote numbers and findings exactly as the excerpts state them.
-- Write every mathematical variable, symbol, or formula in LaTeX: inline as $...$ (e.g. the coefficient $\\beta_1$) and standalone equations as $$...$$. Never write math as plain text.`
+- Write every mathematical variable, symbol, or formula in LaTeX: inline as $...$ (e.g. the coefficient $\\beta_1$) and standalone equations as $$...$$. Never write math as plain text.
+- Library actions: you can MODIFY the user's library, but ONLY when they explicitly ask you to organise, annotate, or fix something (e.g. "tag this", "add a note", "link these two", "put it in a collection", "fix the year"). For plain questions you must NEVER modify anything.
+  - create_note(item_key, title, content): save a note on a paper.
+  - add_tags(item_key, tags): add keyword tags (call list_tags first to reuse existing names).
+  - add_to_collection(item_key, collection): file a paper into a collection (call list_collections first).
+  - link_items(from_key, to_key, rel_type): connect two papers; rel_type ∈ extends | contradicts | related | cites | same_method.
+  - update_metadata(item_key, ...fields): correct bibliographic fields.
+  - set_star(item_key, starred): mark a paper important.
+  - read_item(item_key): read ONE specific paper's full text, when you already know which paper you want (e.g. from list_items or an @-mention). Don't use search_library to re-read a paper whose key you already have.
+  - list_items(): list the papers in the CURRENT SCOPE (key, title, year, tags). If the user has selected a collection/scope, this lists only those papers; otherwise the whole library. Use it ONLY for explicit library-management/bulk tasks (e.g. "classify these papers", "tag everything") — NEVER to answer a question.
+  When the user has selected a scope/collection, BOTH search_library and list_items are confined to it — stay within the selected papers, never widen to the whole library. For a bulk task like classification: call list_items, judge each paper by its title or read_item, then issue the add_to_collection / add_tags calls (you may issue many in one turn). If there are many papers, handle a bounded batch and tell the user how many you processed and how many remain.
+  Never end your turn with an empty reply: always finish with a short summary of what you did and what remains, in the user's language.
+  After acting, tell the user in one line exactly what you changed.`
 
 /** Appends an installed-skills catalog (name + one-line description) so the
  *  model can decide on its own when a skill's procedure applies -- mirrors
@@ -336,7 +351,11 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 		...resolveRefs(refs),
 		...getMessages(convId).map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
 	]
-	const tools = listInstalledSkills().length ? [...BASE_TOOLS, LOAD_SKILL_TOOL] : BASE_TOOLS
+	const tools = [
+		...BASE_TOOLS,
+		...AGENT_ACTION_TOOLS,
+		...(listInstalledSkills().length ? [LOAD_SKILL_TOOL] : []),
+	]
 	const ac = new AbortController()
 	abortControllers.set(convId, ac)
 	const steps: RetrievalStep[] = []
@@ -358,6 +377,18 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 					messages.push({ role: 'tool', content: toolResult, tool_call_id: tc.id })
 				}
 				finalText = result.content
+			}
+			if (!finalText.trim()) {
+				// The model spent its whole tool-call budget without ever producing a
+				// final answer (e.g. it looped on tools). Re-run once with NO tools so
+				// it must summarise from what it already has — the user never gets a
+				// blank bubble. Do NOT append a user message here: after tool-result
+				// turns that would create two consecutive user turns, which the
+				// Anthropic (claude-subscription) API rejects with a 400.
+				const wrap = await chatStream(cfg, messages, [], (delta) => {
+					emit({ type: 'knowledge.chatDelta', conversationId: convId, delta })
+				}, ac.signal)
+				finalText = wrap.content
 			}
 			const citations = resolveCitations(extractCitations(finalText))
 			kdb.prepare('INSERT INTO messages (conversation_id, role, content, citations, steps) VALUES (?, ?, ?, ?, ?)')
