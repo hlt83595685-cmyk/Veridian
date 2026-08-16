@@ -18,6 +18,7 @@ suite('agent write tools', () => {
 		db = new Database(':memory:')
 		db.exec(`
 			CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT, title TEXT, deleted INTEGER DEFAULT 0,
+				library_id INTEGER DEFAULT 1,
 				abstract TEXT, year INTEGER, journal TEXT, doi TEXT, url TEXT, publisher TEXT, volume TEXT,
 				issue TEXT, pages TEXT, isbn TEXT, language TEXT, extra TEXT, updated_at INTEGER DEFAULT 0, version INTEGER DEFAULT 0, starred INTEGER DEFAULT 0);
 			CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE);
@@ -78,6 +79,13 @@ suite('agent write tools', () => {
 	it('returns an error step for an unknown item key', async () => {
 		const { result } = await executeAgentTool('add_tags', JSON.stringify({ item_key: 'ZZZZ', tags: ['x'] }))
 		expect(result).toMatch(/not found/i)
+	})
+
+	it('list_items enumerates the library', async () => {
+		const { result, step } = await executeAgentTool('list_items', '{}')
+		expect(step.tool).toBe('list_items')
+		expect(result).toMatch(/Paper A/)
+		expect(result).toMatch(/Paper B/)
 	})
 
 	it('exposes the action tool name set', () => {

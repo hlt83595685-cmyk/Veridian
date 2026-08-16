@@ -234,6 +234,9 @@ Rules:
   - link_items(from_key, to_key, rel_type): connect two papers; rel_type ∈ extends | contradicts | related | cites | same_method.
   - update_metadata(item_key, ...fields): correct bibliographic fields.
   - set_star(item_key, starred): mark a paper important.
+  - list_items(): list every paper in the library. Use this for library-wide or bulk tasks (e.g. "classify all papers", "tag everything"). NEVER use search_library to enumerate the library — it only finds papers by topic.
+  For a bulk task: call list_items, decide the scheme, then issue the add_to_collection / add_tags calls — you may issue many in a single turn. If the library is large, handle a bounded batch, then tell the user how many you processed and how many remain (or ask them to narrow the scope).
+  Never end your turn with an empty reply: always finish with a short summary of what you did and what remains, in the user's language.
   After acting, tell the user in one line exactly what you changed.`
 
 /** Appends an installed-skills catalog (name + one-line description) so the
@@ -373,6 +376,15 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 					messages.push({ role: 'tool', content: toolResult, tool_call_id: tc.id })
 				}
 				finalText = result.content
+			}
+			if (!finalText.trim()) {
+				// The model spent its whole tool-call budget without ever producing a
+				// final answer (e.g. it looped on tools). Force one tool-less completion
+				// so the user always gets a summary instead of a silent empty bubble.
+				const wrap = await chatStream(cfg, [...messages, { role: 'user', content: 'You have run out of tool steps. In the user\'s language, briefly summarise what you did and what remains.' }], [], (delta) => {
+					emit({ type: 'knowledge.chatDelta', conversationId: convId, delta })
+				}, ac.signal)
+				finalText = wrap.content
 			}
 			const citations = resolveCitations(extractCitations(finalText))
 			kdb.prepare('INSERT INTO messages (conversation_id, role, content, citations, steps) VALUES (?, ?, ?, ?, ?)')

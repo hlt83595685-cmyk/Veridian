@@ -29,6 +29,7 @@ export interface Item {
   added_by: string | null
   conversion_failed: number
   starred: number   // 0 = normal, 1 = marked important (local-only)
+  tags?: string[]   // populated by getAllItemsWithTags / getItemsByCollectionWithTags
 }
 
 /**

@@ -19,6 +19,7 @@ const ICON_PATHS: Record<RetrievalStep['tool'], string[]> = {
 	update_metadata: ACTION_ICON,
 	set_star: ACTION_ICON,
 	list_collections: ACTION_ICON,
+	list_items: ACTION_ICON,
 	list_tags: ACTION_ICON,
 	read_notes: ACTION_ICON,
 }

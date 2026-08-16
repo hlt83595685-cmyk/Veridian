@@ -7,7 +7,7 @@
 import { getDb } from '../db'
 import { mergeTagsForItem, listAll as listAllTags } from '../services/TagService'
 import { listAll as listAllCollections, createCollection, addItemToCollection } from '../services/CollectionService'
-import { updateItem, setStarred } from '../services/ItemService'
+import { updateItem, setStarred, listItems } from '../services/ItemService'
 import { createNote, listNotesByItem } from '../services/NoteService'
 import { linkItems } from '../services/RelationService'
 import { RELATION_TYPES } from '../db/relations'
@@ -28,6 +28,10 @@ function resolveItem(key: string): { id: number; title: string | null } | null {
 }
 
 export const AGENT_READ_TOOLS: ToolDef[] = [
+	{ type: 'function', function: {
+			name: 'list_items',
+			description: 'List the papers in the current library (key, title, year, existing tags). Use this — NOT search_library — for library-wide or bulk tasks such as classifying or tagging every paper. search_library is only for finding papers by topic/content.',
+			parameters: { type: 'object', properties: {} } } },
 	{ type: 'function', function: {
 			name: 'list_collections',
 			description: 'List the collections (folders) in the current library, so you can file papers correctly.',
@@ -98,6 +102,14 @@ export async function executeAgentTool(name: string, argsJson: string): Promise<
 	try { a = JSON.parse(argsJson || '{}') } catch { return { result: 'error: invalid arguments', step: step(name as Step, '(bad args)') } }
 	const key = String(a.item_key ?? '')
 
+	if (name === 'list_items') {
+		const items = listItems()
+		const cap = 300
+		const shown = items.slice(0, cap)
+		const lines = shown.map((it) => `${it.key}\t${it.title ?? '(untitled)'}${it.year ? ` (${it.year})` : ''}${it.tags?.length ? ` [${it.tags.join(', ')}]` : ''}`)
+		const note = items.length > cap ? `\n… and ${items.length - cap} more (showing first ${cap})` : ''
+		return { result: (lines.join('\n') || '(library is empty)') + note, step: step('list_items', `${items.length} items`) }
+	}
 	if (name === 'list_collections') {
 		const names = listAllCollections().map((c) => c.name)
 		return { result: names.length ? names.join('\n') : '(no collections)', step: step('list_collections', `${names.length} collections`) }
