@@ -19,14 +19,14 @@ import type { ScopeFilter } from './search'
 
 const READ_ITEM_CHARS = 8000
 
-function resolveItem(key: string): { id: number; title: string | null } | null {
+function resolveItem(key: string): { id: number; key: string; title: string | null } | null {
 	const db = getDb()
-	let row = db.prepare('SELECT id, title FROM items WHERE key = ? AND deleted = 0')
-		.get(key) as { id: number; title: string | null } | undefined
+	let row = db.prepare('SELECT id, key, title FROM items WHERE key = ? AND deleted = 0')
+		.get(key) as { id: number; key: string; title: string | null } | undefined
 	if (!row) {
 		const like = key.replace(/[\\%_]/g, '\\$&') + '%'
-		const hits = db.prepare("SELECT id, title FROM items WHERE key LIKE ? ESCAPE '\\' AND deleted = 0 LIMIT 2")
-			.all(like) as { id: number; title: string | null }[]
+		const hits = db.prepare("SELECT id, key, title FROM items WHERE key LIKE ? ESCAPE '\\' AND deleted = 0 LIMIT 2")
+			.all(like) as { id: number; key: string; title: string | null }[]
 		if (hits.length === 1) row = hits[0]
 	}
 	return row ?? null
@@ -144,7 +144,9 @@ export async function executeAgentTool(name: string, argsJson: string, filter?: 
 		if (!md) return { result: `no converted markdown text is available for "${item.title ?? key}" yet`, step: step('read_item', item.title ?? key) }
 		try {
 			const text = readFileSync(assertReadable(md.path), 'utf-8').slice(0, READ_ITEM_CHARS)
-			return { result: text, step: step('read_item', item.title ?? key) }
+			// Carry the paper as a "hit" so the trace summary counts it as a source
+			// (reading a paper in full is a source just like a search excerpt).
+			return { result: text, step: { tool: 'read_item', label: item.title ?? key, hits: [{ key: item.key, title: item.title ?? item.key, chars: text.length }] } }
 		} catch (err) {
 			return { result: `could not read "${item.title ?? key}": ${(err as Error).message}`, step: step('read_item', item.title ?? key) }
 		}
