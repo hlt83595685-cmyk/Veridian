@@ -35,6 +35,23 @@ export function setTagsForItem(itemId: number, tagNames: string[]): void {
   })()
 }
 
+/** Add tags to an item without clearing existing ones (used by the AI). */
+export function addTagsToItem(itemId: number, tagNames: string[]): void {
+  const db = getDb()
+  const upsertTag = db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)')
+  const getTag = db.prepare('SELECT id FROM tags WHERE name = ?')
+  const linkTag = db.prepare('INSERT OR IGNORE INTO item_tags (item_id, tag_id) VALUES (?, ?)')
+  db.transaction(() => {
+    for (const raw of tagNames) {
+      const name = raw.trim()
+      if (!name) continue
+      upsertTag.run(name)
+      const row = getTag.get(name) as { id: number }
+      linkTag.run(itemId, row.id)
+    }
+  })()
+}
+
 export function deleteOrphanTags(): void {
   getDb().prepare(`
     DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM item_tags)

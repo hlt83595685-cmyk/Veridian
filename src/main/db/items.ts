@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto'
 import { getDb } from './index'
 import { getAttribution } from '../services/attribution'
+import { deleteRelationsForItem } from './relations'
+import { deleteNotesForItem } from './notes'
 
 export interface Item {
   id: number
@@ -197,6 +199,8 @@ export function restoreItem(id: number): void {
 }
 
 export function permanentlyDeleteItem(id: number): void {
+  deleteRelationsForItem(id)
+  deleteNotesForItem(id)
   getDb().prepare('DELETE FROM items WHERE id = ?').run(id)
 }
 
