@@ -5,13 +5,12 @@
 // Service (which emits a domain event), and returns a short confirmation plus a
 // RetrievalStep for the trace panel. AI-created notes/edges are tagged origin='ai'.
 import { getDb } from '../db'
-import { addTagsToItem, getAllTags } from '../db/tags'
-import { getAllCollections, createCollection, addItemToCollection } from '../db/collections'
-import { updateItem, setStarred } from '../db/items'
+import { mergeTagsForItem, listAll as listAllTags } from '../services/TagService'
+import { listAll as listAllCollections, createCollection, addItemToCollection } from '../services/CollectionService'
+import { updateItem, setStarred } from '../services/ItemService'
 import { createNote, listNotesByItem } from '../services/NoteService'
 import { linkItems } from '../services/RelationService'
 import { RELATION_TYPES } from '../db/relations'
-import { emit } from '../core/Notifier'
 import type { ToolDef } from './providers'
 import type { RetrievalStep } from '../../shared/types'
 
@@ -100,11 +99,11 @@ export async function executeAgentTool(name: string, argsJson: string): Promise<
 	const key = String(a.item_key ?? '')
 
 	if (name === 'list_collections') {
-		const names = getAllCollections().map((c) => c.name)
+		const names = listAllCollections().map((c) => c.name)
 		return { result: names.length ? names.join('\n') : '(no collections)', step: step('list_collections', `${names.length} collections`) }
 	}
 	if (name === 'list_tags') {
-		const names = getAllTags().map((t) => t.name)
+		const names = listAllTags().map((t) => t.name)
 		return { result: names.length ? names.join(', ') : '(no tags)', step: step('list_tags', `${names.length} tags`) }
 	}
 	if (name === 'read_notes') {
@@ -122,19 +121,17 @@ export async function executeAgentTool(name: string, argsJson: string): Promise<
 	if (name === 'add_tags') {
 		const item = resolveItem(key); if (!item) return { result: `item not found: ${key}`, step: step('add_tags', key) }
 		const tags = Array.isArray(a.tags) ? a.tags.map(String) : []
-		addTagsToItem(item.id, tags)
-		emit({ type: 'tag.changed', itemIds: [item.id] })
-		return { result: `tagged "${item.title ?? key}" with: ${tags.join(', ')}`, step: step('add_tags', tags.join(', ')) }
+		const res = mergeTagsForItem(item.id, tags)
+		return { result: `tagged "${item.title ?? key}" (+${res.added})`, step: step('add_tags', tags.join(', ')) }
 	}
 	if (name === 'add_to_collection') {
 		const item = resolveItem(key); if (!item) return { result: `item not found: ${key}`, step: step('add_to_collection', key) }
 		const cname = String(a.collection ?? '').trim()
 		if (!cname) return { result: 'error: empty collection name', step: step('add_to_collection', '(empty)') }
-		const existing = getAllCollections().find((c) => c.name === cname)
+		const existing = listAllCollections().find((c) => c.name.toLowerCase() === cname.toLowerCase())
 		const col = existing ?? createCollection(cname)
 		addItemToCollection(col.id, item.id)
-		emit({ type: 'collection.changed', ids: [col.id] })
-		return { result: `filed "${item.title ?? key}" into "${cname}"`, step: step('add_to_collection', cname) }
+		return { result: `filed "${item.title ?? key}" into "${col.name}"`, step: step('add_to_collection', col.name) }
 	}
 	if (name === 'link_items') {
 		const src = resolveItem(String(a.from_key ?? '')); const dst = resolveItem(String(a.to_key ?? ''))
@@ -155,13 +152,11 @@ export async function executeAgentTool(name: string, argsJson: string): Promise<
 			if (a[f] !== undefined) patch[f] = a[f]
 		}
 		updateItem(item.id, patch as Parameters<typeof updateItem>[1])
-		emit({ type: 'item.modified', ids: [item.id] })
 		return { result: `updated metadata of "${item.title ?? key}"`, step: step('update_metadata', Object.keys(patch).join(', ')) }
 	}
 	if (name === 'set_star') {
 		const item = resolveItem(key); if (!item) return { result: `item not found: ${key}`, step: step('set_star', key) }
 		setStarred(item.id, Boolean(a.starred))
-		emit({ type: 'item.modified', ids: [item.id] })
 		return { result: `${a.starred ? 'starred' : 'unstarred'} "${item.title ?? key}"`, step: step('set_star', item.title ?? key) }
 	}
 
