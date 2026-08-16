@@ -14,6 +14,7 @@ import { truncateAtBoundary } from './truncate'
 import { getChatConfig, chatStream, type ChatMessage, type ToolDef } from './providers'
 import { extractCitations } from './citations'
 import { listInstalledSkills, getSkillBody } from './skills'
+import { AGENT_ACTION_TOOLS, AGENT_ACTION_TOOL_NAMES, executeAgentTool } from './agentTools'
 import { readFileSync } from 'fs'
 import { basename } from 'path'
 import type { KnowledgeRef } from '../../shared/ipc-contract'
@@ -98,6 +99,8 @@ const LOAD_SKILL_TOOL: ToolDef = {
 }
 
 async function runTool(name: string, argsJson: string, filter?: import('./search').ScopeFilter): Promise<{ result: string; step: RetrievalStep }> {
+	if (AGENT_ACTION_TOOL_NAMES.has(name)) return executeAgentTool(name, argsJson)
+
 	let args: Record<string, unknown>
 	try { args = JSON.parse(argsJson || '{}') } catch { return { result: 'error: invalid arguments', step: { tool: 'search_library', label: '(bad args)' } } }
 
@@ -223,7 +226,15 @@ Rules:
 - For claims drawn from search_library results, cite with the marker [^item_key:seq] taken from those results (e.g. [^AB12CD34:5]), placed inline right after the claim.
 - Answer in the same language the user asked in.
 - Be concise and factual. Quote numbers and findings exactly as the excerpts state them.
-- Write every mathematical variable, symbol, or formula in LaTeX: inline as $...$ (e.g. the coefficient $\\beta_1$) and standalone equations as $$...$$. Never write math as plain text.`
+- Write every mathematical variable, symbol, or formula in LaTeX: inline as $...$ (e.g. the coefficient $\\beta_1$) and standalone equations as $$...$$. Never write math as plain text.
+- Library actions: you can MODIFY the user's library, but ONLY when they explicitly ask you to organise, annotate, or fix something (e.g. "tag this", "add a note", "link these two", "put it in a collection", "fix the year"). For plain questions you must NEVER modify anything.
+  - create_note(item_key, title, content): save a note on a paper.
+  - add_tags(item_key, tags): add keyword tags (call list_tags first to reuse existing names).
+  - add_to_collection(item_key, collection): file a paper into a collection (call list_collections first).
+  - link_items(from_key, to_key, rel_type): connect two papers; rel_type ∈ extends | contradicts | related | cites | same_method.
+  - update_metadata(item_key, ...fields): correct bibliographic fields.
+  - set_star(item_key, starred): mark a paper important.
+  After acting, tell the user in one line exactly what you changed.`
 
 /** Appends an installed-skills catalog (name + one-line description) so the
  *  model can decide on its own when a skill's procedure applies -- mirrors
@@ -336,7 +347,11 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 		...resolveRefs(refs),
 		...getMessages(convId).map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
 	]
-	const tools = listInstalledSkills().length ? [...BASE_TOOLS, LOAD_SKILL_TOOL] : BASE_TOOLS
+	const tools = [
+		...BASE_TOOLS,
+		...AGENT_ACTION_TOOLS,
+		...(listInstalledSkills().length ? [LOAD_SKILL_TOOL] : []),
+	]
 	const ac = new AbortController()
 	abortControllers.set(convId, ac)
 	const steps: RetrievalStep[] = []
