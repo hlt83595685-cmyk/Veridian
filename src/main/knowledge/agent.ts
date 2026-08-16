@@ -359,6 +359,7 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 	const ac = new AbortController()
 	abortControllers.set(convId, ac)
 	const steps: RetrievalStep[] = []
+	console.log('[dbg-scope] runTurn conv=%d filter=%s', convId, filter ? `${filter.itemIds.length} items [${filter.itemIds.slice(0, 8).join(',')}...]` : 'NONE (whole library)')
 	void (async () => {
 		try {
 			let finalText = ''
@@ -371,6 +372,7 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 				messages.push({ role: 'assistant', content: result.content || null, tool_calls: result.toolCalls })
 				for (const tc of result.toolCalls) {
 					emit({ type: 'knowledge.chatState', conversationId: convId, state: 'searching', detail: tc.function.name })
+					console.log('[dbg-scope] tool=%s args=%s', tc.function.name, (tc.function.arguments || '').slice(0, 120))
 					const { result: toolResult, step } = await runTool(tc.function.name, tc.function.arguments, filter)
 					steps.push(step)
 					emit({ type: 'knowledge.step', conversationId: convId, step })
@@ -410,6 +412,7 @@ export async function ask(question: string, conversationId: number | null, refs?
 
 	let convId = conversationId
 	const scope = scopeCollectionId ?? null
+	console.log('[dbg-scope] ask received scopeCollectionId=%o -> scope=%o', scopeCollectionId, scope)
 	if (convId === null) {
 		const info = kdb.prepare('INSERT INTO conversations (workspace_id, title, scope_collection_id) VALUES (?, ?, ?)')
 			.run(ws, question.slice(0, 60), scope)
