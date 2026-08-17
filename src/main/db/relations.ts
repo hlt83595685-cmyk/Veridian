@@ -53,3 +53,42 @@ export function deleteRelationsForItem(itemId: number): void {
     DELETE FROM relations WHERE (src_kind = 'item' AND src_id = ?) OR (dst_kind = 'item' AND dst_id = ?)
   `).run(itemId, itemId)
 }
+
+// Wikilinks live in the same edge table as the AI's typed links, but with a
+// dedicated rel_type outside RELATION_TYPES (they are user-authored [[ ]], not
+// the AI's extends/contradicts/... vocabulary).
+export const WIKILINK_REL = 'wikilink'
+export type LinkEndpoint = { kind: 'item' | 'note'; id: number }
+
+/** Replace ALL wikilink out-edges of a note with the given target set (add new,
+ *  drop removed). Self-links (note -> itself) are ignored. */
+export function setWikilinksForNote(noteId: number, targets: LinkEndpoint[]): void {
+  const db = getDb()
+  const del = db.prepare("DELETE FROM relations WHERE src_kind = 'note' AND src_id = ? AND rel_type = ?")
+  const ins = db.prepare(`
+    INSERT OR IGNORE INTO relations (src_kind, src_id, dst_kind, dst_id, rel_type, origin)
+    VALUES ('note', ?, ?, ?, ?, 'user')
+  `)
+  db.transaction(() => {
+    del.run(noteId, WIKILINK_REL)
+    for (const t of targets) {
+      if (t.kind === 'note' && t.id === noteId) continue
+      ins.run(noteId, t.kind, t.id, WIKILINK_REL)
+    }
+  })()
+}
+
+/** All edges pointing AT this object (incoming), any rel_type. */
+export function listBacklinks(kind: 'item' | 'note', id: number): Relation[] {
+  return getDb().prepare(
+    'SELECT * FROM relations WHERE dst_kind = ? AND dst_id = ? ORDER BY id'
+  ).all(kind, id) as Relation[]
+}
+
+/** Remove every edge where this note is an endpoint (src or dst). For when a
+ *  note is deleted. */
+export function deleteRelationsForNote(noteId: number): void {
+  getDb().prepare(
+    "DELETE FROM relations WHERE (src_kind = 'note' AND src_id = ?) OR (dst_kind = 'note' AND dst_id = ?)"
+  ).run(noteId, noteId)
+}

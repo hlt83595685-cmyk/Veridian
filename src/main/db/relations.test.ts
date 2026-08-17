@@ -8,7 +8,7 @@ const suite = dbUsable ? describe : describe.skip
 let db: Database.Database
 vi.mock('./index', () => ({ getDb: () => db }))
 
-import { RELATION_TYPES, linkItems, unlink, listRelationsForItem, deleteRelationsForItem } from './relations'
+import { RELATION_TYPES, linkItems, unlink, listRelationsForItem, deleteRelationsForItem, setWikilinksForNote, listBacklinks, deleteRelationsForNote } from './relations'
 
 suite('relations repo', () => {
   beforeEach(() => {
@@ -53,5 +53,31 @@ suite('relations repo', () => {
 
   it('exposes the fixed rel_type vocabulary', () => {
     expect(RELATION_TYPES).toEqual(['extends', 'contradicts', 'related', 'cites', 'same_method'])
+  })
+
+  it('sets a note\'s wikilink out-edges idempotently and reconciles on change', () => {
+    setWikilinksForNote(5, [{ kind: 'item', id: 2 }, { kind: 'note', id: 9 }])
+    expect(listBacklinks('item', 2)).toHaveLength(1)
+    expect(listBacklinks('note', 9)).toHaveLength(1)
+    setWikilinksForNote(5, [{ kind: 'note', id: 9 }, { kind: 'item', id: 3 }])
+    expect(listBacklinks('item', 2)).toHaveLength(0)
+    expect(listBacklinks('item', 3)).toHaveLength(1)
+    expect(listBacklinks('note', 9)).toHaveLength(1)
+  })
+
+  it('listBacklinks returns incoming edges of any rel_type', () => {
+    linkItems(1, 2, 'extends', 'ai')
+    setWikilinksForNote(7, [{ kind: 'item', id: 2 }])
+    const back = listBacklinks('item', 2)
+    expect(back).toHaveLength(2)
+    expect(back.map((b) => b.rel_type).sort()).toEqual(['extends', 'wikilink'])
+  })
+
+  it('deleteRelationsForNote removes edges where the note is src or dst', () => {
+    setWikilinksForNote(5, [{ kind: 'item', id: 2 }])
+    setWikilinksForNote(8, [{ kind: 'note', id: 5 }])
+    deleteRelationsForNote(5)
+    expect(listBacklinks('item', 2)).toHaveLength(0)
+    expect(listBacklinks('note', 5)).toHaveLength(0)
   })
 })
