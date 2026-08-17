@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useUiStore } from '../../stores/uiStore'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
@@ -53,6 +53,10 @@ export function KnowledgePage(): JSX.Element {
 	const [chatConfigured, setChatConfigured] = useState<boolean | null>(null)
 	const streamingRef = useRef('')
 	const bottomRef = useRef<HTMLDivElement>(null)
+	const chatScrollRef = useRef<HTMLDivElement>(null)
+	const turnAnchorRef = useRef<HTMLDivElement>(null)
+	const pinTopRef = useRef(false)
+	const [spacerH, setSpacerH] = useState(0)
 	const activeConvIdRef = useRef<number | null>(null)
 	activeConvIdRef.current = conversationId
 	// Synchronous re-entrancy guard for send(). chatState alone isn't safe here:
@@ -230,7 +234,14 @@ export function KnowledgePage(): JSX.Element {
 	}, [])
 
 	useEffect(() => {
-		bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+		// Subsequent turns pin the new question to the top of the chat (room below
+		// is provided by the spacer); the first turn / streaming just follows the
+		// bottom.
+		if (pinTopRef.current && turnAnchorRef.current) {
+			turnAnchorRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' })
+		} else {
+			bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+		}
 	}, [messages, liveStep, chatState])
 
 	async function refreshConversations(): Promise<void> {
@@ -256,6 +267,8 @@ export function KnowledgePage(): JSX.Element {
 		setMention(null)
 		setScopeCollectionId(null)
 		setActiveMode(null)
+		pinTopRef.current = false
+		setSpacerH(0)
 	}
 
 	async function openConversation(id: number): Promise<void> {
@@ -288,6 +301,11 @@ export function KnowledgePage(): JSX.Element {
 		setEditing(null)
 		streamingRef.current = ''
 		setLiveStep(null)
+		// Subsequent turns pin the new question to the top of the chat; the spacer
+		// provides the room needed to scroll it up. The very first turn stays natural.
+		const subsequentTurn = messages.length > 0
+		pinTopRef.current = subsequentTurn
+		if (subsequentTurn) setSpacerH(chatScrollRef.current?.clientHeight ?? 0)
 		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [], refs: sentRefs }])
 		setChatState('searching')
 		if (wasEditing && conversationId !== null) {
@@ -398,7 +416,7 @@ export function KnowledgePage(): JSX.Element {
 					</span>
 				</div>
 
-				<div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+				<div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 					{chatConfigured === false && (
 						<div style={notConfiguredBanner}>
 							<span>{t('knowledge.notConfigured')}</span>
@@ -410,17 +428,19 @@ export function KnowledgePage(): JSX.Element {
 						</div>
 					)}
 					{messages.map((m) => (
-						<ChatMessageView
-							key={m.id}
-							role={m.role}
-							content={m.content}
-							citations={m.citations}
-							refs={m.refs}
-							streaming={m.id === 'streaming'}
-							isLast={!busy && (m.role === 'assistant' ? m.id === lastId : m.id === lastUserId)}
-							onRegenerate={m.role === 'assistant' && m.id === lastId ? regenerate : undefined}
-							onEdit={m.role === 'user' && m.id === lastUserId ? () => startEdit(m) : undefined}
-						/>
+						<Fragment key={m.id}>
+							{m.role === 'user' && m.id === lastUserId && <div ref={turnAnchorRef} style={{ scrollMarginTop: 12 }} />}
+							<ChatMessageView
+								role={m.role}
+								content={m.content}
+								citations={m.citations}
+								refs={m.refs}
+								streaming={m.id === 'streaming'}
+								isLast={!busy && (m.role === 'assistant' ? m.id === lastId : m.id === lastUserId)}
+								onRegenerate={m.role === 'assistant' && m.id === lastId ? regenerate : undefined}
+								onEdit={m.role === 'user' && m.id === lastUserId ? () => startEdit(m) : undefined}
+							/>
+						</Fragment>
 					))}
 					{busy && (
 						<div style={{ alignSelf: 'flex-start', maxWidth: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--foreground)' }}>
@@ -449,6 +469,7 @@ export function KnowledgePage(): JSX.Element {
 						</div>
 					)}
 					<div ref={bottomRef} />
+					<div style={{ flexShrink: 0, height: spacerH }} />
 				</div>
 
 				<div style={{ padding: '12px 16px 16px', borderTop: '1px solid var(--separator)', position: 'relative' }}>
@@ -482,7 +503,12 @@ export function KnowledgePage(): JSX.Element {
 										const v = e.target.value
 										const nextMode = v === 'qa' ? null : v
 										setActiveMode(nextMode)
-										if (nextMode && input.trim() === '') setInput(t('knowledge.template.' + nextMode))
+										// Replace the input when it's empty OR still holds an
+										// unedited task template (so switching tasks overwrites the
+										// previous template), but never clobber text the user typed.
+										const isAutoTemplate = TASK_MODES.some((m) => input === t('knowledge.template.' + m))
+										if (nextMode && (input.trim() === '' || isAutoTemplate)) setInput(t('knowledge.template.' + nextMode))
+										else if (!nextMode && isAutoTemplate) setInput('')
 									}}
 									style={taskSelectStyle}
 								>
@@ -563,7 +589,7 @@ const backBtnStyle: React.CSSProperties = {
 }
 
 const inputStyle: React.CSSProperties = {
-	flex: 1, minHeight: 38, maxHeight: 120, padding: '9px 12px',
+	flex: 1, minHeight: 68, maxHeight: 200, padding: '10px 12px',
 	border: 'none', background: 'transparent', color: 'var(--foreground)',
 	fontSize: 13, resize: 'none', fontFamily: 'inherit', outline: 'none',
 }
