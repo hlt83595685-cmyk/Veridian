@@ -49,6 +49,7 @@ export function KnowledgePage(): JSX.Element {
 	const [input, setInput] = useState('')
 	const [chatState, setChatState] = useState<ChatState>('idle')
 	const [stateDetail, setStateDetail] = useState<string | null>(null)
+	const [liveStep, setLiveStep] = useState<RetrievalStep | null>(null)
 	const [chatConfigured, setChatConfigured] = useState<boolean | null>(null)
 	const streamingRef = useRef('')
 	const bottomRef = useRef<HTMLDivElement>(null)
@@ -174,13 +175,7 @@ export function KnowledgePage(): JSX.Element {
 				})
 			} else if (e.type === 'knowledge.step') {
 				if (e.conversationId !== activeConvIdRef.current) return
-				setMessages((prev) => {
-					const last = prev[prev.length - 1]
-					if (last?.id === 'streaming') {
-						return [...prev.slice(0, -1), { ...last, steps: [...(last.steps ?? []), e.step] }]
-					}
-					return [...prev, { id: 'streaming', role: 'assistant', content: streamingRef.current, citations: [], steps: [e.step] }]
-				})
+				setLiveStep(e.step)
 			} else if (e.type === 'knowledge.chatState') {
 				if (e.conversationId !== activeConvIdRef.current) return
 				setStateDetail(e.detail ?? null)
@@ -188,11 +183,13 @@ export function KnowledgePage(): JSX.Element {
 					setChatState('idle')
 					streamingRef.current = ''
 					busyRef.current = false
+					setLiveStep(null)
 					void refreshMessages(e.conversationId)
 					void refreshConversations()
 				} else if (e.state === 'error') {
 					setChatState('error')
 					busyRef.current = false
+					setLiveStep(null)
 				} else {
 					setChatState(e.state)
 				}
@@ -234,7 +231,7 @@ export function KnowledgePage(): JSX.Element {
 
 	useEffect(() => {
 		bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-	}, [messages])
+	}, [messages, liveStep, chatState])
 
 	async function refreshConversations(): Promise<void> {
 		const list = await window.veridian.knowledge.listConversations()
@@ -290,6 +287,7 @@ export function KnowledgePage(): JSX.Element {
 		setMention(null)
 		setEditing(null)
 		streamingRef.current = ''
+		setLiveStep(null)
 		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [], refs: sentRefs }])
 		setChatState('searching')
 		if (wasEditing && conversationId !== null) {
@@ -344,8 +342,6 @@ export function KnowledgePage(): JSX.Element {
 	const scopeLabel = activeWs?.name ?? t('knowledge.personalLibrary')
 	const lastId = messages[messages.length - 1]?.id
 	const lastUserId = [...messages].reverse().find((m) => m.role === 'user')?.id
-	const streamingMsg = messages[messages.length - 1]?.id === 'streaming' ? messages[messages.length - 1] : undefined
-	const liveStep = streamingMsg?.steps?.[streamingMsg.steps.length - 1]
 
 	return (
 		<div style={{ display: 'flex', height: '100%' }}>
@@ -427,7 +423,7 @@ export function KnowledgePage(): JSX.Element {
 						/>
 					))}
 					{busy && (
-						<div style={{ alignSelf: 'flex-start', maxWidth: '88%', overflow: 'hidden', fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+						<div style={{ alignSelf: 'flex-start', maxWidth: '88%', overflow: 'hidden', fontSize: 12, color: 'var(--foreground-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
 							<span className="chat-dot-pulse" />
 							{chatState === 'answering' ? (
 								<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
