@@ -39,14 +39,20 @@ function resolveTargets(content: string, selfNoteId: number): LinkEndpoint[] {
 }
 
 /** Create or update a note, then reconcile its wikilink out-edges from the
- *  content. Returns the note id. */
-export function saveNote(input: { id?: number; itemId?: number | null; title?: string | null; content?: string | null }): number {
+ *  content. `origin` tags who authored the change (default 'user'; AI writes
+ *  pass 'ai'). Returns the note id. */
+export function saveNote(input: {
+	id?: number; itemId?: number | null;
+	title?: string | null; content?: string | null;
+	origin?: 'user' | 'ai'
+}): number {
+	const origin = input.origin ?? 'user'
 	let id = input.id
 	if (id == null) {
-		id = repoCreate({ itemId: input.itemId ?? null, title: input.title ?? null, content: input.content ?? '', origin: 'user' })
+		id = repoCreate({ itemId: input.itemId ?? null, title: input.title ?? null, content: input.content ?? '', origin })
 		appendOp('note', id, 'create', { itemId: input.itemId ?? null })
 	} else {
-		repoUpdate(id, { title: input.title ?? null, content: input.content ?? null, updatedBy: 'user' })
+		repoUpdate(id, { title: input.title ?? null, content: input.content ?? null, updatedBy: origin })
 		appendOp('note', id, 'modify', {})
 	}
 	setWikilinksForNote(id, resolveTargets(input.content ?? '', id))
