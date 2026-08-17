@@ -398,7 +398,7 @@ export function KnowledgePage(): JSX.Element {
 					</span>
 				</div>
 
-				<div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+				<div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14, justifyContent: 'safe center' }}>
 					{chatConfigured === false && (
 						<div style={notConfiguredBanner}>
 							<span>{t('knowledge.notConfigured')}</span>
