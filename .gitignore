@@ -14,3 +14,4 @@ readme/**/*.aux
 readme/**/*.out
 readme/**/*.toc
 readme/**/*.synctex.gz
+.superpowers/
