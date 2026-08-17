@@ -192,6 +192,15 @@ const veridianAPI = {
     pickStoragePath: () => call<string | null>('knowledge:pickStoragePath'),
     testProvider: (which: 'chat' | 'embedding') => call<string | null>('knowledge:testProvider', which),
   },
+  notes: {
+    listByItem: (itemId: number) => call<Array<{ id: number; item_id: number | null; title: string | null; content: string | null; origin: string; updated_by: string; created_at: number; updated_at: number }>>('notes:listByItem', itemId),
+    listStandalone: () => call<Array<{ id: number; item_id: number | null; title: string | null; content: string | null; origin: string; updated_by: string; created_at: number; updated_at: number }>>('notes:listStandalone'),
+    get: (id: number) => call<{ id: number; item_id: number | null; title: string | null; content: string | null } | null>('notes:get', id),
+    save: (input: { id?: number; itemId?: number | null; title?: string | null; content?: string | null }) => call<number>('notes:save', input),
+    delete: (id: number) => call<void>('notes:delete', id),
+    backlinks: (kind: 'item' | 'note', id: number) => call<Array<{ kind: 'item' | 'note'; id: number; title: string; relType: string }>>('notes:backlinks', kind, id),
+    resolveTitle: (title: string) => call<{ kind: 'item' | 'note'; id: number } | null>('notes:resolveTitle', title),
+  },
   skills: {
     list: () => call<Array<{ name: string; description: string }>>('skills:list'),
     installFromGithub: (url: string) =>

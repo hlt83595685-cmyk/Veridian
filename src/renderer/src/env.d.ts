@@ -122,6 +122,15 @@ interface VeridianAPI {
     pickStoragePath: () => Promise<string | null>
     testProvider: (which: 'chat' | 'embedding') => Promise<string | null>
   }
+  notes: {
+    listByItem: (itemId: number) => Promise<Array<{ id: number; item_id: number | null; title: string | null; content: string | null; origin: string; updated_by: string; created_at: number; updated_at: number }>>
+    listStandalone: () => Promise<Array<{ id: number; item_id: number | null; title: string | null; content: string | null; origin: string; updated_by: string; created_at: number; updated_at: number }>>
+    get: (id: number) => Promise<{ id: number; item_id: number | null; title: string | null; content: string | null } | null>
+    save: (input: { id?: number; itemId?: number | null; title?: string | null; content?: string | null }) => Promise<number>
+    delete: (id: number) => Promise<void>
+    backlinks: (kind: 'item' | 'note', id: number) => Promise<Array<{ kind: 'item' | 'note'; id: number; title: string; relType: string }>>
+    resolveTitle: (title: string) => Promise<{ kind: 'item' | 'note'; id: number } | null>
+  }
   skills: {
     list: () => Promise<Array<{ name: string; description: string }>>
     installFromGithub: (url: string) => Promise<{ name: string; description: string }>

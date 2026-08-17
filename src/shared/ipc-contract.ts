@@ -172,6 +172,15 @@ export const contract = {
   'knowledge:pickStoragePath':    z.tuple([]),
   'knowledge:testProvider':       z.tuple([z.enum(['chat', 'embedding'])]),
 
+  // Notes: standalone / per-item notes with [[wikilink]] cross-references.
+  'notes:listByItem':     z.tuple([id]),
+  'notes:listStandalone': z.tuple([]),
+  'notes:get':            z.tuple([id]),
+  'notes:save':           z.tuple([z.object({ id: id.optional(), itemId: id.nullable().optional(), title: z.string().max(300).nullable().optional(), content: z.string().max(200000).nullable().optional() })]),
+  'notes:delete':         z.tuple([id]),
+  'notes:backlinks':      z.tuple([z.enum(['item', 'note']), id]),
+  'notes:resolveTitle':   z.tuple([z.string().max(300)]),
+
   // Skills: reusable instruction blocks (SKILL.md, no code execution) the
   // chat agent can load on demand -- see src/main/knowledge/skills.ts.
   'skills:list':              z.tuple([]),

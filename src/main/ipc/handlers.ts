@@ -29,6 +29,7 @@ import { getChunkBySeq } from '../knowledge/search'
 import { testProvider } from '../knowledge/providers'
 import { closeKnowledgeDb, knowledgeDir } from '../knowledge/db'
 import * as Skills from '../knowledge/skills'
+import * as Notes from '../services/NoteService'
 import { convertPdfToMarkdown } from '../mineruApi'
 import { assertReadable, assertWritable, grantAccess } from '../security/pathGuard'
 import { emit } from '../core/Notifier'
@@ -319,6 +320,15 @@ export const handlers: Record<IpcChannel, Handler> = {
     Settings.setSetting('knowledge.storagePath', dest)
     return dest
   },
+
+  // Notes
+  'notes:listByItem':     (_e, itemId: number) => Notes.listNotesByItem(itemId),
+  'notes:listStandalone': () => Notes.listStandaloneNotes(),
+  'notes:get':            (_e, id: number) => Notes.getNote(id) ?? null,
+  'notes:save':           (_e, input: { id?: number; itemId?: number | null; title?: string | null; content?: string | null }) => Notes.saveNote(input),
+  'notes:delete':         (_e, id: number) => Notes.deleteNote(id),
+  'notes:backlinks':      (_e, kind: 'item' | 'note', id: number) => Notes.getBacklinks(kind, id),
+  'notes:resolveTitle':   (_e, title: string) => Notes.resolveTitle(title),
 
   // Skills: reusable instruction blocks the chat agent can load on demand.
   'skills:list': () => Skills.listInstalledSkills(),
