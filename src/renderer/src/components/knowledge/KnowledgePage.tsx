@@ -423,6 +423,11 @@ export function KnowledgePage(): JSX.Element {
 						/>
 					))}
 					{busy && (
+						<div style={{ alignSelf: 'flex-start', background: 'red', color: 'white', padding: '6px 10px', borderRadius: 6, fontSize: 15, fontWeight: 700, maxWidth: '88%', overflow: 'hidden' }}>
+							LIVE dbg: state={chatState} step={liveStep?.tool ?? '-'}
+						</div>
+					)}
+					{false && busy && (
 						<div style={{ alignSelf: 'flex-start', maxWidth: '88%', overflow: 'hidden', fontSize: 12.5, color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: 6 }}>
 							<span className="chat-dot-pulse" />
 							{chatState === 'answering' ? (
