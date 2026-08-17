@@ -427,27 +427,6 @@ export function KnowledgePage(): JSX.Element {
 							LIVE dbg: state={chatState} step={liveStep?.tool ?? '-'}
 						</div>
 					)}
-					{false && busy && (
-						<div style={{ alignSelf: 'flex-start', maxWidth: '88%', overflow: 'hidden', fontSize: 12.5, color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: 6 }}>
-							<span className="chat-dot-pulse" />
-							{chatState === 'answering' ? (
-								<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-									{t('knowledge.doing.answering')}
-								</span>
-							) : liveStep ? (
-								<>
-									<ToolIcon tool={liveStep.tool} />
-									<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-										{t(`knowledge.doing.${liveStep.tool}`, { q: liveStep.label })}
-									</span>
-								</>
-							) : (
-								<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-									{t('knowledge.doing.searching')}
-								</span>
-							)}
-						</div>
-					)}
 					{chatState === 'error' && (
 						<div style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--danger, #dc2626)' }}>
 							{t('knowledge.error', { detail: stateDetail ?? '' })}
