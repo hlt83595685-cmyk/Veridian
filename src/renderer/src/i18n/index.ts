@@ -365,6 +365,8 @@ const zh = {
     newNote: '新建笔记',
     notesSection: '笔记',
     createLinked: '新建笔记『{{title}}』?',
+    noNotesYet: '暂无笔记',
+    untitled: '无标题',
   },
 }
 
@@ -732,6 +734,8 @@ const en = {
     newNote: 'New note',
     notesSection: 'Notes',
     createLinked: 'Create note "{{title}}"?',
+    noNotesYet: 'No notes yet',
+    untitled: 'Untitled',
   },
 }
 

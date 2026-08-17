@@ -10,6 +10,7 @@ import { ImageGalleryPane } from '../pdf-viewer/ImageGalleryPane'
 import { SettingsPage } from '../pages/SettingsPage'
 import { ToolsPage } from '../pages/ToolsPage'
 import { KnowledgePage } from '../knowledge/KnowledgePage'
+import { NotePage } from '../notes/NotePage'
 import { useItemStore } from '../../stores/itemStore'
 import { useUiStore } from '../../stores/uiStore'
 import { useLayoutStore } from '../../stores/layoutStore'
@@ -58,6 +59,7 @@ export function MainLayout(): JSX.Element {
   const selectedId = useItemStore((s) => s.selectedId)
   const viewerPath = useItemStore((s) => s.viewerPath)
   const viewerType = useItemStore((s) => s.viewerType)
+  const noteViewerId = useItemStore((s) => s.noteViewerId)
   const page = useUiStore((s) => s.page)
 
   const sidebarWidth = useLayoutStore((s) => s.prefs.sidebarWidth)
@@ -120,7 +122,7 @@ export function MainLayout(): JSX.Element {
               other pages, so its scroll position survives opening/closing a
               PDF / markdown / gallery viewer -- same reason KnowledgePage is
               kept mounted above. */}
-          <div style={{ display: page === 'library' && !viewerPath ? 'contents' : 'none' }}>
+          <div style={{ display: page === 'library' && !viewerPath && noteViewerId == null ? 'contents' : 'none' }}>
             <ItemListPane />
           </div>
           {page === 'knowledge' ? null
@@ -128,18 +130,20 @@ export function MainLayout(): JSX.Element {
             ? <SettingsPage />
             : page === 'tools'
               ? <ToolsPage />
-              : viewerPath
-                ? viewerType === 'markdown'
-                  ? <MarkdownReaderPane />
-                  : viewerType === 'gallery'
-                    ? <ImageGalleryPane />
-                    : <PdfReaderPane />
-                : null
+              : noteViewerId != null
+                ? <NotePage />
+                : viewerPath
+                  ? viewerType === 'markdown'
+                    ? <MarkdownReaderPane />
+                    : viewerType === 'gallery'
+                      ? <ImageGalleryPane />
+                      : <PdfReaderPane />
+                  : null
           }
         </main>
 
         {/* Right detail — hidden during PDF reading and on settings/tools pages */}
-        {page === 'library' && selectedId !== null && !viewerPath && (
+        {page === 'library' && selectedId !== null && !viewerPath && noteViewerId == null && (
           <>
             <Resizer onDrag={dragDetail} onEnd={persist} />
             <aside style={{

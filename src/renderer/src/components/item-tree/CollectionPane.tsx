@@ -140,7 +140,7 @@ function NavRow({
 
 export function CollectionPane(): JSX.Element {
   const { t } = useTranslation('common')
-  const { activeCollection, setActiveCollection } = useItemStore()
+  const { activeCollection, setActiveCollection, noteViewerId } = useItemStore()
   const { collections, load, create, rename, remove } = useCollectionStore()
   const { workspaces, activeWorkspaceId } = useWorkspaceStore()
 
@@ -162,6 +162,16 @@ export function CollectionPane(): JSX.Element {
   }, [isGithubWs, sideTab])
 
   const trashFull = collections.length >= 0  // placeholder — real check is item count; always show normal icon for now
+
+  const [standaloneNotes, setStandaloneNotes] = useState<Array<{ id: number; title: string | null }>>([])
+  useEffect(() => {
+    const loadNotes = (): void => {
+      void window.veridian.notes.listStandalone().then((ns) => setStandaloneNotes(ns.map((n) => ({ id: n.id, title: n.title }))))
+    }
+    loadNotes()
+    const onEvent = (e: { type: string }): void => { if (e.type === 'note.changed') loadNotes() }
+    return window.veridian.onDomainEvent(onEvent)
+  }, [])
 
   useEffect(() => { load() }, [load])
 
@@ -433,6 +443,57 @@ export function CollectionPane(): JSX.Element {
           {roots.map((col) => renderCollection(col.id, 0))}
         </div>
       )}
+
+      {/* Divider */}
+      <div style={{ height: 1, background: 'var(--separator)', margin: '8px 6px' }} />
+
+      {/* Standalone notes section */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '2px 4px', marginBottom: 2 }}>
+        <span style={{ width: 16, flexShrink: 0 }} />
+        <p style={{
+          flex: 1, fontSize: 10, fontWeight: 700, color: 'var(--muted)',
+          textTransform: 'uppercase', letterSpacing: '0.08em', padding: '0 4px', userSelect: 'none',
+        }}>
+          {t('notes.notesSection')}
+        </p>
+        <button
+          onClick={async (e) => {
+            e.stopPropagation()
+            const id = await window.veridian.notes.save({ title: '', content: '' })
+            useItemStore.getState().openNote(id)
+          }}
+          title={t('notes.newNote')}
+          style={{
+            width: 18, height: 18, borderRadius: '50%', border: 'none',
+            background: 'var(--primary-light)', color: 'var(--primary)',
+            fontSize: 13, fontWeight: 700, lineHeight: 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+        >
+          +
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {standaloneNotes.length === 0 && (
+          <p style={{ fontSize: 12, color: 'var(--muted)', padding: '6px 28px', userSelect: 'none' }}>
+            {t('notes.noNotesYet')}
+          </p>
+        )}
+        {standaloneNotes.map((n) => {
+          const active = noteViewerId === n.id
+          return (
+            <NavRow
+              key={n.id}
+              id={`note:${n.id}`}
+              icon={<span style={{ fontSize: 13 }}>📝</span>}
+              label={n.title && n.title.trim() ? n.title : t('notes.untitled')}
+              active={active}
+              onClick={() => useItemStore.getState().openNote(n.id)}
+            />
+          )
+        })}
+      </div>
 
       {/* Right-click context menu for collections */}
       {contextMenu && (

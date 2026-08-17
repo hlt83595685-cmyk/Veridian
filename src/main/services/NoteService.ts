@@ -51,7 +51,7 @@ export function saveNote(input: { id?: number; itemId?: number | null; title?: s
 	}
 	setWikilinksForNote(id, resolveTargets(input.content ?? '', id))
 	const itemId = input.itemId ?? getNote(id)?.item_id ?? null
-	if (itemId != null) emit({ type: 'note.changed', itemIds: [itemId] })
+	emit({ type: 'note.changed', itemIds: itemId != null ? [itemId] : [] })
 	emit({ type: 'relation.changed', itemIds: itemId != null ? [itemId] : [] })
 	return id
 }
@@ -61,7 +61,7 @@ export function deleteNote(id: number): void {
 	deleteRelationsForNote(id)
 	repoDelete(id)
 	appendOp('note', id, 'delete', {})
-	if (note?.item_id != null) emit({ type: 'note.changed', itemIds: [note.item_id] })
+	emit({ type: 'note.changed', itemIds: note?.item_id != null ? [note.item_id] : [] })
 	emit({ type: 'relation.changed', itemIds: [] })
 }
 
