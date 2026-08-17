@@ -61,10 +61,11 @@ export const MODES: AgentMode[] = [
 	{
 		id: 'notes', label: 'knowledge.mode.notes', button: true,
 		keywords: /建链|建立链接|关联起来|生成笔记|做笔记|link (these|them)/i,
-		tools: ['search_library', 'read_item', 'list_items', 'create_note', 'link_items', 'read_notes'],
+		tools: ['search_library', 'read_item', 'list_items', 'create_note', 'update_note', 'list_notes', 'link_items', 'read_notes'],
 		procedure: `MODE: Notes & links.
 - To summarise a paper, write a structured note with create_note (one-line summary, problem, method, key findings, contributions/limits, key concepts).
 - To connect papers, find related items with search_library / list_items and create typed links with link_items (rel_type ∈ extends | contradicts | related | cites | same_method). Use read_notes to see existing notes.
+- You may create standalone concept notes (create_note without item_key, title = the concept) and update existing notes (update_note by note_id — read it first with list_notes/read_notes before overwriting). Cross-link with [[Title]] in the body.
 - End with a one-line summary of the notes/links you created.`,
 	},
 	{

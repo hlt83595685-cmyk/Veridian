@@ -24,4 +24,8 @@ describe('routeMode', () => {
 		for (const w of ['add_tags', 'add_to_collection', 'create_note', 'link_items', 'update_metadata', 'set_star', 'list_items'])
 			expect(qa.tools).not.toContain(w)
 	})
+	it('notes mode exposes the note-writing tools', () => {
+		const tools = getMode('notes').tools
+		expect(tools).toEqual(expect.arrayContaining(['create_note', 'update_note', 'list_notes', 'read_notes']))
+	})
 })
