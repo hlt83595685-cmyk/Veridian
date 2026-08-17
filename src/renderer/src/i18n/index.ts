@@ -355,6 +355,16 @@ const zh = {
       notes: '请为当前范围内的论文生成摘要笔记。',
     },
   },
+  notes: {
+    titlePlaceholder: '笔记标题…',
+    bodyPlaceholder: '正文,输入 [[ 链接…',
+    preview: '预览',
+    edit: '编辑',
+    backlinks: '反向链接',
+    newNote: '新建笔记',
+    notesSection: '笔记',
+    createLinked: '新建笔记『{{title}}』?',
+  },
 }
 
 const en = {
@@ -710,6 +720,16 @@ const en = {
       tag: 'Extract topical keywords and tag the papers in the current scope.',
       notes: 'Generate summary notes for the papers in the current scope.',
     },
+  },
+  notes: {
+    titlePlaceholder: 'Note title…',
+    bodyPlaceholder: 'Body, type [[ to link…',
+    preview: 'Preview',
+    edit: 'Edit',
+    backlinks: 'Backlinks',
+    newNote: 'New note',
+    notesSection: 'Notes',
+    createLinked: 'Create note "{{title}}"?',
   },
 }
 

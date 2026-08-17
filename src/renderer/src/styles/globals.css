@@ -284,3 +284,7 @@ button:active { opacity: 0.75; transform: scale(0.97); }
 .msg-row:hover .msg-actions { opacity: 1; }
 .msg-actbtn { border: none; background: none; padding: 2px; cursor: pointer; color: var(--muted); display: inline-flex; }
 .msg-actbtn:hover { color: var(--primary); }
+
+.wiki-link { color: var(--primary); cursor: pointer; text-decoration: none; }
+.wiki-link:hover { text-decoration: underline; }
+.wiki-link-new { color: var(--muted); border-bottom: 1px dashed var(--muted); cursor: pointer; }
