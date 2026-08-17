@@ -116,6 +116,13 @@ export function MainLayout(): JSX.Element {
           <div style={{ display: page === 'knowledge' ? 'contents' : 'none' }}>
             <KnowledgePage />
           </div>
+          {/* Item list kept mounted (just hidden) while a reader is open or on
+              other pages, so its scroll position survives opening/closing a
+              PDF / markdown / gallery viewer -- same reason KnowledgePage is
+              kept mounted above. */}
+          <div style={{ display: page === 'library' && !viewerPath ? 'contents' : 'none' }}>
+            <ItemListPane />
+          </div>
           {page === 'knowledge' ? null
             : page === 'settings'
             ? <SettingsPage />
@@ -127,7 +134,7 @@ export function MainLayout(): JSX.Element {
                   : viewerType === 'gallery'
                     ? <ImageGalleryPane />
                     : <PdfReaderPane />
-                : <ItemListPane />
+                : null
           }
         </main>
 
