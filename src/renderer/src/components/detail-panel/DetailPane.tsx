@@ -11,6 +11,11 @@ import type { Item } from '../../../../shared/types'
 
 type Tab = 'metadata' | 'tags' | 'attachments' | 'notes'
 
+// Remembered across item switches (and detail-pane open/close) within a
+// session, so selecting another paper keeps you on the tab you were reading
+// rather than snapping back to metadata. All four tabs apply to every item.
+let lastDetailTab: Tab = 'metadata'
+
 function NotesTab({ itemId }: { itemId: number }): JSX.Element {
   const [noteId, setNoteId] = useState<number | undefined>(undefined)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -31,12 +36,11 @@ function NotesTab({ itemId }: { itemId: number }): JSX.Element {
 export function DetailPane({ itemId }: { itemId: number }): JSX.Element {
   const { t } = useTranslation('common')
   const { items, loadItems, setSelectedId } = useItemStore()
-  const [tab, setTab] = useState<Tab>('metadata')
+  const [tab, setTabState] = useState<Tab>(lastDetailTab)
+  const setTab = (t: Tab): void => { lastDetailTab = t; setTabState(t) }
 
   const item = items.find((i) => i.id === itemId)
   const handleSaved = useCallback(() => loadItems(), [loadItems])
-
-  useEffect(() => { setTab('metadata') }, [itemId])
 
   if (!item) return <div style={{ padding: 16, color: 'var(--muted)', fontSize: 13 }}>...</div>
 
