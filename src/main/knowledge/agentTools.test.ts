@@ -105,4 +105,58 @@ suite('agent write tools', () => {
 		expect(AGENT_ACTION_TOOL_NAMES.has('create_note')).toBe(true)
 		expect(AGENT_ACTION_TOOL_NAMES.has('search_library')).toBe(false)
 	})
+
+	it('create_note without item_key makes a standalone concept note + wikilink edge', async () => {
+		await executeAgentTool('create_note', JSON.stringify({ title: 'Contrastive Learning', content: 'see [[Paper B]]' }))
+		const note = db.prepare("SELECT * FROM notes WHERE title = 'Contrastive Learning'").get() as { id: number; item_id: number | null; origin: string }
+		expect(note.item_id).toBeNull()
+		expect(note.origin).toBe('ai')
+		const edge = db.prepare("SELECT * FROM relations WHERE rel_type = 'wikilink'").get() as { src_kind: string; dst_kind: string; dst_id: number } | undefined
+		expect(edge).toBeTruthy()
+		expect(edge!.src_kind).toBe('note')
+		expect(edge!.dst_kind).toBe('item')
+		expect(edge!.dst_id).toBe(2)
+	})
+
+	it('create_note without a title for a standalone note errors', async () => {
+		const { result } = await executeAgentTool('create_note', JSON.stringify({ content: 'no title here' }))
+		expect(result).toMatch(/title/i)
+		expect(db.prepare('SELECT COUNT(*) AS n FROM notes').get()).toMatchObject({ n: 0 })
+	})
+
+	it('update_note overwrites content and re-reconciles edges', async () => {
+		await executeAgentTool('create_note', JSON.stringify({ title: 'Topic', content: 'link [[Paper A]]' }))
+		const before = db.prepare("SELECT id FROM notes WHERE title = 'Topic'").get() as { id: number }
+		expect(db.prepare("SELECT dst_id FROM relations WHERE rel_type='wikilink'").get()).toMatchObject({ dst_id: 1 })
+		await executeAgentTool('update_note', JSON.stringify({ note_id: before.id, content: 'now [[Paper B]]' }))
+		const note = db.prepare("SELECT content, updated_by FROM notes WHERE id = ?").get(before.id) as { content: string; updated_by: string }
+		expect(note.content).toBe('now [[Paper B]]')
+		expect(note.updated_by).toBe('ai')
+		const edges = db.prepare("SELECT dst_id FROM relations WHERE rel_type='wikilink'").all() as { dst_id: number }[]
+		expect(edges).toEqual([{ dst_id: 2 }])
+	})
+
+	it('update_note errors on a missing note', async () => {
+		const { result } = await executeAgentTool('update_note', JSON.stringify({ note_id: 999, content: 'x' }))
+		expect(result).toMatch(/not found/i)
+	})
+
+	it('list_notes lists standalone concept notes with ids', async () => {
+		await executeAgentTool('create_note', JSON.stringify({ title: 'Alpha', content: '' }))
+		const { result, step } = await executeAgentTool('list_notes', '{}')
+		expect(step.tool).toBe('list_notes')
+		expect(result).toMatch(/Alpha/)
+		expect(result).toMatch(/id \d+/)
+	})
+
+	it('read_notes includes note ids', async () => {
+		await executeAgentTool('create_note', JSON.stringify({ item_key: 'AAAA1111', title: 'S', content: 'b' }))
+		const { result } = await executeAgentTool('read_notes', JSON.stringify({ item_key: 'AAAA1111' }))
+		expect(result).toMatch(/id \d+/)
+	})
+
+	it('exposes the new tool names', () => {
+		expect(AGENT_ACTION_TOOL_NAMES.has('update_note')).toBe(true)
+		expect(AGENT_ACTION_TOOL_NAMES.has('list_notes')).toBe(true)
+	})
 })

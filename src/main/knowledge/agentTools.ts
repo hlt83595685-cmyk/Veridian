@@ -9,7 +9,7 @@ import { getDb } from '../db'
 import { mergeTagsForItem, listAll as listAllTags } from '../services/TagService'
 import { listAll as listAllCollections, createCollection, addItemToCollection } from '../services/CollectionService'
 import { updateItem, setStarred, listItems } from '../services/ItemService'
-import { createNote, listNotesByItem } from '../services/NoteService'
+import { saveNote, getNote, listNotesByItem, listStandaloneNotes } from '../services/NoteService'
 import { linkItems } from '../services/RelationService'
 import { RELATION_TYPES } from '../db/relations'
 import { assertReadable } from '../security/pathGuard'
@@ -53,15 +53,25 @@ export const AGENT_READ_TOOLS: ToolDef[] = [
 			name: 'read_notes',
 			description: 'Read the notes already attached to one paper.',
 			parameters: { type: 'object', properties: { item_key: { type: 'string' } }, required: ['item_key'] } } },
+	{ type: 'function', function: {
+			name: 'list_notes',
+			description: 'List standalone concept notes (id + title) — notes not attached to any paper. Use to find a concept note to update, or to check whether a [[Title]] concept page already exists before creating it.',
+			parameters: { type: 'object', properties: {} } } },
 ]
 
 export const AGENT_WRITE_TOOLS: ToolDef[] = [
 	{ type: 'function', function: {
 			name: 'create_note',
-			description: 'Attach a note to a paper. Use for summaries or observations the user asks you to save.',
+			description: 'Create a note. Provide item_key to attach it to a paper, OR omit item_key to create a standalone concept note (then title is REQUIRED and becomes the concept\'s identity). In the body you may write [[Title]] to link to other notes/papers — those become backlinks automatically. Use for summaries, observations, or concept pages the user asks you to save.',
 			parameters: { type: 'object', properties: {
 				item_key: { type: 'string' }, title: { type: 'string' }, content: { type: 'string' },
-			}, required: ['item_key', 'content'] } } },
+			}, required: ['content'] } } },
+	{ type: 'function', function: {
+			name: 'update_note',
+			description: 'Overwrite an existing note (identified by note_id) with new title/content. Read the note first via read_notes or list_notes so you do not discard the user\'s text. [[Title]] links in the new content are re-reconciled into backlinks.',
+			parameters: { type: 'object', properties: {
+				note_id: { type: 'number' }, title: { type: 'string' }, content: { type: 'string' },
+			}, required: ['note_id'] } } },
 	{ type: 'function', function: {
 			name: 'add_tags',
 			description: 'Add one or more keyword tags to a paper (existing tags are kept).',
@@ -134,8 +144,13 @@ export async function executeAgentTool(name: string, argsJson: string, filter?: 
 	if (name === 'read_notes') {
 		const item = resolveItem(key); if (!item) return { result: `item not found: ${key}`, step: step('read_notes', key) }
 		const notes = listNotesByItem(item.id)
-		const body = notes.length ? notes.map((n) => `- ${n.title ?? '(untitled)'}: ${n.content ?? ''}`).join('\n') : '(no notes)'
+		const body = notes.length ? notes.map((n) => `- [id ${n.id}] ${n.title ?? '(untitled)'}: ${n.content ?? ''}`).join('\n') : '(no notes)'
 		return { result: body, step: step('read_notes', item.title ?? key) }
+	}
+	if (name === 'list_notes') {
+		const notes = listStandaloneNotes()
+		const body = notes.length ? notes.map((n) => `[id ${n.id}] ${n.title ?? '(untitled)'}`).join('\n') : '(no standalone notes)'
+		return { result: body, step: step('list_notes', `${notes.length} notes`) }
 	}
 	if (name === 'read_item') {
 		const item = resolveItem(key); if (!item) return { result: `item not found: ${key}`, step: step('read_item', key) }
@@ -153,9 +168,25 @@ export async function executeAgentTool(name: string, argsJson: string, filter?: 
 	}
 
 	if (name === 'create_note') {
-		const item = resolveItem(key); if (!item) return { result: `item not found: ${key}`, step: step('create_note', key) }
-		createNote({ itemId: item.id, title: a.title ? String(a.title) : null, content: String(a.content ?? ''), origin: 'ai' })
-		return { result: `note added to "${item.title ?? key}"`, step: step('create_note', item.title ?? key) }
+		const title = a.title != null ? String(a.title) : null
+		const content = String(a.content ?? '')
+		if (key) {
+			const item = resolveItem(key); if (!item) return { result: `item not found: ${key}`, step: step('create_note', key) }
+			const id = saveNote({ itemId: item.id, title, content, origin: 'ai' })
+			return { result: `note ${id} added to "${item.title ?? key}"`, step: step('create_note', item.title ?? key) }
+		}
+		if (!title || !title.trim()) return { result: 'error: a standalone concept note needs a title', step: step('create_note', '(no title)') }
+		const id = saveNote({ title, content, origin: 'ai' })
+		return { result: `standalone note ${id} created: "${title}"`, step: step('create_note', title) }
+	}
+	if (name === 'update_note') {
+		const noteId = Number(a.note_id)
+		if (!Number.isInteger(noteId) || noteId <= 0) return { result: 'error: note_id must be a positive integer', step: step('update_note', '(bad id)') }
+		const existing = getNote(noteId); if (!existing) return { result: `note not found: ${noteId}`, step: step('update_note', String(noteId)) }
+		const title = a.title != null ? String(a.title) : existing.title
+		const content = a.content != null ? String(a.content) : (existing.content ?? '')
+		saveNote({ id: noteId, title, content, origin: 'ai' })
+		return { result: `note ${noteId} updated`, step: step('update_note', title ?? String(noteId)) }
 	}
 	if (name === 'add_tags') {
 		const item = resolveItem(key); if (!item) return { result: `item not found: ${key}`, step: step('add_tags', key) }
