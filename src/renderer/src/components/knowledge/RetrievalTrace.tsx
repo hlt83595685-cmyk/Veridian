@@ -10,6 +10,8 @@ export const ICON_PATHS: Record<RetrievalStep['tool'], string[]> = {
 	get_item_info: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z', 'M12 16v-4', 'M12 8h.01'],
 	load_skill: ['M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z'],
 	create_note: ACTION_ICON,
+	update_note: ACTION_ICON,
+	list_notes: ACTION_ICON,
 	add_tags: ACTION_ICON,
 	add_to_collection: ACTION_ICON,
 	link_items: ACTION_ICON,
