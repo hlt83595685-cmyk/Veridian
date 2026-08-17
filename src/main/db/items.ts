@@ -55,6 +55,14 @@ export function findItemByDoi(doi: string): Item | undefined {
   return candidates.find((it) => it.doi && normalizeDoi(it.doi) === norm)
 }
 
+/** An active item whose title matches (case-insensitive, trimmed). Used to
+ *  resolve [[Title]] wikilinks to a paper. */
+export function findItemByTitle(title: string): Item | undefined {
+  return getDb().prepare(
+    'SELECT * FROM items WHERE deleted = 0 AND lower(trim(title)) = lower(trim(?)) ORDER BY updated_at DESC LIMIT 1'
+  ).get(title) as Item | undefined
+}
+
 export function getAllItems(libraryId = 1): Item[] {
   return getDb()
     .prepare('SELECT * FROM items WHERE library_id = ? AND deleted = 0 ORDER BY updated_at DESC')

@@ -8,7 +8,7 @@ const suite = dbUsable ? describe : describe.skip
 let db: Database.Database
 vi.mock('./index', () => ({ getDb: () => db }))
 
-import { createNote, getNote, listNotesByItem, updateNote, deleteNote } from './notes'
+import { createNote, getNote, listNotesByItem, updateNote, deleteNote, listStandaloneNotes, findNoteByTitle } from './notes'
 
 suite('notes repo', () => {
   beforeEach(() => {
@@ -51,5 +51,19 @@ suite('notes repo', () => {
     const id = createNote({ itemId: 7, content: 'x', origin: 'user' })
     deleteNote(id)
     expect(getNote(id)).toBeUndefined()
+  })
+
+  it('lists standalone notes (item_id NULL) newest first', () => {
+    createNote({ itemId: 7, content: 'paper note' })
+    createNote({ title: 'Concept A', content: 'a' })
+    createNote({ title: 'Concept B', content: 'b' })
+    const list = listStandaloneNotes()
+    expect(list.map((n) => n.title)).toEqual(['Concept B', 'Concept A'])
+  })
+
+  it('finds a standalone note by title, case-insensitively', () => {
+    createNote({ title: 'Chiral Plasmonics', content: 'x' })
+    expect(findNoteByTitle('chiral plasmonics')?.title).toBe('Chiral Plasmonics')
+    expect(findNoteByTitle('nope')).toBeUndefined()
   })
 })

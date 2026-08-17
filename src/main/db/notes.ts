@@ -60,3 +60,16 @@ export function deleteNote(id: number): void {
 export function deleteNotesForItem(itemId: number): void {
   getDb().prepare('DELETE FROM notes WHERE item_id = ?').run(itemId)
 }
+
+/** Standalone notes (not attached to any paper), newest first. */
+export function listStandaloneNotes(): Note[] {
+  return getDb().prepare('SELECT * FROM notes WHERE item_id IS NULL ORDER BY updated_at DESC, id DESC').all() as Note[]
+}
+
+/** A standalone note whose title matches (case-insensitive, trimmed); newest
+ *  wins on collision. Used to resolve [[Title]] wikilinks. */
+export function findNoteByTitle(title: string): Note | undefined {
+  return getDb().prepare(
+    'SELECT * FROM notes WHERE item_id IS NULL AND lower(trim(title)) = lower(trim(?)) ORDER BY updated_at DESC, id DESC LIMIT 1'
+  ).get(title) as Note | undefined
+}
