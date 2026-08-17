@@ -316,6 +316,17 @@ const zh = {
     cancel: '取消',
     update: '更新',
     editingNote: '编辑中',
+    mode: {
+      classify: '分类',
+      tag: '打标签',
+      review: '综述',
+      compare: '对比',
+      contradict: '找矛盾',
+      notes: '笔记',
+      qa: '问答',
+    },
+    modeActive: '{{mode}} 模式',
+    modeClear: '取消',
   },
 }
 
@@ -634,6 +645,17 @@ const en = {
     cancel: 'Cancel',
     update: 'Update',
     editingNote: 'Editing',
+    mode: {
+      classify: 'Classify',
+      tag: 'Tag',
+      review: 'Review',
+      compare: 'Compare',
+      contradict: 'Contradict',
+      notes: 'Notes',
+      qa: 'Q&A',
+    },
+    modeActive: '{{mode}} mode',
+    modeClear: 'Clear',
   },
 }
 

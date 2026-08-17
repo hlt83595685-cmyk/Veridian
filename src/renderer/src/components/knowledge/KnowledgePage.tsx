@@ -28,6 +28,8 @@ interface PendingRef { ref: KnowledgeRef; label: string }
 interface MentionCandidate { label: string; sub: string; ref: KnowledgeRef; token: string }
 type MentionTrigger = { kind: 'at' | 'slash'; start: number; query: string } | null
 
+const MODE_BUTTONS = ['classify', 'tag', 'review', 'compare', 'contradict', 'notes'] as const
+
 export function KnowledgePage(): JSX.Element {
 	const { t } = useTranslation('common')
 	const setPage = useUiStore((s) => s.setPage)
@@ -41,6 +43,7 @@ export function KnowledgePage(): JSX.Element {
 	// comes back empty (this page is kept mounted, so it never retries).
 	const collections = useCollectionStore((s) => s.collections)
 	const [scopeCollectionId, setScopeCollectionId] = useState<number | null>(null)
+	const [activeMode, setActiveMode] = useState<string | null>(null)
 	const [messages, setMessages] = useState<DisplayMessage[]>([])
 	const [input, setInput] = useState('')
 	const [chatState, setChatState] = useState<ChatState>('idle')
@@ -254,6 +257,7 @@ export function KnowledgePage(): JSX.Element {
 		setPendingRefs([])
 		setMention(null)
 		setScopeCollectionId(null)
+		setActiveMode(null)
 	}
 
 	async function openConversation(id: number): Promise<void> {
@@ -287,9 +291,9 @@ export function KnowledgePage(): JSX.Element {
 		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [], refs: sentRefs }])
 		setChatState('searching')
 		if (wasEditing && conversationId !== null) {
-			await window.veridian.knowledge.editResend(conversationId, q, refs.length ? refs : undefined, scopeCollectionId)
+			await window.veridian.knowledge.editResend(conversationId, q, refs.length ? refs : undefined, scopeCollectionId, activeMode)
 		} else {
-			const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined, scopeCollectionId)
+			const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined, scopeCollectionId, activeMode)
 			setConversationId(id)
 		}
 	}
@@ -457,6 +461,22 @@ export function KnowledgePage(): JSX.Element {
 							))}
 						</div>
 					)}
+					<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+						{MODE_BUTTONS.map((id) => (
+							<button
+								key={id}
+								onClick={() => setActiveMode((m) => (m === id ? null : id))}
+								style={{
+									padding: '2px 10px', borderRadius: 999, fontSize: 11.5, cursor: 'pointer',
+									border: activeMode === id ? '1px solid var(--primary)' : '1px solid var(--border)',
+									background: activeMode === id ? 'var(--primary)' : 'var(--surface-2)',
+									color: activeMode === id ? 'var(--primary-foreground, #fff)' : 'var(--foreground-3)',
+								}}
+							>
+								{t('knowledge.mode.' + id)}
+							</button>
+						))}
+					</div>
 					<div style={{ display: 'flex', gap: 8 }}>
 						<div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
 							<select
@@ -479,6 +499,12 @@ export function KnowledgePage(): JSX.Element {
 								<div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 11.5, color: 'var(--muted)' }}>
 									<span>{t('knowledge.editingNote')}</span>
 									<button onClick={cancelEdit} style={{ border: 'none', background: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', fontSize: 11.5 }}>{t('knowledge.cancel')}</button>
+								</div>
+							)}
+							{activeMode !== null && (
+								<div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 11.5, color: 'var(--muted)' }}>
+									<span>{t('knowledge.modeActive', { mode: t('knowledge.mode.' + activeMode) })}</span>
+									<button onClick={() => setActiveMode(null)} style={{ border: 'none', background: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', fontSize: 11.5 }}>{t('knowledge.modeClear')}</button>
 								</div>
 							)}
 							{pendingRefs.length > 0 && (
