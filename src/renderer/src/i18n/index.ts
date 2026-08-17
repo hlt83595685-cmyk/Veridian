@@ -327,6 +327,14 @@ const zh = {
     },
     modeActive: '{{mode}} 模式',
     modeClear: '取消',
+    template: {
+      review: '请对当前范围内的论文写一篇结构化文献综述,涵盖主题、方法、主要发现与研究空白。',
+      compare: '请对比当前范围内的论文,从问题、方法、数据、主要结果、局限几个维度列一张对比表。',
+      contradict: '请找出当前范围内论文之间相互矛盾或不一致的观点,并各自标注出处。',
+      classify: '请把当前范围内的论文按主题分类归档到合适的分类中。',
+      tag: '请为当前范围内的论文提取主题词并打上标签。',
+      notes: '请为当前范围内的论文生成摘要笔记。',
+    },
   },
 }
 
@@ -656,6 +664,14 @@ const en = {
     },
     modeActive: '{{mode}} mode',
     modeClear: 'Clear',
+    template: {
+      review: 'Write a structured literature review of the papers in the current scope: themes, methods, key findings, and gaps.',
+      compare: 'Compare the papers in the current scope across problem, method, data, key result, and limitations, as a table.',
+      contradict: 'Find claims that contradict or disagree between the papers in the current scope, each with its source.',
+      classify: 'Classify the papers in the current scope into suitable collections by topic.',
+      tag: 'Extract topical keywords and tag the papers in the current scope.',
+      notes: 'Generate summary notes for the papers in the current scope.',
+    },
   },
 }
 

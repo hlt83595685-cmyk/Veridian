@@ -28,7 +28,7 @@ interface PendingRef { ref: KnowledgeRef; label: string }
 interface MentionCandidate { label: string; sub: string; ref: KnowledgeRef; token: string }
 type MentionTrigger = { kind: 'at' | 'slash'; start: number; query: string } | null
 
-const MODE_BUTTONS = ['classify', 'tag', 'review', 'compare', 'contradict', 'notes'] as const
+const TASK_MODES = ['review', 'compare', 'contradict', 'classify', 'tag', 'notes'] as const
 
 export function KnowledgePage(): JSX.Element {
 	const { t } = useTranslation('common')
@@ -462,54 +462,45 @@ export function KnowledgePage(): JSX.Element {
 							))}
 						</div>
 					)}
-					<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
-						{MODE_BUTTONS.map((id) => (
-							<button
-								key={id}
-								onClick={() => setActiveMode((m) => (m === id ? null : id))}
-								style={{
-									padding: '2px 10px', borderRadius: 999, fontSize: 11.5, cursor: 'pointer',
-									border: activeMode === id ? '1px solid var(--primary)' : '1px solid var(--border)',
-									background: activeMode === id ? 'var(--primary)' : 'var(--surface-2)',
-									color: activeMode === id ? 'var(--primary-foreground, #fff)' : 'var(--foreground-3)',
-								}}
-							>
-								{t('knowledge.mode.' + id)}
-							</button>
-						))}
-					</div>
 					<div style={{ display: 'flex', gap: 8 }}>
-						<div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-							<select
-								value={scopeCollectionId ?? ''}
-								onChange={(e) => setScopeCollectionId(e.target.value ? Number(e.target.value) : null)}
-								title={t('knowledge.scopeSelectTitle')}
-								style={{
-									alignSelf: 'flex-start', marginBottom: 6, height: 26, padding: '0 8px',
-									borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
-									background: 'var(--surface)', color: 'var(--foreground-2)', fontSize: 12,
-								}}
-							>
-								<option value="">{t('knowledge.scopeWholeLibrary')}</option>
-								<option value={IMPORTANT_SCOPE}>{t('knowledge.scopeImportant')}</option>
-								{collections.map((c) => (
-									<option key={c.id} value={c.id}>{c.name}</option>
-								))}
-							</select>
+						<div style={composerBoxStyle}>
+							<div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 4px 0' }}>
+								<select
+									value={activeMode ?? 'qa'}
+									onChange={(e) => {
+										const v = e.target.value
+										const nextMode = v === 'qa' ? null : v
+										setActiveMode(nextMode)
+										if (nextMode && input.trim() === '') setInput(t('knowledge.template.' + nextMode))
+									}}
+									style={taskSelectStyle}
+								>
+									<option value="qa">{t('knowledge.mode.qa')}</option>
+									{TASK_MODES.map((id) => (
+										<option key={id} value={id}>{t('knowledge.mode.' + id)}</option>
+									))}
+								</select>
+								<select
+									value={scopeCollectionId ?? ''}
+									onChange={(e) => setScopeCollectionId(e.target.value ? Number(e.target.value) : null)}
+									title={t('knowledge.scopeSelectTitle')}
+									style={scopeSelectStyle}
+								>
+									<option value="">{t('knowledge.scopeWholeLibrary')}</option>
+									<option value={IMPORTANT_SCOPE}>{t('knowledge.scopeImportant')}</option>
+									{collections.map((c) => (
+										<option key={c.id} value={c.id}>{c.name}</option>
+									))}
+								</select>
+							</div>
 							{editing !== null && (
-								<div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 11.5, color: 'var(--muted)' }}>
+								<div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 8px 0', fontSize: 11.5, color: 'var(--muted)' }}>
 									<span>{t('knowledge.editingNote')}</span>
 									<button onClick={cancelEdit} style={{ border: 'none', background: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', fontSize: 11.5 }}>{t('knowledge.cancel')}</button>
 								</div>
 							)}
-							{activeMode !== null && (
-								<div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 11.5, color: 'var(--muted)' }}>
-									<span>{t('knowledge.modeActive', { mode: t('knowledge.mode.' + activeMode) })}</span>
-									<button onClick={() => setActiveMode(null)} style={{ border: 'none', background: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', fontSize: 11.5 }}>{t('knowledge.modeClear')}</button>
-								</div>
-							)}
 							{pendingRefs.length > 0 && (
-								<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+								<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '4px 8px 0' }}>
 									{pendingRefs.map((p, i) => (
 										<Chip key={i} icon={<PaperclipIcon />} label={p.label} maxWidth={260}
 											onRemove={() => setPendingRefs((prev) => prev.filter((_, j) => j !== i))} />
@@ -561,9 +552,27 @@ const backBtnStyle: React.CSSProperties = {
 }
 
 const inputStyle: React.CSSProperties = {
-	flex: 1, minHeight: 38, maxHeight: 120, padding: '9px 12px', borderRadius: 10,
-	border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--foreground)',
-	fontSize: 13, resize: 'none', fontFamily: 'inherit',
+	flex: 1, minHeight: 38, maxHeight: 120, padding: '9px 12px',
+	border: 'none', background: 'transparent', color: 'var(--foreground)',
+	fontSize: 13, resize: 'none', fontFamily: 'inherit', outline: 'none',
+}
+
+const composerBoxStyle: React.CSSProperties = {
+	display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0,
+	border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)',
+}
+
+const taskSelectStyle: React.CSSProperties = {
+	border: 'none', background: 'transparent', outline: 'none', fontSize: 12,
+	padding: '2px 4px', color: 'var(--foreground-2)', cursor: 'pointer', flexShrink: 0,
+}
+
+const scopeSelectStyle: React.CSSProperties = {
+	border: 'none', background: 'transparent', outline: 'none', fontSize: 12,
+	padding: '2px 4px', color: 'var(--foreground-2)', cursor: 'pointer',
+	maxWidth: 160, overflow: 'hidden',
+	WebkitMaskImage: 'linear-gradient(to right, #000 72%, transparent)',
+	maskImage: 'linear-gradient(to right, #000 72%, transparent)',
 }
 
 const mentionPopupStyle: React.CSSProperties = {
