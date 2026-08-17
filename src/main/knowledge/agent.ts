@@ -39,7 +39,10 @@ function tunedInt(key: string, def: number, min: number, max: number): number {
 
 // ── Tools ────────────────────────────────────────────────────────────────────
 
-async function runTool(name: string, argsJson: string, filter?: import('./search').ScopeFilter): Promise<{ result: string; step: RetrievalStep }> {
+async function runTool(name: string, argsJson: string, filter?: import('./search').ScopeFilter, allowed?: Set<string>): Promise<{ result: string; step: RetrievalStep }> {
+	if (allowed && !allowed.has(name)) {
+		return { result: `error: tool "${name}" is not available in the current mode`, step: { tool: 'search_library', label: `(blocked: ${name})` } }
+	}
 	if (AGENT_ACTION_TOOL_NAMES.has(name)) return executeAgentTool(name, argsJson, filter)
 
 	let args: Record<string, unknown>
@@ -288,6 +291,7 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 		...getMessages(convId).map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
 	]
 	const tools = buildTools(mode, listInstalledSkills().length > 0)
+	const allowedTools = new Set(tools.map((t) => t.function.name))
 	const ac = new AbortController()
 	abortControllers.set(convId, ac)
 	const steps: RetrievalStep[] = []
@@ -303,7 +307,7 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 				messages.push({ role: 'assistant', content: result.content || null, tool_calls: result.toolCalls })
 				for (const tc of result.toolCalls) {
 					emit({ type: 'knowledge.chatState', conversationId: convId, state: 'searching', detail: tc.function.name })
-					const { result: toolResult, step } = await runTool(tc.function.name, tc.function.arguments, filter)
+					const { result: toolResult, step } = await runTool(tc.function.name, tc.function.arguments, filter, allowedTools)
 					steps.push(step)
 					emit({ type: 'knowledge.step', conversationId: convId, step })
 					messages.push({ role: 'tool', content: toolResult, tool_call_id: tc.id })

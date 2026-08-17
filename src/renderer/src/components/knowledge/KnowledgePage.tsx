@@ -265,6 +265,7 @@ export function KnowledgePage(): JSX.Element {
 		const saved = row?.scope_collection_id ?? null
 		const valid = saved === IMPORTANT_SCOPE || collections.some((c) => c.id === saved)
 		setScopeCollectionId(valid ? saved : null)
+		setActiveMode(null)
 		setConversationId(id)
 		await refreshMessages(id)
 	}
