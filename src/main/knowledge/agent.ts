@@ -11,10 +11,12 @@ import { getSetting } from '../services/SettingsService'
 import { getKnowledgeDb } from './db'
 import { hybridSearch } from './search'
 import { truncateAtBoundary } from './truncate'
-import { getChatConfig, chatStream, type ChatMessage, type ToolDef } from './providers'
+import { getChatConfig, chatStream, type ChatMessage } from './providers'
 import { extractCitations } from './citations'
 import { listInstalledSkills, getSkillBody } from './skills'
-import { AGENT_ACTION_TOOLS, AGENT_ACTION_TOOL_NAMES, executeAgentTool } from './agentTools'
+import { AGENT_ACTION_TOOL_NAMES, executeAgentTool } from './agentTools'
+import { buildTools } from './toolRegistry'
+import { routeMode, getMode, type AgentMode } from './modes'
 import { readFileSync } from 'fs'
 import { basename } from 'path'
 import type { KnowledgeRef } from '../../shared/ipc-contract'
@@ -37,68 +39,10 @@ function tunedInt(key: string, def: number, min: number, max: number): number {
 
 // ── Tools ────────────────────────────────────────────────────────────────────
 
-const BASE_TOOLS: ToolDef[] = [
-	{
-		type: 'function',
-		function: {
-			name: 'search_library',
-			description:
-				'Hybrid semantic + keyword search over the full text of every paper in the current library. ' +
-				'Returns excerpts with their source (item_key + seq). Call multiple times with different ' +
-				'phrasings if the first search misses. Queries can be Chinese or English.',
-			parameters: {
-				type: 'object',
-				properties: { query: { type: 'string', description: 'search query' } },
-				required: ['query'],
-			},
-		},
-	},
-	{
-		type: 'function',
-		function: {
-			name: 'get_item_info',
-			description: 'Bibliographic metadata (title, authors, year, journal, DOI) for one paper.',
-			parameters: {
-				type: 'object',
-				properties: { item_key: { type: 'string', description: 'the item key from a search result' } },
-				required: ['item_key'],
-			},
-		},
-	},
-	{
-		type: 'function',
-		function: {
-			name: 'read_context',
-			description: 'Read the chunks immediately before and after a given excerpt for more context.',
-			parameters: {
-				type: 'object',
-				properties: {
-					item_key: { type: 'string' },
-					seq: { type: 'number', description: 'the seq of the excerpt to expand around' },
-				},
-				required: ['item_key', 'seq'],
-			},
-		},
-	},
-]
-
-const LOAD_SKILL_TOOL: ToolDef = {
-	type: 'function',
-	function: {
-		name: 'load_skill',
-		description:
-			'Load the full instructions for one of the installed skills listed at the end of this ' +
-			'prompt. Call this before following a skill\'s procedure -- the catalog only gives you its ' +
-			'name and a one-line description, not the actual steps.',
-		parameters: {
-			type: 'object',
-			properties: { name: { type: 'string', description: 'the skill name from the catalog' } },
-			required: ['name'],
-		},
-	},
-}
-
-async function runTool(name: string, argsJson: string, filter?: import('./search').ScopeFilter): Promise<{ result: string; step: RetrievalStep }> {
+async function runTool(name: string, argsJson: string, filter?: import('./search').ScopeFilter, allowed?: Set<string>): Promise<{ result: string; step: RetrievalStep }> {
+	if (allowed && !allowed.has(name)) {
+		return { result: `error: tool "${name}" is not available in the current mode`, step: { tool: 'search_library', label: `(blocked: ${name})` } }
+	}
 	if (AGENT_ACTION_TOOL_NAMES.has(name)) return executeAgentTool(name, argsJson, filter)
 
 	let args: Record<string, unknown>
@@ -218,37 +162,26 @@ function resolveCitations(raw: { itemKey: string; seq: number }[]): Citation[] {
 
 // ── The ask loop ─────────────────────────────────────────────────────────────
 
-const BASE_SYSTEM_PROMPT = `You are the research assistant inside Veridian, a reference manager. You answer questions strictly from the user's own paper library using the provided tools.
+const SLIM_BASE_PROMPT = `You are the research assistant inside Veridian, a reference manager. You help with the user's own paper library.
 
-Rules:
-- If the user has attached specific papers or files for this turn (they appear as "[Attached paper: ...]" or "[Attached file: ...]" system messages), answer directly from that attached content. Do NOT call search_library, and do NOT add [^...] citation markers for it -- the attached text has no seq numbers and none are needed. Only search if the attached material genuinely lacks what's asked.
-- Otherwise, answer ONLY from the library's actual content — never from general knowledge, and never from paper titles alone. To get that content you MUST consult it: either call search_library (finds the most relevant passages across the library, honours the selected scope, and gives citable [^item_key:seq] markers), OR — when a small collection is selected and the user wants an overview/analysis of those specific papers — read them in full with read_item. Calling list_items only gives you titles; that is NOT enough to answer a question, so never answer from a list_items result alone. If the library has nothing relevant, say so plainly.
-- For claims drawn from search_library results, cite with the marker [^item_key:seq] taken from those results (e.g. [^AB12CD34:5]), placed inline right after the claim.
-- Answer in the same language the user asked in.
-- Be concise and factual. Quote numbers and findings exactly as the excerpts state them.
-- Write every mathematical variable, symbol, or formula in LaTeX: inline as $...$ (e.g. the coefficient $\\beta_1$) and standalone equations as $$...$$. Never write math as plain text.
-- Library actions: you can MODIFY the user's library, but ONLY when they explicitly ask you to organise, annotate, or fix something (e.g. "tag this", "add a note", "link these two", "put it in a collection", "fix the year"). For plain questions you must NEVER modify anything.
-  - create_note(item_key, title, content): save a note on a paper.
-  - add_tags(item_key, tags): add keyword tags (call list_tags first to reuse existing names).
-  - add_to_collection(item_key, collection): file a paper into a collection (call list_collections first).
-  - link_items(from_key, to_key, rel_type): connect two papers; rel_type ∈ extends | contradicts | related | cites | same_method.
-  - update_metadata(item_key, ...fields): correct bibliographic fields.
-  - set_star(item_key, starred): mark a paper important.
-  - read_item(item_key): read ONE specific paper's full text, when you already know which paper you want (e.g. from list_items or an @-mention). Don't use search_library to re-read a paper whose key you already have.
-  - list_items(): list the papers in the CURRENT SCOPE (key, title, year, tags). If the user has selected a collection/scope, this lists only those papers; otherwise the whole library. Use it ONLY for explicit library-management/bulk tasks (e.g. "classify these papers", "tag everything") — NEVER to answer a question.
-  When the user has selected a scope/collection, BOTH search_library and list_items are confined to it — stay within the selected papers, never widen to the whole library. For a bulk task like classification: call list_items, judge each paper by its title or read_item, then issue the add_to_collection / add_tags calls (you may issue many in one turn). If there are many papers, handle a bounded batch and tell the user how many you processed and how many remain.
-  Never end your turn with an empty reply: always finish with a short summary of what you did and what remains, in the user's language.
-  After acting, tell the user in one line exactly what you changed.`
+Core rules (always apply):
+- If the user attached specific papers or files this turn (they appear as "[Attached paper: ...]" / "[Attached file: ...]" system messages), answer directly from that attached content; do NOT call search_library and add no [^...] markers for it.
+- Otherwise answer ONLY from the library — never from general knowledge, and never from paper titles alone.
+- Cite any claim drawn from a search_library result with the marker [^item_key:seq] taken from that result (e.g. [^AB12CD34:5]), inline right after the claim.
+- Answer in the same language the user asked in. Be concise and factual; quote numbers and findings exactly.
+- Write every mathematical variable/formula in LaTeX: inline $...$ and display $$...$$. Never write math as plain text.`
 
-/** Appends an installed-skills catalog (name + one-line description) so the
- *  model can decide on its own when a skill's procedure applies -- mirrors
- *  how Claude's own Agent Skills are progressively disclosed: the catalog is
- *  cheap, the full body only loads via load_skill when actually relevant. */
-function buildSystemPrompt(): string {
+/** Appends the mode's procedure, then an installed-skills catalog (name +
+ *  one-line description) so the model can decide on its own when a skill's
+ *  procedure applies -- mirrors how Claude's own Agent Skills are
+ *  progressively disclosed: the catalog is cheap, the full body only loads
+ *  via load_skill when actually relevant. */
+function buildSystemPrompt(mode: AgentMode): string {
+	const base = `${SLIM_BASE_PROMPT}\n\n${mode.procedure}`
 	const skills = listInstalledSkills()
-	if (!skills.length) return BASE_SYSTEM_PROMPT
+	if (!skills.length) return base
 	const catalog = skills.map((s) => `- ${s.name}: ${s.description}`).join('\n')
-	return `${BASE_SYSTEM_PROMPT}\n\nInstalled skills (call load_skill(name) to read one in full before using it):\n${catalog}`
+	return `${base}\n\nInstalled skills (call load_skill(name) to read one in full before using it):\n${catalog}`
 }
 
 const MAX_REF_CHARS = 8000
@@ -339,7 +272,13 @@ function conversationFilter(convId: number): import('./search').ScopeFilter | un
 	return scopeToFilter(row?.scope_collection_id ?? null)
 }
 
-function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: import('./search').ScopeFilter | undefined): void {
+function conversationMode(convId: number): AgentMode {
+	const row = getKnowledgeDb().prepare('SELECT mode_id FROM conversations WHERE id = ?')
+		.get(convId) as { mode_id: string | null } | undefined
+	return getMode(row?.mode_id ?? 'qa')
+}
+
+function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: import('./search').ScopeFilter | undefined, mode: AgentMode): void {
 	const cfg = getChatConfig()
 	if (!cfg) {
 		emit({ type: 'knowledge.chatState', conversationId: convId, state: 'error', detail: 'not_configured' })
@@ -347,15 +286,12 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 	}
 	const kdb = getKnowledgeDb()
 	const messages: ChatMessage[] = [
-		{ role: 'system', content: buildSystemPrompt() },
+		{ role: 'system', content: buildSystemPrompt(mode) },
 		...resolveRefs(refs),
 		...getMessages(convId).map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
 	]
-	const tools = [
-		...BASE_TOOLS,
-		...AGENT_ACTION_TOOLS,
-		...(listInstalledSkills().length ? [LOAD_SKILL_TOOL] : []),
-	]
+	const tools = buildTools(mode, listInstalledSkills().length > 0)
+	const allowedTools = new Set(tools.map((t) => t.function.name))
 	const ac = new AbortController()
 	abortControllers.set(convId, ac)
 	const steps: RetrievalStep[] = []
@@ -369,9 +305,13 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 				}, ac.signal)
 				if (result.toolCalls.length === 0) { finalText = result.content; break }
 				messages.push({ role: 'assistant', content: result.content || null, tool_calls: result.toolCalls })
+				// This round streamed only preamble/thinking (it's about to call tools).
+				// Clear it from the answer bubble — thinking belongs in the live status
+				// line, not the answer. Only the final (no-tool) round's stream stays.
+				emit({ type: 'knowledge.chatReset', conversationId: convId })
 				for (const tc of result.toolCalls) {
 					emit({ type: 'knowledge.chatState', conversationId: convId, state: 'searching', detail: tc.function.name })
-					const { result: toolResult, step } = await runTool(tc.function.name, tc.function.arguments, filter)
+					const { result: toolResult, step } = await runTool(tc.function.name, tc.function.arguments, filter, allowedTools)
 					steps.push(step)
 					emit({ type: 'knowledge.step', conversationId: convId, step })
 					messages.push({ role: 'tool', content: toolResult, tool_call_id: tc.id })
@@ -404,23 +344,24 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 	})()
 }
 
-export async function ask(question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null): Promise<number> {
+export async function ask(question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null): Promise<number> {
 	const kdb = getKnowledgeDb()
 	const ws = wsId()
+	const mode = routeMode(question, modeId)
 
 	let convId = conversationId
 	const scope = scopeCollectionId ?? null
 	if (convId === null) {
-		const info = kdb.prepare('INSERT INTO conversations (workspace_id, title, scope_collection_id) VALUES (?, ?, ?)')
-			.run(ws, question.slice(0, 60), scope)
+		const info = kdb.prepare('INSERT INTO conversations (workspace_id, title, scope_collection_id, mode_id) VALUES (?, ?, ?, ?)')
+			.run(ws, question.slice(0, 60), scope, mode.id)
 		convId = Number(info.lastInsertRowid)
 	} else {
-		kdb.prepare('UPDATE conversations SET scope_collection_id = ? WHERE id = ?').run(scope, convId)
+		kdb.prepare('UPDATE conversations SET scope_collection_id = ?, mode_id = ? WHERE id = ?').run(scope, mode.id, convId)
 	}
 	kdb.prepare('INSERT INTO messages (conversation_id, role, content, refs) VALUES (?, ?, ?, ?)')
 		.run(convId, 'user', question, JSON.stringify(enrichRefs(refs)))
 
-	runTurn(convId, refs, scopeToFilter(scope))
+	runTurn(convId, refs, scopeToFilter(scope), mode)
 	return convId
 }
 
@@ -434,18 +375,19 @@ export function regenerate(conversationId: number): void {
 		.get(conversationId) as { id: number; role: string } | undefined
 	if (!last) return
 	if (last.role === 'assistant') kdb.prepare('DELETE FROM messages WHERE id = ?').run(last.id)
-	runTurn(conversationId, lastUserRefs(conversationId), conversationFilter(conversationId))
+	runTurn(conversationId, lastUserRefs(conversationId), conversationFilter(conversationId), conversationMode(conversationId))
 }
 
-export function editLastAndResend(conversationId: number, newQuestion: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null): void {
+export function editLastAndResend(conversationId: number, newQuestion: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null): void {
 	const kdb = getKnowledgeDb()
 	const lastUser = kdb.prepare("SELECT id FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1")
 		.get(conversationId) as { id: number } | undefined
 	if (!lastUser) return
 	const scope = scopeCollectionId ?? null
-	kdb.prepare('UPDATE conversations SET scope_collection_id = ? WHERE id = ?').run(scope, conversationId)
+	const mode = routeMode(newQuestion, modeId)
+	kdb.prepare('UPDATE conversations SET scope_collection_id = ?, mode_id = ? WHERE id = ?').run(scope, mode.id, conversationId)
 	kdb.prepare('DELETE FROM messages WHERE conversation_id = ? AND id >= ?').run(conversationId, lastUser.id)
 	kdb.prepare('INSERT INTO messages (conversation_id, role, content, refs) VALUES (?, ?, ?, ?)')
 		.run(conversationId, 'user', newQuestion, JSON.stringify(enrichRefs(refs)))
-	runTurn(conversationId, refs, scopeToFilter(scope))
+	runTurn(conversationId, refs, scopeToFilter(scope), mode)
 }

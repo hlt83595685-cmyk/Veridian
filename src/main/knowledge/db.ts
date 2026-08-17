@@ -96,6 +96,9 @@ export function getKnowledgeDb(): Database.Database {
 	if (!convCols.some((c) => c.name === 'scope_collection_id')) {
 		db.exec('ALTER TABLE conversations ADD COLUMN scope_collection_id INTEGER')
 	}
+	if (!convCols.some((c) => c.name === 'mode_id')) {
+		db.exec('ALTER TABLE conversations ADD COLUMN mode_id TEXT')
+	}
 
 	// Additive migration: older DBs have `messages` without this column.
 	const msgCols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]

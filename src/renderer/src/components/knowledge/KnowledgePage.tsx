@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useUiStore } from '../../stores/uiStore'
 import { useWorkspaceStore } from '../../stores/workspaceStore'
@@ -9,6 +9,7 @@ import type { Item, RetrievalStep } from '../../../../shared/types'
 import { IMPORTANT_SCOPE } from '../../../../shared/types'
 import { ChatMessageView, type CitationInfo } from './ChatMessage'
 import { Chip, PaperclipIcon } from './Chip'
+import { ToolIcon } from './RetrievalTrace'
 
 interface ConversationRow { id: number; title: string; created_at: number; scope_collection_id: number | null }
 interface DisplayMessage {
@@ -28,6 +29,8 @@ interface PendingRef { ref: KnowledgeRef; label: string }
 interface MentionCandidate { label: string; sub: string; ref: KnowledgeRef; token: string }
 type MentionTrigger = { kind: 'at' | 'slash'; start: number; query: string } | null
 
+const TASK_MODES = ['review', 'compare', 'contradict', 'classify', 'tag', 'notes'] as const
+
 export function KnowledgePage(): JSX.Element {
 	const { t } = useTranslation('common')
 	const setPage = useUiStore((s) => s.setPage)
@@ -41,15 +44,24 @@ export function KnowledgePage(): JSX.Element {
 	// comes back empty (this page is kept mounted, so it never retries).
 	const collections = useCollectionStore((s) => s.collections)
 	const [scopeCollectionId, setScopeCollectionId] = useState<number | null>(null)
+	const [activeMode, setActiveMode] = useState<string | null>(null)
 	const [messages, setMessages] = useState<DisplayMessage[]>([])
 	const [input, setInput] = useState('')
 	const [chatState, setChatState] = useState<ChatState>('idle')
 	const [stateDetail, setStateDetail] = useState<string | null>(null)
+	const [liveStep, setLiveStep] = useState<RetrievalStep | null>(null)
 	const [chatConfigured, setChatConfigured] = useState<boolean | null>(null)
 	const streamingRef = useRef('')
 	const bottomRef = useRef<HTMLDivElement>(null)
+	const chatScrollRef = useRef<HTMLDivElement>(null)
+	const turnAnchorRef = useRef<HTMLDivElement>(null)
+	const pinTopRef = useRef(false)
+	const [spacerH, setSpacerH] = useState(0)
 	const activeConvIdRef = useRef<number | null>(null)
 	activeConvIdRef.current = conversationId
+	// The conversation that currently has a generation in flight (may differ from
+	// the one being viewed once the user switches away mid-run).
+	const runningConvIdRef = useRef<number | null>(null)
 	// Synchronous re-entrancy guard for send(). chatState alone isn't safe here:
 	// its setter is async/batched, so two send() calls within the same tick
 	// (IME Enter-to-confirm firing right before Enter-to-submit, a fast
@@ -168,27 +180,35 @@ export function KnowledgePage(): JSX.Element {
 					}
 					return [...prev, { id: 'streaming', role: 'assistant', content: streamingRef.current, citations: [] }]
 				})
+			} else if (e.type === 'knowledge.chatReset') {
+				// An intermediate (tool-calling) round streamed only preamble/thinking;
+				// drop it from the bubble so the bubble ends up holding just the answer.
+				if (e.conversationId !== activeConvIdRef.current) return
+				streamingRef.current = ''
+				setMessages((prev) => (prev[prev.length - 1]?.id === 'streaming' ? prev.slice(0, -1) : prev))
 			} else if (e.type === 'knowledge.step') {
 				if (e.conversationId !== activeConvIdRef.current) return
-				setMessages((prev) => {
-					const last = prev[prev.length - 1]
-					if (last?.id === 'streaming') {
-						return [...prev.slice(0, -1), { ...last, steps: [...(last.steps ?? []), e.step] }]
-					}
-					return [...prev, { id: 'streaming', role: 'assistant', content: streamingRef.current, citations: [], steps: [e.step] }]
-				})
+				setLiveStep(e.step)
 			} else if (e.type === 'knowledge.chatState') {
+				// Record generation lifecycle even for a backgrounded conversation the
+				// user has switched away from, so its completion is never lost (which
+				// otherwise left busy stuck / status bleeding into other sessions).
+				if (e.state === 'done' || e.state === 'error') {
+					if (e.conversationId === runningConvIdRef.current) runningConvIdRef.current = null
+					void refreshConversations()
+				}
 				if (e.conversationId !== activeConvIdRef.current) return
 				setStateDetail(e.detail ?? null)
 				if (e.state === 'done') {
 					setChatState('idle')
 					streamingRef.current = ''
 					busyRef.current = false
+					setLiveStep(null)
 					void refreshMessages(e.conversationId)
-					void refreshConversations()
 				} else if (e.state === 'error') {
 					setChatState('error')
 					busyRef.current = false
+					setLiveStep(null)
 				} else {
 					setChatState(e.state)
 				}
@@ -212,6 +232,10 @@ export function KnowledgePage(): JSX.Element {
 					void window.veridian.knowledge.stop(activeConvIdRef.current)
 				}
 				busyRef.current = false
+				runningConvIdRef.current = null
+				streamingRef.current = ''
+				setLiveStep(null)
+				setStateDetail(null)
 				setConversationId(null)
 				setMessages([])
 				setChatState('idle')
@@ -229,8 +253,15 @@ export function KnowledgePage(): JSX.Element {
 	}, [])
 
 	useEffect(() => {
-		bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-	}, [messages])
+		// Subsequent turns pin the new question to the top of the chat (room below
+		// is provided by the spacer); the first turn / streaming just follows the
+		// bottom.
+		if (pinTopRef.current && turnAnchorRef.current) {
+			turnAnchorRef.current.scrollIntoView({ block: 'start', behavior: 'smooth' })
+		} else {
+			bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+		}
+	}, [messages, liveStep, chatState])
 
 	async function refreshConversations(): Promise<void> {
 		const list = await window.veridian.knowledge.listConversations()
@@ -251,16 +282,36 @@ export function KnowledgePage(): JSX.Element {
 		setConversationId(null)
 		setMessages([])
 		setChatState('idle')
+		streamingRef.current = ''
+		setLiveStep(null)
+		setStateDetail(null)
+		busyRef.current = false
 		setPendingRefs([])
 		setMention(null)
 		setScopeCollectionId(null)
+		setActiveMode(null)
+		pinTopRef.current = false
+		setSpacerH(0)
 	}
 
 	async function openConversation(id: number): Promise<void> {
 		const row = conversations.find((c) => c.id === id)
 		const saved = row?.scope_collection_id ?? null
 		const valid = saved === IMPORTANT_SCOPE || collections.some((c) => c.id === saved)
+		// Reset all transient streaming state so the previous conversation's in-flight
+		// status / thinking / partial bubble never bleeds into this one. If the target
+		// itself is the one still generating, keep it "busy" and let its live events
+		// repaint it.
+		streamingRef.current = ''
+		setLiveStep(null)
+		setStateDetail(null)
+		pinTopRef.current = false
+		setSpacerH(0)
+		const running = id === runningConvIdRef.current
+		busyRef.current = running
+		setChatState(running ? 'searching' : 'idle')
 		setScopeCollectionId(valid ? saved : null)
+		setActiveMode(null)
 		setConversationId(id)
 		await refreshMessages(id)
 	}
@@ -284,24 +335,36 @@ export function KnowledgePage(): JSX.Element {
 		setMention(null)
 		setEditing(null)
 		streamingRef.current = ''
+		setLiveStep(null)
+		// Subsequent turns pin the new question to the top of the chat; the spacer
+		// provides the room needed to scroll it up. The very first turn stays natural.
+		const subsequentTurn = messages.length > 0
+		pinTopRef.current = subsequentTurn
+		if (subsequentTurn) setSpacerH(chatScrollRef.current?.clientHeight ?? 0)
 		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [], refs: sentRefs }])
 		setChatState('searching')
 		if (wasEditing && conversationId !== null) {
-			await window.veridian.knowledge.editResend(conversationId, q, refs.length ? refs : undefined, scopeCollectionId)
+			runningConvIdRef.current = conversationId
+			await window.veridian.knowledge.editResend(conversationId, q, refs.length ? refs : undefined, scopeCollectionId, activeMode)
 		} else {
-			const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined, scopeCollectionId)
+			if (conversationId !== null) runningConvIdRef.current = conversationId
+			const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined, scopeCollectionId, activeMode)
 			setConversationId(id)
+			runningConvIdRef.current = id
 		}
 	}
 
 	async function stop(): Promise<void> {
 		if (conversationId !== null) await window.veridian.knowledge.stop(conversationId)
+		if (conversationId === runningConvIdRef.current) runningConvIdRef.current = null
 	}
 
 	function regenerate(): void {
 		if (conversationId === null || busyRef.current) return
 		busyRef.current = true
+		runningConvIdRef.current = conversationId
 		streamingRef.current = ''
+		setLiveStep(null)
 		setMessages((prev) => {
 			const last = prev[prev.length - 1]
 			return last?.role === 'assistant' ? prev.slice(0, -1) : prev
@@ -394,7 +457,7 @@ export function KnowledgePage(): JSX.Element {
 					</span>
 				</div>
 
-				<div style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+				<div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 					{chatConfigured === false && (
 						<div style={notConfiguredBanner}>
 							<span>{t('knowledge.notConfigured')}</span>
@@ -406,34 +469,50 @@ export function KnowledgePage(): JSX.Element {
 						</div>
 					)}
 					{messages.map((m) => (
-						<ChatMessageView
-							key={m.id}
-							role={m.role}
-							content={m.content}
-							citations={m.citations}
-							steps={m.steps}
-							refs={m.refs}
-							streaming={m.id === 'streaming'}
-							isLast={!busy && (m.role === 'assistant' ? m.id === lastId : m.id === lastUserId)}
-							onRegenerate={m.role === 'assistant' && m.id === lastId ? regenerate : undefined}
-							onEdit={m.role === 'user' && m.id === lastUserId ? () => startEdit(m) : undefined}
-						/>
+						<Fragment key={m.id}>
+							{m.role === 'user' && m.id === lastUserId && <div ref={turnAnchorRef} style={{ scrollMarginTop: 12 }} />}
+							<ChatMessageView
+								role={m.role}
+								content={m.content}
+								citations={m.citations}
+								refs={m.refs}
+								streaming={m.id === 'streaming'}
+								isLast={!busy && (m.role === 'assistant' ? m.id === lastId : m.id === lastUserId)}
+								onRegenerate={m.role === 'assistant' && m.id === lastId ? regenerate : undefined}
+								onEdit={m.role === 'user' && m.id === lastUserId ? () => startEdit(m) : undefined}
+							/>
+						</Fragment>
 					))}
-					{busy && (
-						<div style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-							<span className="chat-dot-pulse" />
-							{chatState === 'searching'
-								? (stateDetail ? t('knowledge.searchingTool', { query: stateDetail }) : t('knowledge.searching'))
-								: t('knowledge.answering')}
-						</div>
-					)}
 					{chatState === 'error' && (
 						<div style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--danger, #dc2626)' }}>
 							{t('knowledge.error', { detail: stateDetail ?? '' })}
 						</div>
 					)}
 					<div ref={bottomRef} />
+					<div style={{ flexShrink: 0, height: spacerH }} />
 				</div>
+
+				{busy && (
+					<div style={{ padding: '6px 20px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--foreground)', overflow: 'hidden' }}>
+						<span className="chat-dot-pulse" />
+						{chatState === 'answering' ? (
+							<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+								{t('knowledge.doing.answering')}
+							</span>
+						) : liveStep ? (
+							<>
+								<ToolIcon tool={liveStep.tool} />
+								<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+									{t(`knowledge.doing.${liveStep.tool}`, { q: liveStep.label })}
+								</span>
+							</>
+						) : (
+							<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+								{t('knowledge.doing.searching')}
+							</span>
+						)}
+					</div>
+				)}
 
 				<div style={{ padding: '12px 16px 16px', borderTop: '1px solid var(--separator)', position: 'relative' }}>
 					{mention && mentionCandidates.length > 0 && (
@@ -458,31 +537,49 @@ export function KnowledgePage(): JSX.Element {
 						</div>
 					)}
 					<div style={{ display: 'flex', gap: 8 }}>
-						<div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-							<select
-								value={scopeCollectionId ?? ''}
-								onChange={(e) => setScopeCollectionId(e.target.value ? Number(e.target.value) : null)}
-								title={t('knowledge.scopeSelectTitle')}
-								style={{
-									alignSelf: 'flex-start', marginBottom: 6, height: 26, padding: '0 8px',
-									borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
-									background: 'var(--surface)', color: 'var(--foreground-2)', fontSize: 12,
-								}}
-							>
-								<option value="">{t('knowledge.scopeWholeLibrary')}</option>
-								<option value={IMPORTANT_SCOPE}>{t('knowledge.scopeImportant')}</option>
-								{collections.map((c) => (
-									<option key={c.id} value={c.id}>{c.name}</option>
-								))}
-							</select>
+						<div style={composerBoxStyle}>
+							<div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 4px 0' }}>
+								<select
+									value={activeMode ?? 'qa'}
+									onChange={(e) => {
+										const v = e.target.value
+										const nextMode = v === 'qa' ? null : v
+										setActiveMode(nextMode)
+										// Replace the input when it's empty OR still holds an
+										// unedited task template (so switching tasks overwrites the
+										// previous template), but never clobber text the user typed.
+										const isAutoTemplate = TASK_MODES.some((m) => input === t('knowledge.template.' + m))
+										if (nextMode && (input.trim() === '' || isAutoTemplate)) setInput(t('knowledge.template.' + nextMode))
+										else if (!nextMode && isAutoTemplate) setInput('')
+									}}
+									style={taskSelectStyle}
+								>
+									<option value="qa">{t('knowledge.mode.qa')}</option>
+									{TASK_MODES.map((id) => (
+										<option key={id} value={id}>{t('knowledge.mode.' + id)}</option>
+									))}
+								</select>
+								<select
+									value={scopeCollectionId ?? ''}
+									onChange={(e) => setScopeCollectionId(e.target.value ? Number(e.target.value) : null)}
+									title={t('knowledge.scopeSelectTitle')}
+									style={scopeSelectStyle}
+								>
+									<option value="">{t('knowledge.scopeWholeLibrary')}</option>
+									<option value={IMPORTANT_SCOPE}>{t('knowledge.scopeImportant')}</option>
+									{collections.map((c) => (
+										<option key={c.id} value={c.id}>{c.name}</option>
+									))}
+								</select>
+							</div>
 							{editing !== null && (
-								<div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 11.5, color: 'var(--muted)' }}>
+								<div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 8px 0', fontSize: 11.5, color: 'var(--muted)' }}>
 									<span>{t('knowledge.editingNote')}</span>
 									<button onClick={cancelEdit} style={{ border: 'none', background: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', fontSize: 11.5 }}>{t('knowledge.cancel')}</button>
 								</div>
 							)}
 							{pendingRefs.length > 0 && (
-								<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+								<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '4px 8px 0' }}>
 									{pendingRefs.map((p, i) => (
 										<Chip key={i} icon={<PaperclipIcon />} label={p.label} maxWidth={260}
 											onRemove={() => setPendingRefs((prev) => prev.filter((_, j) => j !== i))} />
@@ -534,9 +631,27 @@ const backBtnStyle: React.CSSProperties = {
 }
 
 const inputStyle: React.CSSProperties = {
-	flex: 1, minHeight: 38, maxHeight: 120, padding: '9px 12px', borderRadius: 10,
-	border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--foreground)',
-	fontSize: 13, resize: 'none', fontFamily: 'inherit',
+	flex: 1, minHeight: 68, maxHeight: 200, padding: '10px 12px',
+	border: 'none', background: 'transparent', color: 'var(--foreground)',
+	fontSize: 13, resize: 'none', fontFamily: 'inherit', outline: 'none',
+}
+
+const composerBoxStyle: React.CSSProperties = {
+	display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0,
+	border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)',
+}
+
+const taskSelectStyle: React.CSSProperties = {
+	border: 'none', background: 'transparent', outline: 'none', fontSize: 12,
+	padding: '2px 4px', color: 'var(--foreground-2)', cursor: 'pointer', flexShrink: 0,
+}
+
+const scopeSelectStyle: React.CSSProperties = {
+	border: 'none', background: 'transparent', outline: 'none', fontSize: 12,
+	padding: '2px 4px', color: 'var(--foreground-2)', cursor: 'pointer',
+	maxWidth: 160, overflow: 'hidden',
+	WebkitMaskImage: 'linear-gradient(to right, #000 72%, transparent)',
+	maskImage: 'linear-gradient(to right, #000 72%, transparent)',
 }
 
 const mentionPopupStyle: React.CSSProperties = {

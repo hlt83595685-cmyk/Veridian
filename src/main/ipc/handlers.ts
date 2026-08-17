@@ -283,12 +283,12 @@ export const handlers: Record<IpcChannel, Handler> = {
   'github:listCollaborators': (_e, owner: string, repo: string) => GitHub.listCollaborators(owner, repo),
 
   // AI knowledge base
-  'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null) =>
-    Agent.ask(question, conversationId, refs, scopeCollectionId),
+  'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) =>
+    Agent.ask(question, conversationId, refs, scopeCollectionId, modeId),
   'knowledge:stop':               (_e, conversationId: number) => Agent.stopGeneration(conversationId),
   'knowledge:regenerate':         (_e, conversationId: number) => Agent.regenerate(conversationId),
-  'knowledge:editResend':         (_e, conversationId: number, question: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null) =>
-    Agent.editLastAndResend(conversationId, question, refs, scopeCollectionId),
+  'knowledge:editResend':         (_e, conversationId: number, question: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) =>
+    Agent.editLastAndResend(conversationId, question, refs, scopeCollectionId, modeId),
   'knowledge:listConversations':  () => Agent.listConversations(),
   'knowledge:getMessages':        (_e, conversationId: number) => Agent.getMessages(conversationId),
   'knowledge:getChunk':           (_e, itemKey: string, seq: number) =>

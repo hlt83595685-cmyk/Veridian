@@ -7,9 +7,7 @@ import 'katex/dist/katex.min.css'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useUiStore } from '../../stores/uiStore'
-import { RetrievalTrace } from './RetrievalTrace'
 import { Chip, PaperclipIcon } from './Chip'
-import type { RetrievalStep } from '../../../../shared/types'
 
 export interface CitationInfo { itemKey: string; itemId: number | null; seq: number; title: string | null }
 
@@ -69,12 +67,11 @@ async function openCitation(
 	openMarkdown(md.path, md.filename ?? 'Full.md')
 }
 
-export function ChatMessageView({ role, content, citations, streaming, steps, isLast, onRegenerate, onEdit, refs }: {
+export function ChatMessageView({ role, content, citations, streaming, isLast, onRegenerate, onEdit, refs }: {
 	role: 'user' | 'assistant'
 	content: string
 	citations: CitationInfo[]
 	streaming?: boolean
-	steps?: RetrievalStep[]
 	isLast?: boolean
 	onRegenerate?: () => void
 	onEdit?: () => void
@@ -113,9 +110,6 @@ export function ChatMessageView({ role, content, citations, streaming, steps, is
 
 	return (
 		<div className="msg-row" style={{ alignSelf: 'flex-start', maxWidth: '88%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-			{role === 'assistant' && steps && steps.length > 0 && (
-				<RetrievalTrace steps={steps} streaming={streaming} />
-			)}
 			<div style={{
 				padding: '10px 14px', borderRadius: '14px 14px 14px 4px',
 				background: 'var(--surface-2)', border: '1px solid var(--border)',
