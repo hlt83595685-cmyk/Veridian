@@ -9,6 +9,7 @@ import type { Item, RetrievalStep } from '../../../../shared/types'
 import { IMPORTANT_SCOPE } from '../../../../shared/types'
 import { ChatMessageView, type CitationInfo } from './ChatMessage'
 import { Chip, PaperclipIcon } from './Chip'
+import { ToolIcon } from './RetrievalTrace'
 
 interface ConversationRow { id: number; title: string; created_at: number; scope_collection_id: number | null }
 interface DisplayMessage {
@@ -343,6 +344,8 @@ export function KnowledgePage(): JSX.Element {
 	const scopeLabel = activeWs?.name ?? t('knowledge.personalLibrary')
 	const lastId = messages[messages.length - 1]?.id
 	const lastUserId = [...messages].reverse().find((m) => m.role === 'user')?.id
+	const streamingMsg = messages[messages.length - 1]?.id === 'streaming' ? messages[messages.length - 1] : undefined
+	const liveStep = streamingMsg?.steps?.[streamingMsg.steps.length - 1]
 
 	return (
 		<div style={{ display: 'flex', height: '100%' }}>
@@ -416,7 +419,6 @@ export function KnowledgePage(): JSX.Element {
 							role={m.role}
 							content={m.content}
 							citations={m.citations}
-							steps={m.steps}
 							refs={m.refs}
 							streaming={m.id === 'streaming'}
 							isLast={!busy && (m.role === 'assistant' ? m.id === lastId : m.id === lastUserId)}
@@ -425,11 +427,24 @@ export function KnowledgePage(): JSX.Element {
 						/>
 					))}
 					{busy && (
-						<div style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+						<div style={{ alignSelf: 'flex-start', maxWidth: '88%', fontSize: 12, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
 							<span className="chat-dot-pulse" />
-							{chatState === 'searching'
-								? (stateDetail ? t('knowledge.searchingTool', { query: stateDetail }) : t('knowledge.searching'))
-								: t('knowledge.answering')}
+							{chatState === 'answering' ? (
+								<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+									{t('knowledge.doing.answering')}
+								</span>
+							) : liveStep ? (
+								<>
+									<ToolIcon tool={liveStep.tool} />
+									<span style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+										{t(`knowledge.doing.${liveStep.tool}`, { q: liveStep.label })}
+									</span>
+								</>
+							) : (
+								<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+									{t('knowledge.doing.searching')}
+								</span>
+							)}
 						</div>
 					)}
 					{chatState === 'error' && (
