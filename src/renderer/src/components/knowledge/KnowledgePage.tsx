@@ -59,6 +59,9 @@ export function KnowledgePage(): JSX.Element {
 	const [spacerH, setSpacerH] = useState(0)
 	const activeConvIdRef = useRef<number | null>(null)
 	activeConvIdRef.current = conversationId
+	// The conversation that currently has a generation in flight (may differ from
+	// the one being viewed once the user switches away mid-run).
+	const runningConvIdRef = useRef<number | null>(null)
 	// Synchronous re-entrancy guard for send(). chatState alone isn't safe here:
 	// its setter is async/batched, so two send() calls within the same tick
 	// (IME Enter-to-confirm firing right before Enter-to-submit, a fast
@@ -187,6 +190,13 @@ export function KnowledgePage(): JSX.Element {
 				if (e.conversationId !== activeConvIdRef.current) return
 				setLiveStep(e.step)
 			} else if (e.type === 'knowledge.chatState') {
+				// Record generation lifecycle even for a backgrounded conversation the
+				// user has switched away from, so its completion is never lost (which
+				// otherwise left busy stuck / status bleeding into other sessions).
+				if (e.state === 'done' || e.state === 'error') {
+					if (e.conversationId === runningConvIdRef.current) runningConvIdRef.current = null
+					void refreshConversations()
+				}
 				if (e.conversationId !== activeConvIdRef.current) return
 				setStateDetail(e.detail ?? null)
 				if (e.state === 'done') {
@@ -195,7 +205,6 @@ export function KnowledgePage(): JSX.Element {
 					busyRef.current = false
 					setLiveStep(null)
 					void refreshMessages(e.conversationId)
-					void refreshConversations()
 				} else if (e.state === 'error') {
 					setChatState('error')
 					busyRef.current = false
@@ -223,6 +232,10 @@ export function KnowledgePage(): JSX.Element {
 					void window.veridian.knowledge.stop(activeConvIdRef.current)
 				}
 				busyRef.current = false
+				runningConvIdRef.current = null
+				streamingRef.current = ''
+				setLiveStep(null)
+				setStateDetail(null)
 				setConversationId(null)
 				setMessages([])
 				setChatState('idle')
@@ -269,6 +282,10 @@ export function KnowledgePage(): JSX.Element {
 		setConversationId(null)
 		setMessages([])
 		setChatState('idle')
+		streamingRef.current = ''
+		setLiveStep(null)
+		setStateDetail(null)
+		busyRef.current = false
 		setPendingRefs([])
 		setMention(null)
 		setScopeCollectionId(null)
@@ -281,6 +298,18 @@ export function KnowledgePage(): JSX.Element {
 		const row = conversations.find((c) => c.id === id)
 		const saved = row?.scope_collection_id ?? null
 		const valid = saved === IMPORTANT_SCOPE || collections.some((c) => c.id === saved)
+		// Reset all transient streaming state so the previous conversation's in-flight
+		// status / thinking / partial bubble never bleeds into this one. If the target
+		// itself is the one still generating, keep it "busy" and let its live events
+		// repaint it.
+		streamingRef.current = ''
+		setLiveStep(null)
+		setStateDetail(null)
+		pinTopRef.current = false
+		setSpacerH(0)
+		const running = id === runningConvIdRef.current
+		busyRef.current = running
+		setChatState(running ? 'searching' : 'idle')
 		setScopeCollectionId(valid ? saved : null)
 		setActiveMode(null)
 		setConversationId(id)
@@ -315,21 +344,27 @@ export function KnowledgePage(): JSX.Element {
 		setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content: q, citations: [], refs: sentRefs }])
 		setChatState('searching')
 		if (wasEditing && conversationId !== null) {
+			runningConvIdRef.current = conversationId
 			await window.veridian.knowledge.editResend(conversationId, q, refs.length ? refs : undefined, scopeCollectionId, activeMode)
 		} else {
+			if (conversationId !== null) runningConvIdRef.current = conversationId
 			const id = await window.veridian.knowledge.ask(q, conversationId, refs.length ? refs : undefined, scopeCollectionId, activeMode)
 			setConversationId(id)
+			runningConvIdRef.current = id
 		}
 	}
 
 	async function stop(): Promise<void> {
 		if (conversationId !== null) await window.veridian.knowledge.stop(conversationId)
+		if (conversationId === runningConvIdRef.current) runningConvIdRef.current = null
 	}
 
 	function regenerate(): void {
 		if (conversationId === null || busyRef.current) return
 		busyRef.current = true
+		runningConvIdRef.current = conversationId
 		streamingRef.current = ''
+		setLiveStep(null)
 		setMessages((prev) => {
 			const last = prev[prev.length - 1]
 			return last?.role === 'assistant' ? prev.slice(0, -1) : prev
