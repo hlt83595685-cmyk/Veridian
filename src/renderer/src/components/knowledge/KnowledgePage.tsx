@@ -422,11 +422,6 @@ export function KnowledgePage(): JSX.Element {
 							onEdit={m.role === 'user' && m.id === lastUserId ? () => startEdit(m) : undefined}
 						/>
 					))}
-					{busy && (
-						<div style={{ alignSelf: 'flex-start', background: 'red', color: 'white', padding: '6px 10px', borderRadius: 6, fontSize: 15, fontWeight: 700, maxWidth: '88%', overflow: 'hidden' }}>
-							LIVE dbg: state={chatState} step={liveStep?.tool ?? '-'}
-						</div>
-					)}
 					{chatState === 'error' && (
 						<div style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--danger, #dc2626)' }}>
 							{t('knowledge.error', { detail: stateDetail ?? '' })}
@@ -434,6 +429,28 @@ export function KnowledgePage(): JSX.Element {
 					)}
 					<div ref={bottomRef} />
 				</div>
+
+				{busy && (
+					<div style={{ padding: '6px 20px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--foreground)', overflow: 'hidden' }}>
+						<span className="chat-dot-pulse" />
+						{chatState === 'answering' ? (
+							<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+								{t('knowledge.doing.answering')}
+							</span>
+						) : liveStep ? (
+							<>
+								<ToolIcon tool={liveStep.tool} />
+								<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+									{t(`knowledge.doing.${liveStep.tool}`, { q: liveStep.label })}
+								</span>
+							</>
+						) : (
+							<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+								{t('knowledge.doing.searching')}
+							</span>
+						)}
+					</div>
+				)}
 
 				<div style={{ padding: '12px 16px 16px', borderTop: '1px solid var(--separator)', position: 'relative' }}>
 					{mention && mentionCandidates.length > 0 && (
