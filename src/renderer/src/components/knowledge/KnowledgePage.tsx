@@ -177,6 +177,12 @@ export function KnowledgePage(): JSX.Element {
 					}
 					return [...prev, { id: 'streaming', role: 'assistant', content: streamingRef.current, citations: [] }]
 				})
+			} else if (e.type === 'knowledge.chatReset') {
+				// An intermediate (tool-calling) round streamed only preamble/thinking;
+				// drop it from the bubble so the bubble ends up holding just the answer.
+				if (e.conversationId !== activeConvIdRef.current) return
+				streamingRef.current = ''
+				setMessages((prev) => (prev[prev.length - 1]?.id === 'streaming' ? prev.slice(0, -1) : prev))
 			} else if (e.type === 'knowledge.step') {
 				if (e.conversationId !== activeConvIdRef.current) return
 				setLiveStep(e.step)

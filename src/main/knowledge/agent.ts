@@ -300,9 +300,15 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 			let finalText = ''
 			for (let round = 0; round < MAX_ROUNDS; round++) {
 				emit({ type: 'knowledge.chatState', conversationId: convId, state: round === 0 ? 'searching' : 'answering' })
-				const result = await chatStream(cfg, messages, tools, () => {}, ac.signal)
+				const result = await chatStream(cfg, messages, tools, (delta) => {
+					emit({ type: 'knowledge.chatDelta', conversationId: convId, delta })
+				}, ac.signal)
 				if (result.toolCalls.length === 0) { finalText = result.content; break }
 				messages.push({ role: 'assistant', content: result.content || null, tool_calls: result.toolCalls })
+				// This round streamed only preamble/thinking (it's about to call tools).
+				// Clear it from the answer bubble — thinking belongs in the live status
+				// line, not the answer. Only the final (no-tool) round's stream stays.
+				emit({ type: 'knowledge.chatReset', conversationId: convId })
 				for (const tc of result.toolCalls) {
 					emit({ type: 'knowledge.chatState', conversationId: convId, state: 'searching', detail: tc.function.name })
 					const { result: toolResult, step } = await runTool(tc.function.name, tc.function.arguments, filter, allowedTools)
@@ -319,14 +325,11 @@ function runTurn(convId: number, refs: KnowledgeRef[] | undefined, filter: impor
 				// blank bubble. Do NOT append a user message here: after tool-result
 				// turns that would create two consecutive user turns, which the
 				// Anthropic (claude-subscription) API rejects with a 400.
-				const wrap = await chatStream(cfg, messages, [], () => {}, ac.signal)
+				const wrap = await chatStream(cfg, messages, [], (delta) => {
+					emit({ type: 'knowledge.chatDelta', conversationId: convId, delta })
+				}, ac.signal)
 				finalText = wrap.content
 			}
-			// Stream nothing intermediate to the bubble — the model's per-round
-			// preamble ("I'll read the papers…") is process, not the answer, and is
-			// shown in the live status line instead. Emit only the final answer, once,
-			// so the chat bubble holds just the answer.
-			emit({ type: 'knowledge.chatDelta', conversationId: convId, delta: finalText })
 			const citations = resolveCitations(extractCitations(finalText))
 			kdb.prepare('INSERT INTO messages (conversation_id, role, content, citations, steps) VALUES (?, ?, ?, ?, ?)')
 				.run(convId, 'assistant', finalText, JSON.stringify(citations), JSON.stringify(steps))
