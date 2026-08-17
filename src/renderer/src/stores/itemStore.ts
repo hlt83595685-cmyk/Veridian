@@ -13,6 +13,9 @@ interface ItemStore {
   viewerPath: string | null
   viewerFilename: string | null
   viewerType: ViewerType
+  // Standalone note page viewer -- mutually exclusive with the file viewer
+  // (viewerPath) and with paper selection. Not persisted across restart.
+  noteViewerId: number | null
   // Transient one-shot target for scrolling the markdown reader to a clicked
   // citation. Consumed once by MarkdownViewer then cleared, so it is NOT part
   // of the persisted session (reopening a file later must not re-scroll).
@@ -27,6 +30,8 @@ interface ItemStore {
   openMarkdown: (path: string, filename: string) => void
   openGallery: (dirPath: string, name: string) => void
   closePdf: () => void
+  openNote: (id: number) => void
+  closeNote: () => void
 }
 
 export const useItemStore = create<ItemStore>((set) => ({
@@ -38,6 +43,7 @@ export const useItemStore = create<ItemStore>((set) => ({
   viewerPath: null,
   viewerFilename: null,
   viewerType: 'pdf',
+  noteViewerId: null,
   mdScrollTarget: null,
 
   setMdScrollTarget: (t) => set({ mdScrollTarget: t }),
@@ -66,9 +72,9 @@ export const useItemStore = create<ItemStore>((set) => ({
     }
   },
 
-  setSelectedId: (id) => set({ selectedId: id }),
+  setSelectedId: (id) => set({ selectedId: id, noteViewerId: null }),
   setActiveCollection: (id) => {
-    set({ activeCollection: id, selectedId: null, viewerPath: null, yearSort: 'none' })
+    set({ activeCollection: id, selectedId: null, viewerPath: null, yearSort: 'none', noteViewerId: null })
     window.veridian.session.saveViewer(null)
     setTimeout(() => useItemStore.getState().loadItems(), 0)
   },
@@ -77,19 +83,21 @@ export const useItemStore = create<ItemStore>((set) => ({
   // Each open action also persists itself for session restore -- next launch
   // reopens whichever reader (if any) was showing when the app quit.
   openPdf: (path, filename) => {
-    set({ viewerPath: path, viewerFilename: filename, viewerType: 'pdf' })
+    set({ viewerPath: path, viewerFilename: filename, viewerType: 'pdf', noteViewerId: null })
     window.veridian.session.saveViewer({ type: 'pdf', path, filename })
   },
   openMarkdown: (path, filename) => {
-    set({ viewerPath: path, viewerFilename: filename, viewerType: 'markdown' })
+    set({ viewerPath: path, viewerFilename: filename, viewerType: 'markdown', noteViewerId: null })
     window.veridian.session.saveViewer({ type: 'markdown', path, filename })
   },
   openGallery: (dirPath, name) => {
-    set({ viewerPath: dirPath, viewerFilename: name, viewerType: 'gallery' })
+    set({ viewerPath: dirPath, viewerFilename: name, viewerType: 'gallery', noteViewerId: null })
     window.veridian.session.saveViewer({ type: 'gallery', path: dirPath, filename: name })
   },
   closePdf: () => {
     set({ viewerPath: null, viewerFilename: null })
     window.veridian.session.saveViewer(null)
   },
+  openNote: (id) => set({ noteViewerId: id, viewerPath: null }),
+  closeNote: () => set({ noteViewerId: null }),
 }))

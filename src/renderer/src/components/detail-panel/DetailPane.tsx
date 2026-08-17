@@ -4,9 +4,29 @@ import { useItemStore } from '../../stores/itemStore'
 import { MetadataTab } from './MetadataTab'
 import { TagsTab } from './TagsTab'
 import { AttachmentsTab } from './AttachmentsTab'
+import { NoteEditor } from '../notes/NoteEditor'
+import { Backlinks } from '../notes/Backlinks'
+import { resolveWiki } from '../notes/resolveWiki'
 import type { Item } from '../../../../shared/types'
 
 type Tab = 'metadata' | 'tags' | 'attachments' | 'notes'
+
+function NotesTab({ itemId }: { itemId: number }): JSX.Element {
+  const [noteId, setNoteId] = useState<number | undefined>(undefined)
+  const [refreshKey, setRefreshKey] = useState(0)
+  useEffect(() => { void window.veridian.notes.listByItem(itemId).then((ns) => setNoteId(ns[0]?.id)) }, [itemId])
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: 16, gap: 12, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 120 }}>
+        <NoteEditor noteId={noteId} itemId={itemId} onWiki={resolveWiki} onSaved={(id) => { setNoteId(id); setRefreshKey((k) => k + 1) }} />
+      </div>
+      <div style={{ borderTop: '1px dashed var(--border)', paddingTop: 10 }}>
+        <Backlinks kind="item" id={itemId} refreshKey={refreshKey}
+          onOpen={(k, i) => (k === 'note' ? useItemStore.getState().openNote(i) : useItemStore.getState().setSelectedId(i))} />
+      </div>
+    </div>
+  )
+}
 
 export function DetailPane({ itemId }: { itemId: number }): JSX.Element {
   const { t } = useTranslation('common')
@@ -82,11 +102,7 @@ export function DetailPane({ itemId }: { itemId: number }): JSX.Element {
         {tab === 'metadata'    && <MetadataTab item={item} onSaved={handleSaved} />}
         {tab === 'tags'        && <TagsTab itemId={item.id} />}
         {tab === 'attachments' && <AttachmentsTab itemId={item.id} />}
-        {tab === 'notes'       && (
-          <div style={{ padding: 20, color: 'var(--muted)', fontSize: 13 }}>
-            {t('detail.notesPlaceholder')}
-          </div>
-        )}
+        {tab === 'notes'       && <NotesTab itemId={item.id} />}
       </div>
     </div>
   )
