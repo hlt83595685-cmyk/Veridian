@@ -422,11 +422,8 @@ export function KnowledgePage(): JSX.Element {
 							onEdit={m.role === 'user' && m.id === lastUserId ? () => startEdit(m) : undefined}
 						/>
 					))}
-					<div style={{ alignSelf: 'flex-start', fontSize: 11, color: 'red', fontFamily: 'monospace' }}>
-						[dbg] state={chatState} · busy={String(busy)} · step={liveStep?.tool ?? '-'}
-					</div>
 					{busy && (
-						<div style={{ alignSelf: 'flex-start', maxWidth: '88%', overflow: 'hidden', fontSize: 12, color: 'var(--foreground-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+						<div style={{ alignSelf: 'flex-start', maxWidth: '88%', overflow: 'hidden', fontSize: 12.5, color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: 6 }}>
 							<span className="chat-dot-pulse" />
 							{chatState === 'answering' ? (
 								<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
