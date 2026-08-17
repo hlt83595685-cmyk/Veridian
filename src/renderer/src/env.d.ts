@@ -103,10 +103,10 @@ interface VeridianAPI {
     }>
   }
   knowledge: {
-    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null) => Promise<number>
+    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) => Promise<number>
     stop: (conversationId: number) => Promise<void>
     regenerate: (conversationId: number) => Promise<void>
-    editResend: (conversationId: number, question: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null) => Promise<void>
+    editResend: (conversationId: number, question: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) => Promise<void>
     listConversations: () => Promise<Array<{ id: number; title: string; created_at: number; scope_collection_id: number | null }>>
     getMessages: (conversationId: number) => Promise<Array<{
       id: number; conversation_id: number; role: string; content: string
