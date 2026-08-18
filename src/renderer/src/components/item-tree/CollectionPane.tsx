@@ -60,6 +60,17 @@ function IconFolder({ open }: { open?: boolean }): JSX.Element {
   )
 }
 
+function IconNote(): JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <rect x="3.5" y="2.5" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" fill="none"/>
+      <line x1="5.75" y1="5.6" x2="10.25" y2="5.6" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+      <line x1="5.75" y1="8" x2="10.25" y2="8" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+      <line x1="5.75" y1="10.4" x2="8.5" y2="10.4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
 function Twisty({ open, onClick }: { open: boolean; onClick: (e: React.MouseEvent) => void }): JSX.Element {
   return (
     <span
@@ -486,7 +497,7 @@ export function CollectionPane(): JSX.Element {
             <NavRow
               key={n.id}
               id={`note:${n.id}`}
-              icon={<span style={{ fontSize: 13 }}>📝</span>}
+              icon={<IconNote />}
               label={n.title && n.title.trim() ? n.title : t('notes.untitled')}
               active={active}
               onClick={() => useItemStore.getState().openNote(n.id)}
