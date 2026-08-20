@@ -328,9 +328,21 @@ export function importAll(db: Database.Database, repoRoot: string): void {
       }
     }
 
-    // Anything in the db but not in the tree was deleted remotely
+    // Anything in the db but not in the tree was deleted remotely -- but ONLY
+    // if it ever made it into the tree to begin with. An item whose payloads
+    // all still sit outside the content root (fresh import, conversion still
+    // pending or failed, a crash before the export ran) has never been
+    // exported, so its absence says nothing about a remote deletion. Deleting
+    // those was how a batch import could lose everything but the few papers
+    // that happened to convert before an error. Prefix-match in JS, not SQL
+    // LIKE: '_' in a Windows path is a LIKE wildcard and would mis-match.
+    const exported = new Set<number>()
+    for (const a of db.prepare('SELECT item_id, path FROM attachments WHERE path IS NOT NULL')
+      .all() as Array<{ item_id: number; path: string }>) {
+      if (a.path.startsWith(repoRoot)) exported.add(a.item_id)
+    }
     const stale = (db.prepare('SELECT id, key FROM items').all() as Array<{ id: number; key: string }>)
-      .filter((r) => !treeKeys.has(r.key))
+      .filter((r) => !treeKeys.has(r.key) && exported.has(r.id))
     for (const r of stale) db.prepare('DELETE FROM items WHERE id = ?').run(r.id)
 
     // items_fts is an external-content FTS5 table -- direct INSERT/UPDATE/
