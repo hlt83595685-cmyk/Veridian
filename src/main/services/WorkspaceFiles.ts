@@ -19,7 +19,7 @@ import {
   copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync,
   renameSync, rmSync, statSync, writeFileSync,
 } from 'fs'
-import { basename, join } from 'path'
+import { basename, join, sep } from 'path'
 
 interface ItemJson {
   key: string
@@ -336,10 +336,13 @@ export function importAll(db: Database.Database, repoRoot: string): void {
     // those was how a batch import could lose everything but the few papers
     // that happened to convert before an error. Prefix-match in JS, not SQL
     // LIKE: '_' in a Windows path is a LIKE wildcard and would mis-match.
+    // Match is bounded at a path separator so a sibling folder that merely
+    // shares repoRoot's string prefix (e.g. "C:\Lib-backup") doesn't count.
     const exported = new Set<number>()
+    const repoRootPrefix = repoRoot.endsWith(sep) ? repoRoot : repoRoot + sep
     for (const a of db.prepare('SELECT item_id, path FROM attachments WHERE path IS NOT NULL')
       .all() as Array<{ item_id: number; path: string }>) {
-      if (a.path.startsWith(repoRoot)) exported.add(a.item_id)
+      if (a.path === repoRoot || a.path.startsWith(repoRootPrefix)) exported.add(a.item_id)
     }
     const stale = (db.prepare('SELECT id, key FROM items').all() as Array<{ id: number; key: string }>)
       .filter((r) => !treeKeys.has(r.key) && exported.has(r.id))

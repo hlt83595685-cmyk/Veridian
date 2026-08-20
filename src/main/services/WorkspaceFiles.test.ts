@@ -107,6 +107,18 @@ suite('importAll deletion guard', () => {
     expect(count.n).toBe(0)
   })
 
+  it('does not treat a prefix-sibling folder as inside the content root', () => {
+    db.prepare("INSERT INTO items (key, type, title) VALUES ('SIB1', 'journalArticle', 'Sibling path')").run()
+    // `${root}-backup` shares root's full string prefix but is NOT inside it.
+    db.prepare("INSERT INTO attachments (item_id, type, filename, path) VALUES (1, 'pdf', 'a.pdf', ?)")
+      .run(join(`${root}-backup`, 'a.pdf'))
+
+    importAll(db, root)
+
+    const rows = db.prepare("SELECT key FROM items").all() as Array<{ key: string }>
+    expect(rows.map((r) => r.key)).toEqual(['SIB1'])
+  })
+
   it('keeps an item that is present in the tree', () => {
     const dir = join(root, 'papers', 'Kept')
     mkdirSync(join(dir, 'files'), { recursive: true })
