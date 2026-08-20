@@ -15,6 +15,7 @@ interface JobTypeConfig {
   concurrency: number
   maxAttempts: number
   handler: JobHandler<unknown>
+  onIdle?: () => void
 }
 
 interface Job {
@@ -28,16 +29,18 @@ interface Job {
 const types = new Map<string, JobTypeConfig>()
 const queue: Job[] = []
 const running = new Map<string, number>()  // type -> active count
+const retrying = new Map<string, number>()  // type -> jobs waiting out a backoff
 
 export function registerJobType<P>(
   type: string,
   handler: JobHandler<P>,
-  opts: { concurrency?: number; maxAttempts?: number } = {}
+  opts: { concurrency?: number; maxAttempts?: number; onIdle?: () => void } = {}
 ): void {
   types.set(type, {
     concurrency: opts.concurrency ?? 1,
     maxAttempts: opts.maxAttempts ?? 1,
     handler: handler as JobHandler<unknown>,
+    onIdle: opts.onIdle,
   })
 }
 
@@ -52,6 +55,16 @@ export function enqueue<P>(type: string, label: string, payload: P): string {
 
 function pendingOf(type: string): number {
   return queue.filter((j) => j.type === type).length
+}
+
+/**
+ * Is this job type still working? True while anything is running, queued, or
+ * waiting out a retry backoff. Derived from the queue's own bookkeeping, which
+ * settles every job exactly once even when its handler throws -- callers get an
+ * idle signal that cannot wedge.
+ */
+export function isBusy(type: string): boolean {
+  return (running.get(type) ?? 0) > 0 || pendingOf(type) > 0 || (retrying.get(type) ?? 0) > 0
 }
 
 function pushStatus(
@@ -78,6 +91,7 @@ function drain(): void {
     run(job, cfg).finally(() => {
       running.set(job.type, (running.get(job.type) ?? 1) - 1)
       drain()
+      if (!isBusy(job.type)) cfg.onIdle?.()
     })
   }
 }
@@ -97,7 +111,12 @@ async function run(job: Job, cfg: JobTypeConfig): Promise<void> {
     if (job.attempts < cfg.maxAttempts) {
       const backoff = Math.min(30_000, 1000 * 2 ** job.attempts)
       pushStatus(job, 'queued', `失败，${Math.round(backoff / 1000)}s 后重试...`)
-      setTimeout(() => { queue.push(job); drain() }, backoff)
+      retrying.set(job.type, (retrying.get(job.type) ?? 0) + 1)
+      setTimeout(() => {
+        retrying.set(job.type, (retrying.get(job.type) ?? 1) - 1)
+        queue.push(job)
+        drain()
+      }, backoff)
     }
     else {
       pushStatus(job, 'error', msg)
