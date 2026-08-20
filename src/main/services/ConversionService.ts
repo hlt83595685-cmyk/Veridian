@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { randomUUID } from 'crypto'
 import { app } from 'electron'
 import { planImageRenames } from './markdownImages'
-import { registerJobType, enqueue } from '../core/JobQueue'
+import { registerJobType, enqueue, isBusy } from '../core/JobQueue'
 import { convertPdfToMarkdownAuto, convertPdfToMarkdownPrecision } from '../mineruApi'
 import { registerAttachment, registerAttachmentDir, listByItem } from './AttachmentService'
 import { isPdf2mdEnabled, getPdf2mdMode, getPdf2mdApiToken } from './SettingsService'
@@ -71,22 +71,25 @@ function normalizeImages(mdPath: string, imagesDir: string): void {
   }
 }
 
-let pendingConversions = 0
-let onIdle: (() => void) | null = null
+// Busy-ness is derived from the JobQueue's own bookkeeping rather than a manual
+// counter: a handler that throws before its finally block used to leak a count
+// and wedge the idle signal forever, which stranded a whole batch's converted
+// files in staging instead of relocating them into the workspace folder.
+let onIdleHook: (() => void) | null = null
 
 export function hasPendingConversions(): boolean {
-  return pendingConversions > 0
+  return isBusy('pdf2md')
 }
 
 export function setOnConversionsIdle(fn: () => void): void {
-  onIdle = fn
+  onIdleHook = fn
 }
 
 export function initConversionService(): void {
   registerJobType<Pdf2mdPayload>('pdf2md', async (payload, ctx) => {
     const { itemId, pdfPath } = payload
-    const outputPath = join(stagingDir(itemId), `${basename(pdfPath, '.pdf')}.md`)
     try {
+      const outputPath = join(stagingDir(itemId), `${basename(pdfPath, '.pdf')}.md`)
       const mode = getPdf2mdMode()
       const token = getPdf2mdApiToken()
 
@@ -113,14 +116,11 @@ export function initConversionService(): void {
       setConversionFailed(itemId, false)   // success clears any prior failure
       emit({ type: 'item.modified', ids: [itemId] })   // refresh the list's red-flag column
     } catch (err) {
-      setConversionFailed(itemId, true)    // hold this item out of sync
+      setConversionFailed(itemId, true)    // flag the item; it still exports
       emit({ type: 'item.modified', ids: [itemId] })   // surface the red flag in the list now
       throw err                            // keep JobQueue's error reporting
-    } finally {
-      pendingConversions--
-      if (pendingConversions === 0) onIdle?.()
     }
-  }, { concurrency: 1, maxAttempts: 1 })
+  }, { concurrency: 1, maxAttempts: 1, onIdle: () => onIdleHook?.() })
 }
 
 /**
@@ -144,7 +144,6 @@ export function autoConvertPdfToMd(itemId: number, pdfPath: string): void {
     return
   }
 
-  pendingConversions++
   enqueue<Pdf2mdPayload>('pdf2md', basename(pdfPath), { itemId, pdfPath })
 }
 
@@ -163,7 +162,6 @@ export function manualConvertPdfToMd(itemId: number): string | null {
   )
   if (!pdfAtt?.path) return 'no_pdf'
 
-  pendingConversions++
   enqueue<Pdf2mdPayload>('pdf2md', basename(pdfAtt.path), { itemId, pdfPath: pdfAtt.path })
   return null
 }
