@@ -31,9 +31,14 @@ function markDirty(ids: number[]): void {
 }
 
 /** Write pending changes to the working tree (no git). */
-function exportChanges(repoRoot: string): void {
+function exportChanges(repoRoot: string, includeFailed: boolean): void {
   const db = getDb()
-  const failed = new Set(
+  // Github workspaces hold conversion failures back so collaborators never see
+  // half-converted items; local folder workspaces export them, because that
+  // folder IS the user's library and withholding a paper from it (while
+  // importAll treats "not in the tree" as deleted) is how a batch import used
+  // to lose papers.
+  const failed = includeFailed ? new Set<number>() : new Set(
     (db.prepare('SELECT id FROM items WHERE conversion_failed = 1').all() as Array<{ id: number }>)
       .map((r) => r.id)
   )
@@ -84,7 +89,7 @@ export function initWorkspaceSyncService(): void {
 
     ctx.progress('导出更改...')
     console.log('[WorkspaceSync] export start')
-    exportChanges(activeCtx.repoRoot)
+    exportChanges(activeCtx.repoRoot, activeCtx.kind !== 'github')
     console.log('[WorkspaceSync] export done')
 
     // Folder-backed local stops here -- files written, no git. Only github
@@ -145,7 +150,7 @@ export function initWorkspaceSyncService(): void {
     if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
     const ctx = getActiveWorkspace()
     if (!ctx.repoRoot) return
-    exportChanges(ctx.repoRoot)   // write files (github AND folder-backed local)
+    exportChanges(ctx.repoRoot, ctx.kind !== 'github')   // write files (github AND folder-backed local)
     if (ctx.kind === 'github') {
       try {
         await commitAll(ctx.repoRoot, `veridian: update ${new Date().toISOString()}`)

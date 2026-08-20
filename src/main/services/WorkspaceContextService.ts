@@ -86,7 +86,7 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
     // 1. Rescue stranded local items (index rows without a tree entry --
     //    e.g. a crash before the sync debounce fired) into the tree and
     //    commit, so step 3's tree-as-truth import can't discard them.
-    const recovered = exportMissingItems(db, repoRoot)
+    const recovered = exportMissingItems(db, repoRoot, false)
     if (recovered > 0) {
       console.log(`[WorkspaceContext] recovered ${recovered} stranded local item(s)`)
       await commitAll(repoRoot, 'veridian: recover local changes')
@@ -117,7 +117,7 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
       const db = getDb()
       // Rescue changes stranded in the cached index.db by a crash before the
       // last write-back, then rebuild from the folder (tree = source of truth).
-      const recovered = exportMissingItems(db, contentRoot)
+      const recovered = exportMissingItems(db, contentRoot, true)
       if (recovered > 0) {
         console.log(`[WorkspaceContext] recovered ${recovered} stranded local item(s)`)
       }

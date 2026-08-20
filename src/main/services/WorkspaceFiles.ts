@@ -252,10 +252,18 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
  * every activation BEFORE importAll so tree-as-truth can never silently
  * discard local-only items. Returns how many were recovered.
  */
-export function exportMissingItems(db: Database.Database, repoRoot: string): number {
+export function exportMissingItems(
+  db: Database.Database, repoRoot: string, includeFailed: boolean
+): number {
   const keyToDir = scanKeyToDir(repoRoot)
-  const rows = db.prepare('SELECT id, key FROM items WHERE conversion_failed = 0')
-    .all() as Array<{ id: number; key: string }>
+  // Local folder workspaces rescue everything, conversion failures included --
+  // the user picked that folder as where their library lives, so a paper whose
+  // markdown failed still belongs there (its PDF and metadata are fine, and it
+  // gains Full.md whenever a retry succeeds). Github workspaces keep holding
+  // failures back so collaborators never receive half-converted items.
+  const rows = db.prepare(
+    includeFailed ? 'SELECT id, key FROM items' : 'SELECT id, key FROM items WHERE conversion_failed = 0'
+  ).all() as Array<{ id: number; key: string }>
   const missing = rows.filter((r) => !keyToDir.has(r.key))
   if (missing.length > 0) {
     exportCollections(db, repoRoot)
