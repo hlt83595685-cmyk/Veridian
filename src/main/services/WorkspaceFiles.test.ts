@@ -131,4 +131,19 @@ suite('importAll deletion guard', () => {
     const rows = db.prepare("SELECT key FROM items").all() as Array<{ key: string }>
     expect(rows.map((r) => r.key)).toEqual(['KEEP1'])
   })
+
+  it('restores conversion_failed from item.json', () => {
+    const dir = join(root, 'papers', 'Failed one')
+    mkdirSync(join(dir, 'files'), { recursive: true })
+    writeFileSync(join(dir, 'item.json'), JSON.stringify({
+      key: 'FAIL1', type: 'journalArticle', title: 'Failed one', conversion_failed: 1,
+      attachments: [], creators: [], tags: [], collections: [],
+    }), 'utf-8')
+
+    importAll(db, root)
+
+    const row = db.prepare("SELECT conversion_failed AS f FROM items WHERE key = 'FAIL1'")
+      .get() as { f: number }
+    expect(row.f).toBe(1)
+  })
 })

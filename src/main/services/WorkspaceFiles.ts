@@ -38,6 +38,7 @@ interface ItemJson {
   language: string | null
   extra: string | null
   deleted: number
+  conversion_failed: number
   updated_at: number
   version: number
   added_by: string | null
@@ -234,7 +235,8 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
       year: item.year, doi: item.doi, url: item.url, journal: item.journal,
       publisher: item.publisher, volume: item.volume, issue: item.issue,
       pages: item.pages, isbn: item.isbn, language: item.language, extra: item.extra,
-      deleted: item.deleted, updated_at: item.updated_at, version: item.version,
+      deleted: item.deleted, conversion_failed: item.conversion_failed ?? 0,
+      updated_at: item.updated_at, version: item.version,
       added_by: item.added_by,
       creators, tags, collections,
       attachments: atts.map((a) => ({
@@ -404,7 +406,8 @@ function importItem(db: Database.Database, repoRoot: string, json: ItemJson, dir
     url: json.url ?? null, journal: json.journal ?? null, publisher: json.publisher ?? null,
     volume: json.volume ?? null, issue: json.issue ?? null, pages: json.pages ?? null,
     isbn: json.isbn ?? null, language: json.language ?? null, extra: json.extra ?? null,
-    deleted: json.deleted ?? 0, updated_at: json.updated_at ?? Math.floor(Date.now() / 1000),
+    deleted: json.deleted ?? 0, conversion_failed: json.conversion_failed ?? 0,
+    updated_at: json.updated_at ?? Math.floor(Date.now() / 1000),
     version: json.version ?? 0,
     added_by: json.added_by ?? null,
   }
@@ -415,17 +418,18 @@ function importItem(db: Database.Database, repoRoot: string, json: ItemJson, dir
       UPDATE items SET type=@type, title=@title, abstract=@abstract, year=@year,
         doi=@doi, url=@url, journal=@journal, publisher=@publisher, volume=@volume,
         issue=@issue, pages=@pages, isbn=@isbn, language=@language, extra=@extra,
-        deleted=@deleted, updated_at=@updated_at, version=@version, added_by=@added_by
+        deleted=@deleted, conversion_failed=@conversion_failed,
+        updated_at=@updated_at, version=@version, added_by=@added_by
       WHERE key=@key
     `).run(fields)
     itemId = existing.id
   } else {
     const info = db.prepare(`
       INSERT INTO items (key, type, title, abstract, year, doi, url, journal, publisher,
-        volume, issue, pages, isbn, language, extra, deleted, library_id,
+        volume, issue, pages, isbn, language, extra, deleted, conversion_failed, library_id,
         created_at, updated_at, version, added_by)
       VALUES (@key, @type, @title, @abstract, @year, @doi, @url, @journal, @publisher,
-        @volume, @issue, @pages, @isbn, @language, @extra, @deleted, 1,
+        @volume, @issue, @pages, @isbn, @language, @extra, @deleted, @conversion_failed, 1,
         @updated_at, @updated_at, @version, @added_by)
     `).run(fields)
     itemId = Number(info.lastInsertRowid)
