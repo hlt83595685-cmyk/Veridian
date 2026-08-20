@@ -76,13 +76,23 @@ workspace 的用户文件夹）；库同时存在两处：**索引 db**（app �
 仍建议顺手挪进 try，让抛错走 `setConversionFailed` 而非静默）。
 
 ### 修复 2：失败条目也导出到文件夹（消除附带项，并从源头缓解 Bug B）
-- `WorkspaceSyncService.exportChanges`：去掉 `conversion_failed` 过滤，改为导出
-  所有脏（或全量）条目，含失败条目。
-- `WorkspaceFiles.exportMissingItems`：去掉 `WHERE conversion_failed = 0`，抢救
-  所有本地孤儿条目（含失败条目）。
+
+**范围限定：仅本地文件夹型工作空间（`kind !== 'github'`）。** 用户决定本次先
+修好本地库，协作策略暂不处理，因此 github 工作空间保持现状（失败条目仍不导出、
+不推给协作者）。判据用已有的 `getActiveWorkspace().kind`，github 库的行为与
+本次改动前逐字节一致。
+
+- `WorkspaceSyncService.exportChanges`：本地库导出所有脏（或全量）条目，含失败
+  条目；github 库保留 `conversion_failed` 过滤。
+- `WorkspaceFiles.exportMissingItems`：增加参数 `includeFailed: boolean`，本地库
+  传 `true`（抢救所有本地孤儿条目，含失败条目），github 库传 `false`（保持
+  `WHERE conversion_failed = 0`）。调用点在 `WorkspaceContextService` 的两个分支，
+  各自按 kind 传值。
 - `exportItems` 已能导出只有 PDF、没有 markdown 的条目，无需改动。
-- 失败条目导出后在文件树中存在，`importAll` 不再视其为陈旧 → 不再被删。转换
-  重试成功后，下次导出自然补上 `Full.md`。
+- 本地库的失败条目导出后在文件树中存在，`importAll` 不再视其为陈旧 → 不再被删。
+  转换重试成功后，下次导出自然补上 `Full.md`。
+- github 库的失败条目仍不进树，其数据安全**由修复 3 单独保障**（纯本地条目
+  永不被删）——这正是修复 3 必须独立于修复 2 存在的原因。
 
 保留失败状态：`item.json` 增加 `conversion_failed` 字段并在 `importItem` 回填，
 使“红旗 / 待重试”状态经 export→import 往返后不丢失（缺省 0，向后兼容）。
@@ -111,8 +121,9 @@ workspace 的用户文件夹）；库同时存在两处：**索引 db**（app �
   多个任务，断言全部结算后 `onIdle` 仍被触发恰好一次、`isBusy` 归假——直接覆盖
   Bug C（抛错任务不卡空闲信号）。
 - `WorkspaceFiles.test.ts`（扩充，沿用现有 in-memory sqlite + `dbUsable` 守卫）：
-  - `exportMissingItems` 现在会导出 `conversion_failed=1` 的条目（写出
-    `papers/<key>/item.json`）。
+  - `exportMissingItems(db, root, includeFailed: true)` 会导出 `conversion_failed=1`
+    的条目（写出 `papers/<key>/item.json`）；`includeFailed: false` 时仍跳过它们
+    （github 库行为不变）。
   - `importAll` 保留“所有附件在内容根之外”的本地条目（不删除）；仍删除确被
     远端移除、且曾导出过的条目。
   - `item.json` 往返保留 `conversion_failed`。
@@ -123,7 +134,10 @@ workspace 的用户文件夹）；库同时存在两处：**索引 db**（app �
 - `src/main/core/JobQueue.ts` — 增 `onIdle` per-type、`isBusy`。
 - `src/main/services/ConversionService.ts` — 删手工计数器，改用 JobQueue 空闲信号；
   `stagingDir` 挪进 try。
-- `src/main/services/WorkspaceSyncService.ts` — `exportChanges` 去掉失败过滤。
-- `src/main/services/WorkspaceFiles.ts` — `exportMissingItems` 去掉失败过滤；
-  `importAll` 删除加“附件在树内”保险；`item.json` 增 `conversion_failed` 往返。
+- `src/main/services/WorkspaceSyncService.ts` — `exportChanges` 按 kind 决定是否
+  过滤失败条目（本地库不过滤）。
+- `src/main/services/WorkspaceFiles.ts` — `exportMissingItems` 增 `includeFailed`
+  参数；`importAll` 删除加“附件在树内”保险；`item.json` 增 `conversion_failed` 往返。
+- `src/main/services/WorkspaceContextService.ts` — 两个 activation 分支按 kind 传
+  `includeFailed`。
 - 对应新增 / 扩充测试文件。
