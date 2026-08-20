@@ -1,5 +1,31 @@
 # Veridian 开发日志
 
+## 2026-08-20 — v0.1.11 发版：首类笔记 + 双链/反链 + AI 写笔记
+
+自 v0.1.10 以来累积的知识库大版本，一次性发布。
+
+**首类笔记 + Obsidian 式双链（P2-A）**：`notes` 表升为一等公民，`item_id`
+可空——挂在文献上的是"文献笔记"，`item_id` 为空的是"独立概念笔记"。笔记
+正文里写 `[[标题]]` 会被解析成 `relations` 边（`rel_type='wikilink'`），
+在被指向的笔记/文献上以**反向链接**列出。悬空链接（指向尚不存在的标题）
+保持悬空、不报错，等目标出现时自动接上。新增独立笔记页、侧栏笔记列表、
+`[[` 自动补全的笔记编辑器、反链栏、文献详情的"笔记"标签页。
+
+**AI 写笔记能力**：`saveNote` 增加 `origin`（user|ai），AI 写入的笔记
+统一走 `saveNote`，所以 `[[链接]]` 会自动建反链边。agent 在 notes 模式下
+获得 `create_note`（可建独立概念笔记，`item_key` 可选）、`update_note`
+（按 id 定位、允许整体重写）、`list_notes` 工具；工具在模式路由层结构化
+门控（notes 模式放行、qa 模式拒绝）。
+
+**体验修复**：右侧详情面板切换文献条目时**记住当前所在的标签页**，不再
+每次跳回第一个（元数据）标签。笔记 UI 的 emoji 图标（📝/📄）全部换成随
+`currentColor` 走主题色的内联 SVG 线性图标。
+
+**验证**：node + web 两套 tsc 干净、111 测试通过（40 个 DB 测试在 Electron
+ABI 下按既有约定跳过）、`npm run build` 打包成功。发布沿用固定流程：
+bump 0.1.11 → commit → push main → push tag v0.1.11 → electron-builder
+`--publish always`。
+
 ## 2026-07-26 — 对话模型新增 Claude（订阅令牌）预设
 
 用户问能否用 Claude 订阅账号额度。查证 Anthropic 开发者政策：第三方应用做
