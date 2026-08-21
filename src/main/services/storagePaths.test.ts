@@ -69,6 +69,16 @@ describe('isInside', () => {
   it('tolerates a trailing separator on the directory', () => {
     expect(isInside(join('C:', 'lib', 'a.pdf'), join('C:', 'lib') + sep)).toBe(true)
   })
+  it('ignores case, since Windows paths do', () => {
+    // The two sides reach callers from different sources -- one read back from
+    // the database, one just built with join -- and a false negative here would
+    // let a deletion run over a file that really is inside.
+    expect(isInside(join('C:', 'Lib', 'A.pdf'), join('c:', 'lib'))).toBe(true)
+    expect(isInside(join('C:', 'LIB'), join('c:', 'lib'))).toBe(true)
+  })
+  it('still rejects a prefix-sharing sibling regardless of case', () => {
+    expect(isInside(join('C:', 'LIB-backup', 'a.pdf'), join('c:', 'lib'))).toBe(false)
+  })
 })
 
 describe('moveInto', () => {
@@ -102,6 +112,24 @@ describe('moveInto', () => {
     expect(existsSync(src)).toBe(false)
     expect(readFileSync(join(dest, 'fig1.jpg'), 'utf-8')).toBe('x')
     expect(readFileSync(join(dest, 'sub', 'fig2.jpg'), 'utf-8')).toBe('y')
+  })
+
+  it('moves a directory across volumes via the recursive-copy fallback', () => {
+    // The images/ directory of a conversion takes this path whenever the
+    // scratch area and the library folder sit on different drives, so the
+    // recursive branch of the EXDEV fallback needs its own coverage.
+    const src = join(root, 'images')
+    mkdirSync(join(src, 'sub'), { recursive: true })
+    writeFileSync(join(src, 'fig1.jpg'), 'x', 'utf-8')
+    writeFileSync(join(src, 'sub', 'fig2.jpg'), 'y', 'utf-8')
+    const dest = join(root, 'out', 'images')
+    h.forceExdev = true
+
+    expect(moveInto(src, dest)).toBe(true)
+    expect(existsSync(src)).toBe(false)
+    expect(readFileSync(join(dest, 'fig1.jpg'), 'utf-8')).toBe('x')
+    expect(readFileSync(join(dest, 'sub', 'fig2.jpg'), 'utf-8')).toBe('y')
+    expect(readdirSync(join(root, 'out')).filter((f) => f.includes('veridian-move'))).toEqual([])
   })
 
   it('replaces whatever is already at the destination', () => {

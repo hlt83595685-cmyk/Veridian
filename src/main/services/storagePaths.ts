@@ -11,10 +11,18 @@ import { randomUUID } from 'crypto'
  * Bounded at a path separator on purpose: a bare `startsWith` would let
  * `<root>/10` look like it lives in `<root>/1`, and `C:\lib-backup` look like
  * it lives in `C:\lib` -- both of which would mis-target a deletion.
+ *
+ * Compared case-insensitively because Windows paths are, and the two sides can
+ * reach here from different sources (a path read back from the database versus
+ * one just built with `join`). Callers use this to decide a directory holds
+ * nothing live before deleting it, so a false negative is the dangerous
+ * direction -- it lets the deletion proceed over a file that was in fact
+ * inside. A false positive merely skips a cleanup.
  */
 export function isInside(p: string, dir: string): boolean {
-  const prefix = dir.endsWith(sep) ? dir : dir + sep
-  return p === dir || p === dir.replace(/[\\/]+$/, '') || p.startsWith(prefix)
+  const target = p.toLowerCase()
+  const root = dir.toLowerCase().replace(/[\\/]+$/, '')
+  return target === root || target.startsWith(root + sep)
 }
 
 /**
@@ -95,14 +103,23 @@ export function moveInto(src: string, dest: string): boolean {
     try {
       renameSync(tmp, src)
     } catch {
+      // Copy back instead (src may be on another volume), then drop the temp.
+      // Whether the temp goes away is cosmetic once src holds the payload, so
+      // it must not turn a successful restore into a scary "recover manually".
+      let restored = false
       try {
         if (statSync(tmp).isDirectory()) cpSync(tmp, src, { recursive: true })
         else copyFileSync(tmp, src)
+        restored = true
         rmSync(tmp, { recursive: true, force: true })
       } catch {
-        console.error(
-          `[storage] could not restore the source after a failed move -- payload left at temp path, recover manually: ${tmp}`
-        )
+        if (restored) {
+          console.warn(`[storage] source restored; a stale temp copy remains at: ${tmp}`)
+        } else {
+          console.error(
+            `[storage] could not restore the source after a failed move -- payload left at temp path, recover manually: ${tmp}`
+          )
+        }
       }
     }
     console.warn(`[storage] move failed, could not clear destination (${dest}):`, (err as Error).message)
