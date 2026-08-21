@@ -5,9 +5,8 @@ import { app } from 'electron'
 import { createHash } from 'crypto'
 import DatabaseCtor from 'better-sqlite3'
 import type Database from 'better-sqlite3'
-import { getDb, getPersonalDb } from '../db'
-import { getActiveWorkspace } from './WorkspaceContextService'
-import { convertedDir, stagingRootDir } from './ConversionService'
+import { getPersonalDb } from '../db'
+import { convertedDir } from './ConversionService'
 import { isInside, moveInto } from './storagePaths'
 
 /**
@@ -15,22 +14,66 @@ import { isInside, moveInto } from './storagePaths'
  * area permanently. Move those payloads into their real home so the scratch
  * area can be treated as scratch (and so the next conversion of an item with
  * the same id can't wipe them).
+ *
+ * This must cover every rootless library, not just whichever database happens
+ * to be active: at startup the real active workspace hasn't been restored yet
+ * (that happens later, asynchronously, over IPC), so `getDb()` here would
+ * always resolve to the personal db and silently skip every other rootless
+ * library forever. Instead this opens each rootless library's own database
+ * directly -- the personal db, plus every DB-only local workspace (kind
+ * 'local' with no local_path) found in the personal db's workspace registry.
  */
-export function migrateStagedPayloads(): number {
-  if (getActiveWorkspace().repoRoot != null) return 0
-  const db = getDb()
-  const staging = stagingRootDir()
-  const rows = db.prepare('SELECT id, item_id, path FROM attachments WHERE path IS NOT NULL')
-    .all() as Array<{ id: number; item_id: number; path: string }>
+function migrateLibrary(db: Database.Database, key: string, legacyRoot: string): number {
   let moved = 0
-  for (const r of rows) {
-    if (!isInside(r.path, staging) || !existsSync(r.path)) continue
-    const name = basename(r.path) === 'images' ? 'images' : (r.path.endsWith('.md') ? 'Full.md' : basename(r.path))
-    const dest = join(convertedDir(r.item_id), name)
-    if (!moveInto(r.path, dest)) continue
-    db.prepare('UPDATE attachments SET path = ?, filename = ? WHERE id = ?').run(dest, name, r.id)
-    moved++
+  try {
+    const rows = db.prepare('SELECT id, item_id, path FROM attachments WHERE path IS NOT NULL')
+      .all() as Array<{ id: number; item_id: number; path: string }>
+    for (const r of rows) {
+      if (!isInside(r.path, legacyRoot) || !existsSync(r.path)) continue
+      const name = basename(r.path) === 'images' ? 'images' : (r.path.endsWith('.md') ? 'Full.md' : basename(r.path))
+      const dest = join(convertedDir(key, r.item_id), name)
+      if (!moveInto(r.path, dest)) continue
+      db.prepare('UPDATE attachments SET path = ?, filename = ? WHERE id = ?').run(dest, name, r.id)
+      moved++
+    }
+  } catch (err) {
+    console.warn(`[GC] migration failed for library ${key}:`, (err as Error).message)
   }
+  return moved
+}
+
+export function migrateStagedPayloads(): number {
+  // The legacy flat layout -- NOT stagingRootDir(), which is scoped to
+  // whichever workspace happens to be active right now.
+  const legacyRoot = join(app.getPath('userData'), 'conversions')
+  let moved = 0
+
+  moved += migrateLibrary(getPersonalDb(), 'personal', legacyRoot)
+
+  let rows: Array<{ id: number; local_path: string | null }> = []
+  try {
+    rows = getPersonalDb().prepare("SELECT id, local_path FROM workspaces WHERE kind = 'local'")
+      .all() as Array<{ id: number; local_path: string | null }>
+  } catch (err) {
+    console.warn('[GC] could not read workspace registry for migration:', (err as Error).message)
+    return moved
+  }
+
+  for (const w of rows) {
+    if (w.local_path && w.local_path.trim()) continue   // has a content root -- not rootless
+    const idx = join(app.getPath('userData'), 'workspaces', String(w.id), 'index.db')
+    if (!existsSync(idx)) continue
+    let wdb: Database.Database | null = null
+    try {
+      wdb = new DatabaseCtor(idx)
+      moved += migrateLibrary(wdb, `ws${w.id}`, legacyRoot)
+    } catch (err) {
+      console.warn(`[GC] could not open workspace ${w.id} for migration:`, (err as Error).message)
+    } finally {
+      try { wdb?.close() } catch { /* already closed */ }
+    }
+  }
+
   return moved
 }
 
@@ -122,6 +165,34 @@ function collectRoots(): { paths: Set<string>; bySize: Map<number, string[]> } |
   return { paths, bySize }
 }
 
+/** Is `name` an item-directory name -- i.e. purely digits (an item id)? */
+export function isItemDirName(name: string): boolean {
+  return /^\d+$/.test(name)
+}
+
+/** Every scratch root that can hold per-item conversion output: the legacy
+ *  flat bucket (which now also holds the namespaced `conversions/<key>`
+ *  buckets), each workspace's own tmp dir, and -- for a workspace with a
+ *  content root -- both places its staging area can live (a github clone's
+ *  `tmp`, or a folder-backed local library's `.veridian-tmp`). */
+function scratchRoots(): string[] {
+  const roots = [join(app.getPath('userData'), 'conversions')]
+  try {
+    const rows = getPersonalDb().prepare('SELECT id, local_path FROM workspaces')
+      .all() as Array<{ id: number; local_path: string | null }>
+    for (const w of rows) {
+      roots.push(join(app.getPath('userData'), 'workspaces', String(w.id), 'tmp'))
+      if (w.local_path && w.local_path.trim()) {
+        roots.push(join(w.local_path, 'tmp'))
+        roots.push(join(w.local_path, '.veridian-tmp'))
+      }
+    }
+  } catch (err) {
+    console.warn('[GC] could not read workspace registry for sweep:', (err as Error).message)
+  }
+  return roots
+}
+
 /**
  * Reclaim the bulk data the old copy-and-repoint relocation left behind.
  * Runs once at startup, before any conversion is queued, so nothing in flight
@@ -144,31 +215,52 @@ export function sweepStorage(): { freedBytes: number; files: number } {
     } catch { /* already gone */ }
   }
 
-  // conversions/: in an unreferenced item dir, drop the intermediates and keep
-  // the product.
-  const convRoot = join(app.getPath('userData'), 'conversions')
-  if (existsSync(convRoot)) {
-    for (const itemDir of readdirSync(convRoot)) {
-      const dir = join(convRoot, itemDir)
-      let referenced = false
-      const walk = (d: string): string[] => {
-        const out: string[] = []
-        for (const e of readdirSync(d)) {
-          const p = join(d, e)
-          if (statSync(p).isDirectory()) out.push(p, ...walk(p))
-          else out.push(p)
-        }
-        return out
+  // In an unreferenced item dir, drop the intermediates and keep the product;
+  // then, if that left the item dir empty, remove it too.
+  const processItemDir = (dir: string): void => {
+    const walk = (d: string): string[] => {
+      const out: string[] = []
+      for (const e of readdirSync(d)) {
+        const p = join(d, e)
+        if (statSync(p).isDirectory()) out.push(p, ...walk(p))
+        else out.push(p)
       }
-      let entries: string[] = []
-      try { entries = walk(dir) } catch { continue }
-      for (const p of entries) {
-        if (roots.paths.has(norm(p))) { referenced = true; break }
+      return out
+    }
+    let entries: string[] = []
+    try { entries = walk(dir) } catch { return }
+    if (entries.some((p) => roots.paths.has(norm(p)))) return   // still live -- leave the whole dir alone
+    for (const p of entries) {
+      if (classifyStagingFile(basename(p)) === 'debris') del(p)
+    }
+    try { if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true, force: true }) }
+    catch { /* not empty, or already gone */ }
+  }
+
+  // An item directory is found at depth 1 (`<root>/<itemId>`) or depth 2
+  // (`<root>/<libraryKey>/<itemId>`, the namespaced conversions layout).
+  // Depth-1 entries that aren't item dirs themselves are checked one level
+  // deeper as a possible library-key bucket, then removed if that emptied them.
+  for (const root of scratchRoots()) {
+    if (!existsSync(root)) continue
+    let entries: string[] = []
+    try { entries = readdirSync(root) } catch { continue }
+    for (const name of entries) {
+      const p1 = join(root, name)
+      let isDir = false
+      try { isDir = statSync(p1).isDirectory() } catch { continue }
+      if (!isDir) continue
+      if (isItemDirName(name)) { processItemDir(p1); continue }
+      let sub: string[] = []
+      try { sub = readdirSync(p1) } catch { continue }
+      for (const name2 of sub) {
+        const p2 = join(p1, name2)
+        let isDir2 = false
+        try { isDir2 = statSync(p2).isDirectory() } catch { continue }
+        if (isDir2 && isItemDirName(name2)) processItemDir(p2)
       }
-      if (referenced) continue          // still live -- leave the whole dir alone
-      for (const p of entries) {
-        if (classifyStagingFile(basename(p)) === 'debris') del(p)
-      }
+      try { if (readdirSync(p1).length === 0) rmSync(p1, { recursive: true, force: true }) }
+      catch { /* not empty, or already gone */ }
     }
   }
 

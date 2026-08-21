@@ -32,13 +32,24 @@ interface Pdf2mdPayload {
 // files/<stem>.md; images replaces files/images wholesale) and the debris
 // stays here. Cleared before each run so re-conversions start fresh.
 
+/** Identity of a library for on-disk paths that live under userData. Item ids
+ *  are per-database autoincrements, so paths keyed by id alone collide between
+ *  libraries -- which silently swapped one library's converted markdown for
+ *  another's, and let one library's conversion wipe another's scratch dir. */
+export function activeLibraryKey(): string {
+  const id = getActiveWorkspace().id
+  return id == null ? 'personal' : `ws${id}`
+}
+
 /**
  * Root of the scratch area. Follows the active library's location so bulk data
  * stays off the system drive and the later relocation is a same-volume rename;
- * libraries with no content root of their own fall back to userData.
+ * libraries with no content root of their own fall back to userData, namespaced
+ * by library so two libraries' item ids can't collide there either.
  */
 export function stagingRootDir(): string {
-  return getActiveWorkspace().stagingRoot ?? join(app.getPath('userData'), 'conversions')
+  return getActiveWorkspace().stagingRoot
+    ?? join(app.getPath('userData'), 'conversions', activeLibraryKey())
 }
 
 function stagingDir(itemId: number): string {
@@ -68,8 +79,8 @@ export function clearStagingIfRelocated(db: Database.Database, itemId: number): 
 /** Permanent home for conversion output of libraries that have no content
  *  root of their own. A directory per item, because the markdown references
  *  its figures as `images/figN.jpg` -- md and images must stay siblings. */
-export function convertedDir(itemId: number): string {
-  return join(app.getPath('userData'), 'converted', String(itemId))
+export function convertedDir(libraryKey: string, itemId: number): string {
+  return join(app.getPath('userData'), 'converted', libraryKey, String(itemId))
 }
 
 // Normalize the conversion output in staging: every image referenced by the
@@ -154,7 +165,7 @@ export function initConversionService(): void {
       let finalMd = mdPath
       let finalImages = imagesDir
       if (getActiveWorkspace().repoRoot == null) {
-        const home = convertedDir(itemId)
+        const home = convertedDir(activeLibraryKey(), itemId)
         // Each moveInto replaces its own destination as one confirmed step, so
         // a re-conversion overwrites in place. Deliberately NOT wiping `home`
         // up front: doing that destroys the previous conversion before the new

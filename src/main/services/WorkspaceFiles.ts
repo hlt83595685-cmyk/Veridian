@@ -209,7 +209,7 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
     // removed so the repo mirrors the item's attachments exactly.
     const expected = new Set<string>()
     for (const att of atts) {
-      if (att.path && att.path.startsWith(files)) expected.add(basename(att.path))
+      if (att.path && isInside(att.path, files)) expected.add(basename(att.path))
     }
     try {
       for (const entry of readdirSync(files)) {
