@@ -10,7 +10,7 @@ import { getDb } from '../db'
 import { getActiveWorkspace, setFlushHook } from './WorkspaceContextService'
 import { exportItems, exportCollections, reconcileDeletions, importAll } from './WorkspaceFiles'
 import { commitAll, sync } from './GitWorkspaceService'
-import { hasPendingConversions, setOnConversionsIdle } from './ConversionService'
+import { hasPendingConversions, setOnConversionsIdle, clearStagingIfRelocated } from './ConversionService'
 
 const DEBOUNCE_MS = 3000
 
@@ -31,7 +31,7 @@ function markDirty(ids: number[]): void {
 }
 
 /** Write pending changes to the working tree (no git). */
-function exportChanges(repoRoot: string, includeFailed: boolean): void {
+function exportChanges(repoRoot: string, includeFailed: boolean): number[] {
   const db = getDb()
   // Github workspaces hold conversion failures back so collaborators never see
   // half-converted items; local folder workspaces export them, because that
@@ -54,6 +54,7 @@ function exportChanges(repoRoot: string, includeFailed: boolean): void {
   if (doCollections) exportCollections(db, repoRoot)
   if (ids.length > 0) exportItems(db, repoRoot, ids)
   reconcileDeletions(db, repoRoot)
+  return ids
 }
 
 function scheduleSync(): void {
@@ -89,7 +90,8 @@ export function initWorkspaceSyncService(): void {
 
     ctx.progress('导出更改...')
     console.log('[WorkspaceSync] export start')
-    exportChanges(activeCtx.repoRoot, activeCtx.kind !== 'github')
+    const exported = exportChanges(activeCtx.repoRoot, activeCtx.kind !== 'github')
+    for (const id of exported) clearStagingIfRelocated(getDb(), id)
     console.log('[WorkspaceSync] export done')
 
     // Folder-backed local stops here -- files written, no git. Only github
@@ -150,7 +152,8 @@ export function initWorkspaceSyncService(): void {
     if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null }
     const ctx = getActiveWorkspace()
     if (!ctx.repoRoot) return
-    exportChanges(ctx.repoRoot, ctx.kind !== 'github')   // write files (github AND folder-backed local)
+    const exported = exportChanges(ctx.repoRoot, ctx.kind !== 'github')   // write files (github AND folder-backed local)
+    for (const id of exported) clearStagingIfRelocated(getDb(), id)
     if (ctx.kind === 'github') {
       try {
         await commitAll(ctx.repoRoot, `veridian: update ${new Date().toISOString()}`)

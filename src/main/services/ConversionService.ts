@@ -6,6 +6,7 @@ import { join, dirname, basename } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { app } from 'electron'
+import type Database from 'better-sqlite3'
 import { planImageRenames } from './markdownImages'
 import { registerJobType, enqueue, isBusy } from '../core/JobQueue'
 import { convertPdfToMarkdownAuto, convertPdfToMarkdownPrecision } from '../mineruApi'
@@ -15,6 +16,7 @@ import { grantAccess } from '../security/pathGuard'
 import { setConversionFailed } from '../db/items'
 import { emit } from '../core/Notifier'
 import { getActiveWorkspace } from './WorkspaceContextService'
+import { isInside } from './storagePaths'
 
 interface Pdf2mdPayload {
   itemId: number
@@ -44,6 +46,23 @@ function stagingDir(itemId: number): string {
   try { rmSync(dir, { recursive: true, force: true }) } catch { /* ignore */ }
   mkdirSync(dir, { recursive: true })
   return dir
+}
+
+/**
+ * Drop an item's scratch directory once its payloads have been relocated.
+ *
+ * Guarded: if any attachment of this item still points inside the scratch
+ * directory, the relocation didn't finish (moveInto keeps the source on
+ * failure) and the scratch copy is still the live one -- so leave it alone.
+ */
+export function clearStagingIfRelocated(db: Database.Database, itemId: number): void {
+  const dir = join(stagingRootDir(), String(itemId))
+  if (!existsSync(dir)) return
+  const rows = db.prepare('SELECT path FROM attachments WHERE item_id = ? AND path IS NOT NULL')
+    .all(itemId) as Array<{ path: string }>
+  if (rows.some((r) => isInside(r.path, dir))) return
+  try { rmSync(dir, { recursive: true, force: true }) }
+  catch (err) { console.warn(`[conversion] staging cleanup failed (${dir}):`, (err as Error).message) }
 }
 
 // Normalize the conversion output in staging: every image referenced by the
