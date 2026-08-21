@@ -16,7 +16,7 @@ import { grantAccess } from '../security/pathGuard'
 import { setConversionFailed } from '../db/items'
 import { emit } from '../core/Notifier'
 import { getActiveWorkspace } from './WorkspaceContextService'
-import { isInside } from './storagePaths'
+import { isInside, moveInto } from './storagePaths'
 
 interface Pdf2mdPayload {
   itemId: number
@@ -63,6 +63,13 @@ export function clearStagingIfRelocated(db: Database.Database, itemId: number): 
   if (rows.some((r) => isInside(r.path, dir))) return
   try { rmSync(dir, { recursive: true, force: true }) }
   catch (err) { console.warn(`[conversion] staging cleanup failed (${dir}):`, (err as Error).message) }
+}
+
+/** Permanent home for conversion output of libraries that have no content
+ *  root of their own. A directory per item, because the markdown references
+ *  its figures as `images/figN.jpg` -- md and images must stay siblings. */
+export function convertedDir(itemId: number): string {
+  return join(app.getPath('userData'), 'converted', String(itemId))
 }
 
 // Normalize the conversion output in staging: every image referenced by the
@@ -124,6 +131,7 @@ export function initConversionService(): void {
       const token = getPdf2mdApiToken()
 
       let mdPath: string
+      let imagesDir: string | null = null
       if (mode === 'precision') {
         if (!token) throw new Error('精准解析模式需要填写 API Token（请前往设置 → PDF 转换）')
         const result = await convertPdfToMarkdownPrecision(pdfPath, token, (p) => {
@@ -132,8 +140,7 @@ export function initConversionService(): void {
         mdPath = result.mdPath
         if (result.imagesDir) {
           normalizeImages(mdPath, result.imagesDir)   // figN names, in staging
-          grantAccess(result.imagesDir)
-          registerAttachmentDir(itemId, result.imagesDir, basename(result.imagesDir))
+          imagesDir = result.imagesDir
         }
       }
       else {
@@ -141,8 +148,38 @@ export function initConversionService(): void {
           ctx.progress(p.message ?? p.state, p.chunk, p.progress)
         }, outputPath)
       }
-      grantAccess(mdPath)
-      registerAttachment(itemId, mdPath)
+      // A library with no content root never runs an export, so the scratch
+      // area would become these files' permanent home -- and the scratch area
+      // gets wiped wholesale by the next conversion. Give them a real home now.
+      let finalMd = mdPath
+      let finalImages = imagesDir
+      if (getActiveWorkspace().repoRoot == null) {
+        const home = convertedDir(itemId)
+        rmSync(home, { recursive: true, force: true })   // re-conversion overwrites
+        if (moveInto(mdPath, join(home, 'Full.md'))) finalMd = join(home, 'Full.md')
+        if (finalImages && moveInto(finalImages, join(home, 'images'))) {
+          finalImages = join(home, 'images')
+        }
+      }
+      grantAccess(finalMd)
+      registerAttachment(itemId, finalMd)
+      if (finalImages) {
+        grantAccess(finalImages)
+        registerAttachmentDir(itemId, finalImages, basename(finalImages))
+      }
+      // Nothing of value is left in scratch for a rootless library -- for one
+      // with a content root, the export relocates and Task 4 clears it. Only
+      // safe once neither final path still lives in this item's scratch dir --
+      // e.g. the md moved but the images move failed.
+      const itemStagingDir = join(stagingRootDir(), String(itemId))
+      if (
+        getActiveWorkspace().repoRoot == null &&
+        !isInside(finalMd, itemStagingDir) &&
+        (!finalImages || !isInside(finalImages, itemStagingDir))
+      ) {
+        try { rmSync(itemStagingDir, { recursive: true, force: true }) }
+        catch { /* leftover; the GC reclaims it */ }
+      }
       setConversionFailed(itemId, false)   // success clears any prior failure
       emit({ type: 'item.modified', ids: [itemId] })   // refresh the list's red-flag column
     } catch (err) {

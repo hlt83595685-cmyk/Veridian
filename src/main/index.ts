@@ -9,6 +9,7 @@ import { registerIpcGateway } from './ipc/gateway'
 import { initConversionService } from './services/ConversionService'
 import { initWorkspaceSyncService } from './services/WorkspaceSyncService'
 import { initKnowledgeIndexer } from './knowledge/indexer'
+import { migrateStagedPayloads } from './services/StorageGC'
 import { initAutoUpdater } from './services/UpdateService'
 import { assertReadable } from './security/pathGuard'
 
@@ -186,6 +187,12 @@ app.whenReady().then(async () => {
   initConversionService()
   initWorkspaceSyncService()
   initKnowledgeIndexer()
+  try {
+    const moved = migrateStagedPayloads()
+    if (moved > 0) console.log(`[startup] moved ${moved} staged payload(s) into permanent storage`)
+  } catch (err) {
+    console.warn('[startup] staged-payload migration failed:', (err as Error).message)
+  }
   registerIpcGateway(ipcMain)
 
   // No native menu bar -- Tools/Settings live as in-app pages reached from
