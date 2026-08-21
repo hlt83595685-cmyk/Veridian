@@ -7,8 +7,14 @@ import { tmpdir } from 'os'
 // is stubbed to raise EXDEV on demand. copyFileSync can likewise be stubbed to
 // fail on demand, to provoke a staging failure with a pre-existing destination
 // (a real cross-platform trigger for that, e.g. a locked file, isn't reliable
-// to construct in a test).
-const h = vi.hoisted(() => ({ forceExdev: false, forceCopyFail: false }))
+// to construct in a test). rmSync is stubbed to fail for one specific path
+// (set via h.failClearDest), simulating a destination locked by another
+// process without disturbing the tmp/src cleanups rmSync is also used for.
+const h = vi.hoisted(() => ({
+  forceExdev: false,
+  forceCopyFail: false,
+  failClearDest: null as string | null,
+}))
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>()
   return {
@@ -33,6 +39,14 @@ vi.mock('fs', async (importOriginal) => {
         throw err
       }
       return actual.copyFileSync(from, to)
+    },
+    rmSync: (path: string, options?: unknown): void => {
+      if (h.failClearDest && path === h.failClearDest) {
+        const err = new Error('EBUSY: resource busy or locked') as NodeJS.ErrnoException
+        err.code = 'EBUSY'
+        throw err
+      }
+      return actual.rmSync(path, options as Parameters<typeof actual.rmSync>[1])
     },
   }
 })
@@ -62,6 +76,7 @@ describe('moveInto', () => {
   beforeEach(() => {
     h.forceExdev = false
     h.forceCopyFail = false
+    h.failClearDest = null
     root = mkdtempSync(join(tmpdir(), 'veridian-move-'))
   })
   afterEach(() => { rmSync(root, { recursive: true, force: true }) })
@@ -140,6 +155,19 @@ describe('moveInto', () => {
     expect(moveInto(src, dest)).toBe(false)
     expect(readFileSync(dest, 'utf-8')).toBe('precious')
     expect(readFileSync(src, 'utf-8')).toBe('new')
+  })
+
+  it('returns the payload to the source when the destination cannot be cleared', () => {
+    const src = join(root, 'a.txt')
+    const dest = join(root, 'locked.txt')
+    writeFileSync(src, 'payload', 'utf-8')
+    writeFileSync(dest, 'old', 'utf-8')
+    h.failClearDest = dest
+
+    expect(moveInto(src, dest)).toBe(false)
+    expect(readFileSync(src, 'utf-8')).toBe('payload')   // caller can still use it
+    expect(readFileSync(dest, 'utf-8')).toBe('old')      // destination untouched
+    expect(readdirSync(root).filter((f) => f.includes('veridian-move'))).toEqual([])
   })
 
   it('leaves no temp files behind on success', () => {

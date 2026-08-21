@@ -28,8 +28,10 @@ export function isInside(p: string, dir: string): boolean {
  *      untouched.
  *   2. Clear: remove whatever currently occupies `dest`. Only reached once
  *      the staged payload already exists on this volume. Any failure here
- *      (e.g. `dest` locked by another process) also leaves `dest` untouched
- *      -- the removal simply didn't happen.
+ *      (e.g. `dest` locked by another process) leaves `dest` untouched -- the
+ *      removal simply didn't happen -- and the staged payload is moved back
+ *      onto `src` (already gone by this point, per phase 1) so the caller,
+ *      which still expects the content at `src`, finds it there.
  *   3. Swap: same-volume renameSync of the temp path onto `dest`
  *      (metadata-only, effectively atomic). If this somehow fails, `dest`
  *      has already been cleared -- rather than gamble on a synthesized
@@ -79,7 +81,22 @@ export function moveInto(src: string, dest: string): boolean {
   try {
     if (existsSync(dest)) rmSync(dest, { recursive: true, force: true })
   } catch (err) {
-    rmSync(tmp, { recursive: true, force: true })
+    // src is already gone (phase 1 moved it), so tmp holds the only copy --
+    // hand it back to src rather than discarding it, because the caller will
+    // go on pointing at src.
+    try {
+      renameSync(tmp, src)
+    } catch {
+      try {
+        if (statSync(tmp).isDirectory()) cpSync(tmp, src, { recursive: true })
+        else copyFileSync(tmp, src)
+        rmSync(tmp, { recursive: true, force: true })
+      } catch {
+        console.error(
+          `[storage] could not restore the source after a failed move -- payload left at temp path, recover manually: ${tmp}`
+        )
+      }
+    }
     console.warn(`[storage] move failed, could not clear destination (${dest}):`, (err as Error).message)
     return false
   }
