@@ -20,7 +20,7 @@ import {
   renameSync, rmSync, statSync, writeFileSync,
 } from 'fs'
 import { basename, join, sep } from 'path'
-import { moveInto } from './storagePaths'
+import { isInside, moveInto } from './storagePaths'
 
 interface ItemJson {
   key: string
@@ -151,15 +151,20 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
     let pdfNamed = false
     for (const att of atts) {
       if (!att.path) continue
-      if (att.path.startsWith(repoRoot)) {
-        // Already in-repo: migrate legacy names (<stem>.pdf / <stem>.md) to
-        // the canonical ones in place, so older items converge on Full.* too.
+      // "Already in place" means inside THIS item's files/ dir -- not merely
+      // somewhere under the content root. A folder-backed library keeps its
+      // conversion scratch area at <contentRoot>/.veridian-tmp, so the broader
+      // test mistook freshly converted output for output that had already been
+      // relocated and skipped it, stranding every Full.md outside the library.
+      if (isInside(att.path, files)) {
+        // Migrate legacy names (<stem>.pdf / <stem>.md) to the canonical ones
+        // in place, so older items converge on Full.* too.
         let want: string | null = null
         if (att.type === 'imagedir') want = 'images'
         else if (att.type === 'markdown') want = 'Full.md'
         else if (att.type === 'pdf' && !pdfNamed) want = 'Full.pdf'
         if (att.type === 'pdf') pdfNamed = true
-        if (want && att.path.startsWith(files) && basename(att.path) !== want) {
+        if (want && basename(att.path) !== want) {
           const dest = join(files, want)
           try {
             if (existsSync(dest)) rmSync(dest, { recursive: true, force: true })
