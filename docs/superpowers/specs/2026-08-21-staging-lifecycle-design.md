@@ -62,16 +62,22 @@ C 盘就白占约两倍。
 
 暂存目录不再写死在 `userData`：
 
-- 库有内容根 → `<contentRoot>/.veridian-tmp/<itemId>/`
-- 库无内容根（纯数据库型/个人库）→ 维持 `userData/conversions/<itemId>/`
+- **github** → `<工作空间基目录>/tmp/<itemId>/`，即与 `repo` 同级、**位于 git 工作树
+  之外**。放在树外而非树内加 `.gitignore`：既不必维护忽略规则，也不可能被
+  `commitAll` 的 `statusMatrix` 扫到而误提交。工作空间基目录本就支持用户指定
+  （`workspaceBaseDir` 的 `local_path`），因此同样跟随用户选定的位置。
+- **folder-backed local** → `<contentRoot>/.veridian-tmp/<itemId>/`（用户选定的文件夹
+  内，同卷；该文件夹无 git，无忽略问题。`importAll` 只扫 `papers/`，不受影响）
+- **无内容根**（纯数据库型/个人库）→ 维持 `userData/conversions/<itemId>/`
   （这类库本来就没有用户选定的位置，`userData` 就是它的存储根；待「可配置存储根」
   单独立项后再改）
 
+实现上由 `WorkspaceContextService` 在激活时算出，随 `ActiveWorkspace.stagingRoot`
+对外提供（`null` 表示回退 `userData`），`ConversionService` 只管读取——位置知识留在
+本就掌握基目录与内容根的那一层。
+
 收益有二：**大文件全程不碰 C 盘**（对用户选了文件夹的库）；且暂存与目的地同卷，
 P1 的搬迁退化为**同卷 rename**——用户那 535MB 的库不必再每次跨盘复制。
-
-**github 工作空间**：内容根是 git 工作树，必须确保 `.veridian-tmp/` 不被提交——
-激活时检查并在必要时向内容根的 `.gitignore` 追加一行 `.veridian-tmp/`。
 
 ### P3. 无内容根的库：产物落入永久区
 
@@ -127,9 +133,14 @@ P1 的搬迁退化为**同卷 rename**——用户那 535MB 的库不必再每�
   - 清空后若目录为空则删除空目录。
   - 被任一数据库引用的目录**整体保留**（该篇可能尚未搬迁完成）。
 
-  **`attachments/`** —— 只删**可证明的重复**：某个无引用文件，其内容 md5 与根集中
-  某条**仍被引用**的附件记录的 `md5` 相同，即证明它是搬迁遗留的副本，删除；否则保留
-  （可能是该文件的唯一副本，例如浏览器扩展直接下载入库、原始 PDF 已不在用户手上）。
+  **`attachments/`** —— 只删**可证明的重复**：某个无引用文件，其内容 md5 对应的
+  **另一个不同路径**上的文件仍被引用**且确实存在于磁盘**，才判定为搬迁遗留副本并删除；
+  否则保留（可能是该文件的唯一副本，例如浏览器扩展直接下载入库、原始 PDF 已不在用户
+  手上）。
+
+  「md5 出现在被引用集合中」**不足以**作为判据：被引用文件自身的 md5 也在该集合里，
+  一旦路径比对因大小写或路径形式差异未命中，活文件就会被当成「自己的副本」删掉。
+  要求存在另一条不同路径且文件确实还在，才把「内容仍然幸存」变成观测到的事实。
 
   这两条分界是刻意的：本次回收的是「可证明冗余或无论如何都没用的」，**不碰任何可能
   是唯一副本的用户内容**。
@@ -163,26 +174,28 @@ skip），并在实现阶段用 Node 内置 `node:sqlite` 对真实代码补执�
   目录自身算归属；子路径算归属。
 - **P1 移动语义**：同卷移动后源不存在、目的地内容一致；跨卷（模拟 `renameSync` 抛
   `EXDEV`）回退为复制加删源；复制失败时**源仍在**且不更新路径。
-- **P2**：有内容根时暂存位于 `<contentRoot>/.veridian-tmp/<itemId>`；无内容根时仍在
-  `userData/conversions/<itemId>`；github 内容根的 `.gitignore` 含 `.veridian-tmp/`。
+- **P2**：folder-backed local 的暂存位于 `<contentRoot>/.veridian-tmp/<itemId>`；
+  github 位于 `<基目录>/tmp/<itemId>`（在 git 工作树之外）；无内容根时仍在
+  `userData/conversions/<itemId>`。
 - **P3**：无内容根时产物落入 `converted/<itemId>/` 且 `Full.md` 与 `images/` 同级
   （相对引用不破）；暂存被清空；有内容根时行为不变。迁移：指向 `conversions/` 的附件行
   被移入 `converted/` 且路径已更新。
 - **P4**：附件全部搬离 → 清理；尚有一个附件留在暂存 → 不清理。
 - **P5**：`conversions/` 无引用目录中间产物被删而 `full.md`/`images/` 保留；被引用的
-  目录整体保留；`attachments/` 中 md5 与已引用附件相同的无引用文件被删，md5 不匹配的
-  保留；任一数据库打不开时整轮不删。
+  目录整体保留；`attachments/` 中「同内容文件在另一被引用路径上确实存在」的无引用文件
+  被删，而「md5 只匹配到自己那一条引用」的文件**必须保留**（防止活文件被当成自身副本
+  删除）；任一数据库打不开时整轮不删。
 
 ## 变更文件清单（预计）
 
 - `src/main/services/ConversionService.ts` — 暂存路径跟随内容根；无内容根时产物移入
   `converted/`；`clearStagingIfRelocated`。
 - `src/main/services/StorageGC.ts`（新建）— P5 的引用扫描与回收，以及 P3 的启动迁移。
-- `src/main/services/moveFile.ts`（新建）— P1 的移动语义（同卷 rename / 跨卷回退），
-  文件与目录两种，供 `exportItems` 与转换收尾共用。
+- `src/main/services/storagePaths.ts`（新建）— P1 的移动语义（同卷 rename / 跨卷回退）
+  与按分隔符收边界的路径归属判定，供 `exportItems`、转换收尾与 GC 共用。
 - `src/main/services/WorkspaceFiles.ts` — `exportItems` 改用移动语义。
 - `src/main/services/WorkspaceSyncService.ts` — `exportChanges` 返回导出 id；两个调用点
   在导出后触发清理。
-- `src/main/services/WorkspaceContextService.ts` — github 内容根的 `.gitignore` 保障。
+- `src/main/services/WorkspaceContextService.ts` — 计算并公开 `ActiveWorkspace.stagingRoot`。
 - `src/main/index.ts` — 启动时调用一次 P5。
 - 对应新增测试文件。
