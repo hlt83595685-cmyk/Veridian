@@ -14,22 +14,33 @@ import { isPdf2mdEnabled, getPdf2mdMode, getPdf2mdApiToken } from './SettingsSer
 import { grantAccess } from '../security/pathGuard'
 import { setConversionFailed } from '../db/items'
 import { emit } from '../core/Notifier'
+import { getActiveWorkspace } from './WorkspaceContextService'
 
 interface Pdf2mdPayload {
   itemId: number
   pdfPath: string
 }
 
-// Conversion output ALWAYS goes to a per-item staging dir under userData,
-// never next to the PDF: after a workspace sync the PDF lives INSIDE the repo,
-// and converting next to it would dump MinerU's raw zip extraction (full.md,
-// images, layout.json and other debris) straight into papers/<title>/files/,
+// Conversion output ALWAYS goes to a per-item staging dir, never next to the
+// PDF: after a workspace sync the PDF lives INSIDE the repo, and converting
+// next to it would dump MinerU's raw zip extraction (full.md, images,
+// layout.json and other debris) straight into papers/<title>/files/,
 // bypassing the exporter's canonical-name overwrite. With staging, only the
 // registered md/images attachments are relocated into the repo (md overwrites
 // files/<stem>.md; images replaces files/images wholesale) and the debris
 // stays here. Cleared before each run so re-conversions start fresh.
+
+/**
+ * Root of the scratch area. Follows the active library's location so bulk data
+ * stays off the system drive and the later relocation is a same-volume rename;
+ * libraries with no content root of their own fall back to userData.
+ */
+export function stagingRootDir(): string {
+  return getActiveWorkspace().stagingRoot ?? join(app.getPath('userData'), 'conversions')
+}
+
 function stagingDir(itemId: number): string {
-  const dir = join(app.getPath('userData'), 'conversions', String(itemId))
+  const dir = join(stagingRootDir(), String(itemId))
   try { rmSync(dir, { recursive: true, force: true }) } catch { /* ignore */ }
   mkdirSync(dir, { recursive: true })
   return dir

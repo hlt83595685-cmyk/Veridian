@@ -24,10 +24,16 @@ import { setSetting } from './SettingsService'
 export interface ActiveWorkspace {
   id: number | null            // null = personal library
   kind: 'personal' | 'local' | 'github'
-  repoRoot: string | null      // set only for github workspaces
+  repoRoot: string | null      // content root: github clone, or a folder-backed local library
+  // Where conversions do their scratch work. Kept on the same volume as the
+  // content root so relocating finished output is an instant rename instead of
+  // a cross-drive copy of hundreds of megabytes -- and so bulk data never
+  // lands on the system drive for a library the user placed elsewhere.
+  // null = no content root; ConversionService falls back to userData.
+  stagingRoot: string | null
 }
 
-let active: ActiveWorkspace = { id: null, kind: 'personal', repoRoot: null }
+let active: ActiveWorkspace = { id: null, kind: 'personal', repoRoot: null, stagingRoot: null }
 
 // Set by WorkspaceSyncService -- flushes unexported changes to the working
 // tree (and commits) before the index db closes on a switch away. Registered
@@ -63,7 +69,7 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
 
   if (id === null) {
     closeWorkspaceDb()
-    active = { id: null, kind: 'personal', repoRoot: null }
+    active = { id: null, kind: 'personal', repoRoot: null, stagingRoot: null }
     setAttribution(null)
     setSetting('session.workspaceId', null)
     emit({ type: 'workspace.dataRefreshed' })
@@ -99,7 +105,7 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
     // 3. Rebuild the index from the (now up-to-date) tree
     importAll(db, repoRoot)
 
-    active = { id, kind: 'github', repoRoot }
+    active = { id, kind: 'github', repoRoot, stagingRoot: join(base, 'tmp') }
   }
   else {
     // Local workspace. Folder-backed when local_path names a content root:
@@ -123,7 +129,10 @@ export async function setActiveWorkspace(id: number | null): Promise<ActiveWorks
       }
       importAll(db, contentRoot)
     }
-    active = { id, kind: 'local', repoRoot: contentRoot }
+    active = {
+      id, kind: 'local', repoRoot: contentRoot,
+      stagingRoot: contentRoot ? join(contentRoot, '.veridian-tmp') : null,
+    }
   }
 
   // Attribution follows the active workspace: github -> current GitHub login,
