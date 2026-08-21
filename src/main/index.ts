@@ -9,7 +9,7 @@ import { registerIpcGateway } from './ipc/gateway'
 import { initConversionService } from './services/ConversionService'
 import { initWorkspaceSyncService } from './services/WorkspaceSyncService'
 import { initKnowledgeIndexer } from './knowledge/indexer'
-import { migrateStagedPayloads } from './services/StorageGC'
+import { migrateStagedPayloads, sweepStorage } from './services/StorageGC'
 import { initAutoUpdater } from './services/UpdateService'
 import { assertReadable } from './security/pathGuard'
 
@@ -192,6 +192,12 @@ app.whenReady().then(async () => {
     if (moved > 0) console.log(`[startup] moved ${moved} staged payload(s) into permanent storage`)
   } catch (err) {
     console.warn('[startup] staged-payload migration failed:', (err as Error).message)
+  }
+  try {
+    const { freedBytes, files } = sweepStorage()
+    if (files > 0) console.log(`[startup] reclaimed ${files} file(s), ${Math.round(freedBytes / 1024 / 1024)}MB`)
+  } catch (err) {
+    console.warn('[startup] storage sweep failed:', (err as Error).message)
   }
   registerIpcGateway(ipcMain)
 
