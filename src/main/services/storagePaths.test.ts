@@ -1,22 +1,38 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync } from 'fs'
 import { join, sep } from 'path'
 import { tmpdir } from 'os'
 
 // The cross-volume path can't be provoked with real directories, so renameSync
-// is stubbed to raise EXDEV on demand.
-const h = vi.hoisted(() => ({ forceExdev: false }))
+// is stubbed to raise EXDEV on demand. copyFileSync can likewise be stubbed to
+// fail on demand, to provoke a staging failure with a pre-existing destination
+// (a real cross-platform trigger for that, e.g. a locked file, isn't reliable
+// to construct in a test).
+const h = vi.hoisted(() => ({ forceExdev: false, forceCopyFail: false }))
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>()
   return {
     ...actual,
     renameSync: (from: string, to: string): void => {
       if (h.forceExdev) {
+        // Only the first rename (src -> temp) crosses volumes in the
+        // scenario being simulated; the temp path is constructed beside
+        // dest, so the later temp -> dest swap is same-volume for real. The
+        // flag is consumed on first use so that swap goes through normally.
+        h.forceExdev = false
         const err = new Error('EXDEV: cross-device link not permitted') as NodeJS.ErrnoException
         err.code = 'EXDEV'
         throw err
       }
       return actual.renameSync(from, to)
+    },
+    copyFileSync: (from: string, to: string): void => {
+      if (h.forceCopyFail) {
+        const err = new Error('EACCES: permission denied') as NodeJS.ErrnoException
+        err.code = 'EACCES'
+        throw err
+      }
+      return actual.copyFileSync(from, to)
     },
   }
 })
@@ -45,6 +61,7 @@ describe('moveInto', () => {
   let root: string
   beforeEach(() => {
     h.forceExdev = false
+    h.forceCopyFail = false
     root = mkdtempSync(join(tmpdir(), 'veridian-move-'))
   })
   afterEach(() => { rmSync(root, { recursive: true, force: true }) })
@@ -105,5 +122,32 @@ describe('moveInto', () => {
 
     expect(moveInto(src, dest)).toBe(false)
     expect(readFileSync(dest, 'utf-8')).toBe('precious')
+  })
+
+  it('leaves an existing destination intact when the source cannot be moved', () => {
+    // The implementation routes a directory source through cpSync, not
+    // copyFileSync, so a directory source wouldn't actually provoke the
+    // failure here -- it would succeed via cpSync. Use a file source and force
+    // the copyFileSync fallback itself to fail, which genuinely exercises
+    // "staging failed, destination untouched".
+    const src = join(root, 'a.txt')
+    writeFileSync(src, 'new', 'utf-8')
+    const dest = join(root, 'keep.txt')
+    writeFileSync(dest, 'precious', 'utf-8')
+    h.forceExdev = true     // force the copy path
+    h.forceCopyFail = true  // and make that copy fail
+
+    expect(moveInto(src, dest)).toBe(false)
+    expect(readFileSync(dest, 'utf-8')).toBe('precious')
+    expect(readFileSync(src, 'utf-8')).toBe('new')
+  })
+
+  it('leaves no temp files behind on success', () => {
+    const src = join(root, 'a.txt')
+    const dest = join(root, 'out', 'b.txt')
+    writeFileSync(src, 'hello', 'utf-8')
+
+    expect(moveInto(src, dest)).toBe(true)
+    expect(readdirSync(join(root, 'out')).filter((f) => f.includes('veridian-move'))).toEqual([])
   })
 })
