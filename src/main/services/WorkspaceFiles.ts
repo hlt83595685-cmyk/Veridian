@@ -497,7 +497,10 @@ export function listRepoTree(repoRoot: string): import('../../shared/types').Rep
     try { entries = readdirSync(dir) } catch { return [] }
     const nodes: import('../../shared/types').RepoTreeNode[] = []
     for (const name of entries) {
-      if (name === '.git') continue
+      // .veridian-tmp is the conversion scratch area a folder-backed library
+      // keeps beside its papers; it holds half-finished output and is no more
+      // part of the user's library than .git is.
+      if (name === '.git' || name === '.veridian-tmp') continue
       const abs = join(dir, name)
       let isDir = false
       try { isDir = statSync(abs).isDirectory() } catch { continue }
