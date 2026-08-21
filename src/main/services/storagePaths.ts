@@ -52,7 +52,15 @@ export function moveInto(src: string, dest: string): boolean {
   }
 
   const destDir = dirname(dest)
-  mkdirSync(destDir, { recursive: true })
+  // Report a failure here rather than throwing: callers run this in a loop over
+  // an item's attachments, and an escaping exception would abandon everything
+  // after it. Nothing has been touched yet, so false is accurate.
+  try {
+    mkdirSync(destDir, { recursive: true })
+  } catch (err) {
+    console.warn(`[storage] move failed, could not create ${destDir}:`, (err as Error).message)
+    return false
+  }
   const tmp = join(destDir, `.${basename(dest)}.veridian-move-${randomUUID()}`)
 
   // Phase 1: stage the payload beside dest, on dest's volume. dest is not
