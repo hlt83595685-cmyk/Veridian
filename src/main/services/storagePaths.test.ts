@@ -97,4 +97,13 @@ describe('moveInto', () => {
     const src = join(root, 'missing.txt')   // never created
     expect(moveInto(src, join(root, 'out.txt'))).toBe(false)
   })
+
+  it('leaves an existing destination untouched when the source is missing', () => {
+    const src = join(root, 'missing.txt')          // never created
+    const dest = join(root, 'keep.txt')
+    writeFileSync(dest, 'precious', 'utf-8')
+
+    expect(moveInto(src, dest)).toBe(false)
+    expect(readFileSync(dest, 'utf-8')).toBe('precious')
+  })
 })

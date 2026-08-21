@@ -28,6 +28,13 @@ export function isInside(p: string, dir: string): boolean {
  * move can never destroy the only copy.
  */
 export function moveInto(src: string, dest: string): boolean {
+  // Never disturb the destination until the source is known to be there: the
+  // destination removal below is irreversible, and callers treat a false
+  // return as "nothing changed".
+  if (!existsSync(src)) {
+    console.warn(`[storage] move skipped, source is missing: ${src}`)
+    return false
+  }
   try {
     mkdirSync(dirname(dest), { recursive: true })
     if (existsSync(dest)) rmSync(dest, { recursive: true, force: true })
