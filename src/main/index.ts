@@ -178,15 +178,11 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error('[main] Database init failed:', err)
   }
-  try {
-    startLocalServer()
-    console.log('[main] Local server started on port 23120')
-  } catch (err) {
-    console.error('[main] Local server failed:', err)
-  }
-  initConversionService()
-  initWorkspaceSyncService()
-  initKnowledgeIndexer()
+  // Storage maintenance runs before anything can start a conversion -- neither
+  // the local server (the browser extension posts papers straight into an
+  // import) nor the IPC gateway is up yet. A conversion in flight has not
+  // registered its output as an attachment, so the sweep would read its scratch
+  // files as unreferenced and delete them mid-write.
   try {
     const moved = migrateStagedPayloads()
     if (moved > 0) console.log(`[startup] moved ${moved} staged payload(s) into permanent storage`)
@@ -199,6 +195,15 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.warn('[startup] storage sweep failed:', (err as Error).message)
   }
+  try {
+    startLocalServer()
+    console.log('[main] Local server started on port 23120')
+  } catch (err) {
+    console.error('[main] Local server failed:', err)
+  }
+  initConversionService()
+  initWorkspaceSyncService()
+  initKnowledgeIndexer()
   registerIpcGateway(ipcMain)
 
   // No native menu bar -- Tools/Settings live as in-app pages reached from

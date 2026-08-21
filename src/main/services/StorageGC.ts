@@ -58,32 +58,60 @@ function norm(p: string): string {
   return resolve(p).toLowerCase()
 }
 
-/** Every attachment path, plus md5 -> the paths that carry it, across the
- *  personal library and every registered workspace index. Returns null if any
- *  database can't be read -- callers must then do nothing at all. */
-function collectRoots(): { paths: Set<string>; byMd5: Map<string, string[]> } | null {
+/** Every referenced attachment path across the personal library and every
+ *  registered workspace index, indexed both as a set and by the on-disk size of
+ *  the file each one points at. Returns null if any database can't be read --
+ *  callers must then do nothing at all.
+ *
+ *  Size rather than the `md5` column on purpose: `importItem` rebuilds
+ *  attachment rows without an md5 whenever the index is rebuilt from the file
+ *  tree, so on a real library that column is empty and any proof resting on it
+ *  never fires. Size comes from the filesystem, survives every rebuild, and
+ *  narrows the candidates enough that the content comparison stays cheap. */
+function collectRoots(): { paths: Set<string>; bySize: Map<number, string[]> } | null {
   const paths = new Set<string>()
-  const byMd5 = new Map<string, string[]>()
+  const bySize = new Map<number, string[]>()
   const add = (db: Database.Database): void => {
-    for (const r of db.prepare('SELECT path, md5 FROM attachments').all() as Array<{ path: string | null; md5: string | null }>) {
-      if (r.path) paths.add(norm(r.path))
-      if (r.md5 && r.path) {
-        const list = byMd5.get(r.md5) ?? []
-        list.push(r.path)
-        byMd5.set(r.md5, list)
-      }
+    for (const r of db.prepare('SELECT path FROM attachments WHERE path IS NOT NULL').all() as Array<{ path: string }>) {
+      paths.add(norm(r.path))
+      let size: number
+      try {
+        const st = statSync(r.path)
+        if (st.isDirectory()) continue
+        size = st.size
+      } catch { continue }   // referenced file is gone; it can prove nothing
+      const list = bySize.get(size) ?? []
+      list.push(r.path)
+      bySize.set(size, list)
     }
   }
   try {
     const personal = getPersonalDb()
     add(personal)
-    const ids = personal.prepare('SELECT id, local_path FROM workspaces').all() as Array<{ id: number; local_path: string | null }>
-    for (const w of ids) {
-      const base = w.local_path && w.local_path.trim()
-        ? w.local_path
-        : join(app.getPath('userData'), 'workspaces', String(w.id))
-      const idx = join(base, 'index.db')
-      if (!existsSync(idx)) continue
+
+    // Finding every index db matters more than it looks: a database we fail to
+    // read is a set of live files we'd see as unreferenced, and the sweep
+    // deletes on exactly that basis. `local_path` cannot be used as the base
+    // for all kinds -- for a folder-backed local workspace it names the CONTENT
+    // ROOT while the index still lives under the app's own workspaces dir, so
+    // treating it as the base skipped those databases entirely. Take the union
+    // of both candidates, and sweep the workspaces dir directly so a row we
+    // never see can't hide one.
+    const indexPaths = new Set<string>()
+    const wsRoot = join(app.getPath('userData'), 'workspaces')
+    if (existsSync(wsRoot)) {
+      for (const entry of readdirSync(wsRoot)) {
+        const p = join(wsRoot, entry, 'index.db')
+        if (existsSync(p)) indexPaths.add(p)
+      }
+    }
+    const rows = personal.prepare('SELECT id, local_path FROM workspaces').all() as Array<{ id: number; local_path: string | null }>
+    for (const w of rows) {
+      if (!w.local_path || !w.local_path.trim()) continue
+      const p = join(w.local_path, 'index.db')     // github workspaces keep the index beside their clone
+      if (existsSync(p)) indexPaths.add(p)
+    }
+    for (const idx of indexPaths) {
       const wdb = new DatabaseCtor(idx, { readonly: true })
       try { add(wdb) } finally { wdb.close() }
     }
@@ -91,7 +119,7 @@ function collectRoots(): { paths: Set<string>; byMd5: Map<string, string[]> } | 
     console.warn('[GC] skipping sweep, a database could not be read:', (err as Error).message)
     return null
   }
-  return { paths, byMd5 }
+  return { paths, bySize }
 }
 
 /**
@@ -155,14 +183,26 @@ export function sweepStorage(): { freedBytes: number; files: number } {
   if (existsSync(attRoot)) {
     for (const name of readdirSync(attRoot)) {
       const p = join(attRoot, name)
-      try { if (statSync(p).isDirectory()) continue } catch { continue }
+      let size: number
+      try {
+        const st = statSync(p)
+        if (st.isDirectory()) continue
+        size = st.size
+      } catch { continue }
       if (roots.paths.has(norm(p))) continue
+
+      // Only referenced files of exactly this size could be the survivor, so
+      // hashing stays proportional to the leftovers rather than to the library.
+      const candidates = (roots.bySize.get(size) ?? []).filter((q) => norm(q) !== norm(p))
+      if (candidates.length === 0) continue
       let hash: string
       try { hash = createHash('md5').update(readFileSync(p)).digest('hex') }
       catch { continue }
-      const survivors = (roots.byMd5.get(hash) ?? [])
-        .filter((q) => norm(q) !== norm(p) && existsSync(q))
-      if (survivors.length > 0) del(p)
+      const survives = candidates.some((q) => {
+        try { return createHash('md5').update(readFileSync(q)).digest('hex') === hash }
+        catch { return false }   // unreadable proves nothing
+      })
+      if (survives) del(p)
     }
   }
 
