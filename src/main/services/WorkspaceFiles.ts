@@ -16,10 +16,11 @@
 // whole import is the UI's refresh signal.
 import type Database from 'better-sqlite3'
 import {
-  copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync,
+  existsSync, mkdirSync, readdirSync, readFileSync,
   renameSync, rmSync, statSync, writeFileSync,
 } from 'fs'
 import { basename, join, sep } from 'path'
+import { moveInto } from './storagePaths'
 
 interface ItemJson {
   key: string
@@ -181,22 +182,20 @@ export function exportItems(db: Database.Database, repoRoot: string, itemIds: nu
       else if (isFirstPdf) name = 'Full.pdf'
       else name = att.filename ?? basename(att.path)
       const dest = isCanonical ? join(files, name) : uniquePath(files, name)
-      try {
-        if (att.type === 'imagedir') {
-          // cpSync onto an existing dir MERGES old and new contents -- stale
-          // images from the previous conversion would survive. Clean first.
-          if (existsSync(dest)) rmSync(dest, { recursive: true, force: true })
-          cpSync(att.path, dest, { recursive: true })
-        } else {
-          copyFileSync(att.path, dest)   // plain overwrite for files
-        }
+      // MOVE, don't copy: the old copy-and-repoint left a full duplicate of
+      // every PDF behind in userData forever (hundreds of MB per library, all
+      // of it unreferenced). moveInto replaces the destination wholesale, so
+      // an imagedir can't merge stale images from a previous conversion, and
+      // it leaves the source intact when it fails -- in which case we do NOT
+      // repoint, so the attachment keeps pointing at the copy that still exists.
+      if (moveInto(att.path, dest)) {
         if (isFirstPdf) pdfNamed = true
         db.prepare('UPDATE attachments SET path = ?, filename = ? WHERE id = ?')
           .run(dest, basename(dest), att.id)
         att.path = dest
         att.filename = basename(dest)
-      } catch (err) {
-        console.warn(`[WorkspaceFiles] attachment relocation failed (${att.path}):`, err)
+      } else {
+        console.warn(`[WorkspaceFiles] attachment relocation failed, keeping source: ${att.path}`)
       }
     }
 
