@@ -155,10 +155,19 @@ export function initConversionService(): void {
       let finalImages = imagesDir
       if (getActiveWorkspace().repoRoot == null) {
         const home = convertedDir(itemId)
-        rmSync(home, { recursive: true, force: true })   // re-conversion overwrites
+        // Each moveInto replaces its own destination as one confirmed step, so
+        // a re-conversion overwrites in place. Deliberately NOT wiping `home`
+        // up front: doing that destroys the previous conversion before the new
+        // one is known to have landed, and a failed move would leave the item
+        // with nothing here at all.
         if (moveInto(mdPath, join(home, 'Full.md'))) finalMd = join(home, 'Full.md')
-        if (finalImages && moveInto(finalImages, join(home, 'images'))) {
-          finalImages = join(home, 'images')
+        if (finalImages) {
+          if (moveInto(finalImages, join(home, 'images'))) finalImages = join(home, 'images')
+        } else {
+          // This conversion produced no figures; drop any left by the last one
+          // so the folder can't keep images the markdown no longer references.
+          try { rmSync(join(home, 'images'), { recursive: true, force: true }) }
+          catch { /* nothing to drop */ }
         }
       }
       grantAccess(finalMd)
