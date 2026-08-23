@@ -29,10 +29,16 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-// 服务提供者
+// 服务提供者：名字由 super(ctx, name) 决定。
+// 注意：Cordis 4 没有 `static [Service.provide]`——那样写在 JS 下静默无效
+// （键名变成字符串 "undefined"），只有 typecheck 能抓到。已实测。
 class Foo extends Service {
-  static [Service.provide] = 'foo'
   constructor(ctx: Context) { super(ctx, 'foo') }
+}
+
+// 让 ctx.foo 有类型：
+declare module '@deepseek-ai/cordis' {
+  interface Context { foo: Foo }
 }
 
 // 消费者插件
@@ -515,7 +521,6 @@ export interface LlmResult {
 }
 
 export class LlmService extends Service {
-  static [Service.provide] = 'llm'
   constructor(ctx: Context) { super(ctx, 'llm') }
 
   /**
@@ -700,7 +705,6 @@ export const productionDeps: AttachmentDeps = {
 }
 
 export class AttachmentService extends Service {
-  static [Service.provide] = 'attachment'
   private readonly impl = makeAttachmentResolver(productionDeps)
   constructor(ctx: Context) { super(ctx, 'attachment') }
   resolve(ref: AttachmentRef): Promise<AttachmentResult> { return this.impl.resolve(ref) }
@@ -912,7 +916,6 @@ export interface HarnessTool {
 }
 
 export class ToolsService extends Service {
-  static [Service.provide] = 'tools'
   private readonly reg = new Map<string, HarnessTool>()
   constructor(ctx: Context) { super(ctx, 'tools') }
 
