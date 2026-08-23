@@ -2,12 +2,16 @@
 // 插件在此挂载；每个插件的注册都是可逆效果，卸载即回滚。
 import { Context } from '@deepseek-ai/cordis'
 import './events'
+import { mountHarnessPlugins } from './plugins'
+import { ensureSessionEventTable } from './session/sqliteStore'
 
 let root: Context | null = null
 
 export function bootHarness(): Context {
   if (root) return root
   root = new Context()
+  ensureSessionEventTable()
+  mountHarnessPlugins(root)
   return root
 }
 
