@@ -12,6 +12,7 @@ import { initKnowledgeIndexer } from './knowledge/indexer'
 import { migrateStagedPayloads, sweepStorage } from './services/StorageGC'
 import { initAutoUpdater } from './services/UpdateService'
 import { assertReadable } from './security/pathGuard'
+import { bootHarness } from './harness/boot'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -178,7 +179,7 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error('[main] Database init failed:', err)
   }
-  console.log('[harness]', (await import('./harness/smoke')).cordisSmoke())
+  bootHarness()
   // Storage maintenance runs before anything can start a conversion -- neither
   // the local server (the browser extension posts papers straight into an
   // import) nor the IPC gateway is up yet. A conversion in flight has not
