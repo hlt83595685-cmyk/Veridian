@@ -25,7 +25,7 @@
 ## 目标
 
 1. 建立可运行的插件容器与接缝规范，供后续所有能力挂载。
-2. 打通一次完整回合，**全程不碰现有 `agent.ts`**，旧助手保持可用。
+2. 打通一次完整回合，**全程不碰现有 `agent.ts`**，旧链路留作对照。
 3. 让 @ 文献问答**当场变好**：读全文、失败说清原因。
 4. 留下端到端回归基线。
 
@@ -35,7 +35,7 @@
 
 - 引入 Cordis 核心，建主进程根 context 与插件生命周期
 - 类型化事件总线（含派发模式声明）
-- 会话事件日志（**内存态**）与 `deriveMessages()` 投影
+- 会话事件日志（**持久化**，写入现有 `knowledge.db`）与 `deriveMessages()` 投影
 - 「模型可见即已记录」不变量（开发期断言）
 - 接缝规范，并落地两道：`ctx.llm`、`ctx.attachment`
 - 最小上下文装配器（含 token 预算）
@@ -46,7 +46,6 @@
 
 **不在范围内**（各自留给后续条目）
 
-- 会话日志**持久化**与历史数据迁移（第 95–98 条）
 - 压缩、哈希缓存、PaperContextTracker（第 40–44 条）
 - 检索接缝、embedding 分离（第 59–63 条）
 - 写工具、审批、撤销（第 45–58 条）
@@ -64,16 +63,20 @@
 理由：这样能在**不重写界面**的前提下验证 harness。若同时换掉 UI，出问题时无法判断是架构错了
 还是界面错了。UI 重写是第 68–76 条，独立进行。
 
-### D2. 开关切换，默认走旧路
+### D2. 开关用于开发期 A/B 对照
 
-新增设置项 `knowledge.harnessV2`（布尔，默认 `false`）。`knowledge:ask` 处理器据此路由。
+新增设置项 `knowledge.harnessV2`（布尔，初始 `false`）。`knowledge:ask` 处理器据此路由。
 
-0.1.12 已有用户在使用，重写期间旧助手必须照常工作。
+**软件尚无用户，开关不是安全措施**，而是让新旧链路能就同一个问题当场比对行为。竖线通过验收
+标准即翻默认值，不必等到全部重写完成。
 
-### D3. 会话日志先做内存态，但投影必须是最终形态
+### D3. 会话日志一开始就持久化
 
-`deriveMessages(log)` 的**投影语义**是架构的核心，必须一次做对；而持久化格式涉及历史数据迁移，
-需要单独决策。因此本期建内存态日志 + 完整投影，持久化留到下一期。
+`deriveMessages(log)` 的**投影语义**是架构的核心，且日志是整个架构的真相源。既然没有历史数据
+需要迁移，就不存在推迟持久化的理由——先做内存态再补持久化，等于把最核心的部分设计两遍，且
+投影只能对着假数据验证。
+
+因此本期直接建持久化日志（写入现有 `knowledge.db`），投影对着真实表验证。
 
 不变量在本期即刻建立：**任何进入模型请求的内容，必须能从日志投影重建**，开发期以断言校验。
 
@@ -177,7 +180,7 @@ interface AttachmentSeam {
 
 ## 会话日志与投影
 
-事件（本期最小集，全部按计划第 17a 条声明类型与派发模式）：
+事件持久化到 `knowledge.db` 的追加表。本期最小集，全部按计划第 17a 条声明类型与派发模式：
 
 | 事件 | 载荷 |
 |---|---|
@@ -239,6 +242,8 @@ turn/end
 
 ## 与现有系统的共存
 
+软件尚无用户，旧助手不是发布义务，只是开发期的行为参照物。竖线通过验收后即可着手移除旧编排，不必等到全部重写完成。
+
 - 根 context 在主进程启动时创建，**与现有 Service 层、Notifier、JobQueue 并存**，不替换。
 - 本期不把现有服务接进 context；`ctx.llm` / `ctx.attachment` 的提供者直接调用现有模块。
 - `knowledge:ask` 按开关路由；两条链路发出相同的渲染层事件。
@@ -288,7 +293,7 @@ externalizeDepsPlugin({ exclude: ['@deepseek-ai/cordis', '@deepseek-ai/cosmokit'
 1. @ 一篇论文，问它**结论或讨论部分**的内容，答得出来。
 2. @ 一篇未转换的论文，明确告知「尚未转换」并给出下一步，而非「找不到」。
 3. @ 一个路径越界的文件，明确告知「不在允许范围内」。
-4. 关掉开关，旧助手行为与本期改动前**逐字节一致**。
+4. 关掉开关，旧链路行为与本期改动前**逐字节一致**（保证对照有效）。
 5. `npm run build` 成功且应用能实际启动（不止类型检查通过）。
 
 ## 变更文件清单（预计）
@@ -299,7 +304,7 @@ externalizeDepsPlugin({ exclude: ['@deepseek-ai/cordis', '@deepseek-ai/cosmokit'
 - `src/main/harness/events.ts` — 事件类型声明与派发模式
 - `src/main/harness/seams/llm.ts` — 接口 + 现有 providers 的提供者
 - `src/main/harness/seams/attachment.ts` — 接口 + 论文/文件提供者
-- `src/main/harness/session/log.ts` — 内存态会话日志
+- `src/main/harness/session/log.ts` — 持久化会话日志（追加表 + 读取）
 - `src/main/harness/session/derive.ts` — `deriveMessages()` 与不变量断言
 - `src/main/harness/assemble.ts` — 上下文装配与预算
 - `src/main/harness/tools/registry.ts` — 工具注册与 schema
