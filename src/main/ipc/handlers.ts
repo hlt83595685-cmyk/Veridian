@@ -24,6 +24,7 @@ import type { LocalWorkspaceKind } from '../../shared/types'
 import { manualConvertPdfToMd } from '../services/ConversionService'
 import { checkForUpdatesNow } from '../services/UpdateService'
 import * as Agent from '../knowledge/agent'
+import * as HarnessEntry from '../harness/entry'
 import { rebuildIndex, getIndexStatus } from '../knowledge/indexer'
 import { getChunkBySeq } from '../knowledge/search'
 import { testProvider } from '../knowledge/providers'
@@ -67,6 +68,8 @@ const RENDERER_WRITABLE_SETTINGS = new Set([
   'ui.layout',
   // AI retrieval tuning (result count + excerpt length) -- plain numbers.
   'knowledge.search.resultCount', 'knowledge.search.excerptChars',
+  // Development A/B switch between the old assistant and the harness rewrite.
+  'knowledge.harnessV2',
 ])
 
 function collectImages(dir: string): string[] {
@@ -284,9 +287,16 @@ export const handlers: Record<IpcChannel, Handler> = {
   'github:listCollaborators': (_e, owner: string, repo: string) => GitHub.listCollaborators(owner, repo),
 
   // AI knowledge base
+  // The harness rewrite runs behind a development A/B flag; the old path is
+  // untouched so the two can be compared on the same question.
   'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) =>
-    Agent.ask(question, conversationId, refs, scopeCollectionId, modeId),
-  'knowledge:stop':               (_e, conversationId: number) => Agent.stopGeneration(conversationId),
+    Settings.getSetting('knowledge.harnessV2') === true
+      ? HarnessEntry.ask(question, conversationId, refs)
+      : Agent.ask(question, conversationId, refs, scopeCollectionId, modeId),
+  'knowledge:stop':               (_e, conversationId: number) => {
+    HarnessEntry.stopGeneration(conversationId)
+    Agent.stopGeneration(conversationId)
+  },
   'knowledge:regenerate':         (_e, conversationId: number) => Agent.regenerate(conversationId),
   'knowledge:editResend':         (_e, conversationId: number, question: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) =>
     Agent.editLastAndResend(conversationId, question, refs, scopeCollectionId, modeId),
