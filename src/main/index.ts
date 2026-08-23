@@ -178,6 +178,7 @@ app.whenReady().then(async () => {
   } catch (err) {
     console.error('[main] Database init failed:', err)
   }
+  console.log('[harness]', (await import('./harness/smoke')).cordisSmoke())
   // Storage maintenance runs before anything can start a conversion -- neither
   // the local server (the browser extension posts papers straight into an
   // import) nor the IPC gateway is up yet. A conversion in flight has not

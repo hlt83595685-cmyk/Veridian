@@ -5,7 +5,10 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    // cordis ships ESM only, and this project is CommonJS -- externalizing it would
+    // leave the main process doing require() on a pure ESM package at runtime.
+    // Bundling it sidesteps the interop question entirely.
+    plugins: [externalizeDepsPlugin({ exclude: ['@deepseek-ai/cordis', '@deepseek-ai/cosmokit'] })],
     build: {
       rollupOptions: {
         input: {
