@@ -28,4 +28,17 @@ export class SqliteSessionStore implements SessionStore {
       .all(sessionId) as Array<{ payload: string }>
     return rows.map((r) => JSON.parse(r.payload) as SessionEvent)
   }
+
+  truncateToLastUserMessage(sessionId: number): void {
+    const kdb = getKnowledgeDb()
+    const row = kdb
+      .prepare(
+        `SELECT id FROM harness_events
+         WHERE session_id = ? AND json_extract(payload, '$.kind') = 'user-message'
+         ORDER BY id DESC LIMIT 1`,
+      )
+      .get(sessionId) as { id: number } | undefined
+    if (!row) return
+    kdb.prepare('DELETE FROM harness_events WHERE session_id = ? AND id >= ?').run(sessionId, row.id)
+  }
 }

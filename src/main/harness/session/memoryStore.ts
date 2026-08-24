@@ -13,4 +13,13 @@ export class MemorySessionStore implements SessionStore {
   read(sessionId: number): SessionEvent[] {
     return [...(this.rows.get(sessionId) ?? [])]
   }
+
+  truncateToLastUserMessage(sessionId: number): void {
+    const list = this.rows.get(sessionId) ?? []
+    let cut = -1
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].kind === 'user-message') { cut = i; break }
+    }
+    if (cut >= 0) this.rows.set(sessionId, list.slice(0, cut))
+  }
 }

@@ -16,6 +16,13 @@ export type SessionEvent =
 export interface SessionStore {
   append(sessionId: number, event: SessionEvent): void
   read(sessionId: number): SessionEvent[]
+  /**
+   * 回退到最后一条 user-message 之前，用于重新生成与编辑重发。
+   *
+   * 这是日志唯一的非追加操作，语义是「这一轮没发生过」而不是「改写历史」——
+   * 用户主动要求重来，日志就该反映重来后的事实。
+   */
+  truncateToLastUserMessage(sessionId: number): void
 }
 
 // 复用现有类型，不重新声明——重复声明必然漂移。

@@ -23,8 +23,8 @@ import { getAvatarPath } from '../services/AvatarService'
 import type { LocalWorkspaceKind } from '../../shared/types'
 import { manualConvertPdfToMd } from '../services/ConversionService'
 import { checkForUpdatesNow } from '../services/UpdateService'
-import * as Agent from '../knowledge/agent'
-import * as HarnessEntry from '../harness/entry'
+import * as Harness from '../harness/entry'
+import * as Conversations from '../harness/conversations'
 import { rebuildIndex, getIndexStatus } from '../knowledge/indexer'
 import { getChunkBySeq } from '../knowledge/search'
 import { testProvider } from '../knowledge/providers'
@@ -68,8 +68,6 @@ const RENDERER_WRITABLE_SETTINGS = new Set([
   'ui.layout',
   // AI retrieval tuning (result count + excerpt length) -- plain numbers.
   'knowledge.search.resultCount', 'knowledge.search.excerptChars',
-  // Development A/B switch between the old assistant and the harness rewrite.
-  'knowledge.harnessV2',
 ])
 
 function collectImages(dir: string): string[] {
@@ -287,24 +285,19 @@ export const handlers: Record<IpcChannel, Handler> = {
   'github:listCollaborators': (_e, owner: string, repo: string) => GitHub.listCollaborators(owner, repo),
 
   // AI knowledge base
-  // The harness rewrite runs behind a development A/B flag; the old path is
-  // untouched so the two can be compared on the same question.
-  'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) =>
-    Settings.getSetting('knowledge.harnessV2') === true
-      ? HarnessEntry.ask(question, conversationId, refs)
-      : Agent.ask(question, conversationId, refs, scopeCollectionId, modeId),
-  'knowledge:stop':               (_e, conversationId: number) => {
-    HarnessEntry.stopGeneration(conversationId)
-    Agent.stopGeneration(conversationId)
-  },
-  'knowledge:regenerate':         (_e, conversationId: number) => Agent.regenerate(conversationId),
+  // scopeCollectionId / modeId 暂不接线：检索接缝与预设都还没搬过来，
+  // 收下参数但不使用，好过悄悄按一个不存在的语义处理。
+  'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[]) =>
+    Harness.ask(question, conversationId, refs),
+  'knowledge:stop':               (_e, conversationId: number) => Harness.stopGeneration(conversationId),
+  'knowledge:regenerate':         (_e, conversationId: number) => Harness.regenerate(conversationId),
   'knowledge:editResend':         (_e, conversationId: number, question: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) =>
-    Agent.editLastAndResend(conversationId, question, refs, scopeCollectionId, modeId),
-  'knowledge:listConversations':  () => Agent.listConversations(),
-  'knowledge:getMessages':        (_e, conversationId: number) => Agent.getMessages(conversationId),
+    Harness.editLastAndResend(conversationId, question, refs),
+  'knowledge:listConversations':  () => Conversations.listConversations(),
+  'knowledge:getMessages':        (_e, conversationId: number) => Conversations.getMessages(conversationId),
   'knowledge:getChunk':           (_e, itemKey: string, seq: number) =>
     getChunkBySeq(WorkspaceContext.getActiveWorkspace().id ?? 0, itemKey, seq),
-  'knowledge:deleteConversation': (_e, conversationId: number) => Agent.deleteConversation(conversationId),
+  'knowledge:deleteConversation': (_e, conversationId: number) => Conversations.deleteConversation(conversationId),
   'knowledge:rebuildIndex':       () => rebuildIndex(),
   'knowledge:indexStatus':        () => getIndexStatus(),
   'knowledge:testProvider':       (_e, which: 'chat' | 'embedding') => testProvider(which),

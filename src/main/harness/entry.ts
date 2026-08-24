@@ -32,27 +32,9 @@ function toAttachmentRefs(refs: KnowledgeRef[] | undefined): AttachmentRef[] {
   return out
 }
 
-export async function ask(
-  question: string,
-  conversationId: number | null,
-  refs?: KnowledgeRef[],
-): Promise<number> {
+/** 起一个回合并把结果投影给 UI。ask / regenerate / editResend 共用。 */
+function launch(convId: number, question: string, refs: KnowledgeRef[] | undefined): void {
   const kdb = getKnowledgeDb()
-  const ws = getActiveWorkspace().id ?? 0
-
-  let convId = conversationId
-  if (convId === null) {
-    const info = kdb
-      .prepare('INSERT INTO conversations (workspace_id, title) VALUES (?, ?)')
-      .run(ws, question.slice(0, 60))
-    convId = Number(info.lastInsertRowid)
-  }
-
-  // UI 投影：先把用户这条写进 messages，界面立刻能显示。
-  kdb
-    .prepare('INSERT INTO messages (conversation_id, role, content, refs) VALUES (?, ?, ?, ?)')
-    .run(convId, 'user', question, '[]')
-
   const ac = new AbortController()
   abortControllers.set(convId, ac)
   const store = new SqliteSessionStore()
@@ -77,8 +59,58 @@ export async function ask(
     .finally(() => {
       abortControllers.delete(convId)
     })
+}
 
+export async function ask(
+  question: string,
+  conversationId: number | null,
+  refs?: KnowledgeRef[],
+): Promise<number> {
+  const kdb = getKnowledgeDb()
+  let convId = conversationId
+  if (convId === null) {
+    const info = kdb
+      .prepare('INSERT INTO conversations (workspace_id, title) VALUES (?, ?)')
+      .run(getActiveWorkspace().id ?? 0, question.slice(0, 60))
+    convId = Number(info.lastInsertRowid)
+  }
+  // UI 投影：先把用户这条写进 messages，界面立刻能显示。
+  kdb
+    .prepare('INSERT INTO messages (conversation_id, role, content, refs) VALUES (?, ?, ?, ?)')
+    .run(convId, 'user', question, '[]')
+  launch(convId, question, refs)
   return convId
+}
+
+/** 重新生成：把日志与 UI 投影都退回到最后一次提问之前，然后重跑。 */
+export function regenerate(conversationId: number): void {
+  const kdb = getKnowledgeDb()
+  const lastUser = kdb
+    .prepare("SELECT id, content FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1")
+    .get(conversationId) as { id: number; content: string } | undefined
+  if (!lastUser) return
+  kdb.prepare('DELETE FROM messages WHERE conversation_id = ? AND id > ?').run(conversationId, lastUser.id)
+  new SqliteSessionStore().truncateToLastUserMessage(conversationId)
+  launch(conversationId, lastUser.content, [])
+}
+
+/** 编辑重发：替换最后一次提问，其后的一切作废。 */
+export function editLastAndResend(
+  conversationId: number,
+  newQuestion: string,
+  refs?: KnowledgeRef[],
+): void {
+  const kdb = getKnowledgeDb()
+  const lastUser = kdb
+    .prepare("SELECT id FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY id DESC LIMIT 1")
+    .get(conversationId) as { id: number } | undefined
+  if (!lastUser) return
+  kdb.prepare('DELETE FROM messages WHERE conversation_id = ? AND id >= ?').run(conversationId, lastUser.id)
+  new SqliteSessionStore().truncateToLastUserMessage(conversationId)
+  kdb
+    .prepare('INSERT INTO messages (conversation_id, role, content, refs) VALUES (?, ?, ?, ?)')
+    .run(conversationId, 'user', newQuestion, '[]')
+  launch(conversationId, newQuestion, refs)
 }
 
 export function stopGeneration(conversationId: number): void {
