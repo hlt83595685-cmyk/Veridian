@@ -1,5 +1,58 @@
 # Veridian 开发日志
 
+## 2026-09-21 — v0.2.0 发版：插件系统 + 划词翻译、主题切换、harness v2
+
+自 v0.1.12 以来的累积，一次性发布。**本版带上了 harness v2**（`harness-v2-slice`
+分支的 13 个提交 + 当时工作区里未提交的马厩/审批/工具策略等改动）：旧的 AI 编排
+已删除，应用只跑在 harness 上。
+
+### 一、插件系统 v0 + 划词翻译
+
+MD 阅读器里选中文字 → 选区旁出现浮标 → 点击后译文流式显示在气泡里。翻译由内置
+插件 `translate` 提供，自带 API 配置（Base URL / Key / 模型 / 目标语言，兼容 OpenAI
+接口），不共用知识库的模型配置。设置里新增「插件」标签页（启用开关 + 配置表单）。
+
+**沙箱设计**：插件是 `manifest.json` + `index.js`，跑在 Worker 里，自己联网会被 CSP
+拦住，所有请求由主进程转发。
+
+- **踩坑**：`new Worker('veridian-plugin://…')` 会被浏览器拒绝——Worker 脚本必须与
+  页面同源，自定义协议是另一个源，所以「靠响应头 CSP 限制 Worker」直接走不通。改成：
+  隐藏的 `<iframe sandbox="allow-scripts">`，页面由 `veridian-plugin://` 提供并带
+  CSP 头，iframe 里用 Blob 创建 Worker，Blob Worker **继承 iframe 文档的 CSP**。
+- **联网白名单** = 清单 `network` 里的域名 ∪ 该插件 `url` 类配置值的主机名。清单是
+  插件作者写的，所以 `network` **不允许写本机地址**（否则能调用本机任意服务，包括
+  Veridian 自己的 `localhost:23120`）；本机服务（如 Ollama）只能由用户自己在配置里填。
+- 转发层：只允许 https（用户自填的本机地址除外）、`redirect:'error'`（防重定向到
+  白名单外）、60s 超时、10MB 上限、丢弃 cookie/host/origin/referer、可中止；
+  接收方销毁时会中止请求，不再空读到超时。
+- 插件密码存在 `plugin.<id>.secret.*` 命名空间，`SettingsService` 按命名加密。
+- `scripts/verify-plugin-sandbox.cjs`：在真实 Electron 里让 Worker 尝试
+  fetch / XHR / WebSocket / importScripts / 动态 import / EventSource / 嵌套 Worker，
+  带 CSP 时 8 个探针全被拦、探针服务零命中；不带 CSP 的对照命中 8 次（证明测试有效）。
+  以后升级 Electron 后应重跑一次。
+- 审查中发现并修复：转发出错时连接泄漏、状态码超出 200–599 时请求永久挂起、插件
+  加载失败后每次运行空等 90 秒、`emit` 抛异常时 `runRelay` 拒绝。
+
+### 二、主题切换
+
+设置新增「外观」：跟随系统 / 浅色 / 深色。主进程在创建窗口之前设置
+`nativeTheme.themeSource`（不闪白），复用 `globals.css` 里现有的深色变量块；深色下会
+出问题的硬编码色（白色半透明浮层、状态栏、标签紫色）改成主题变量。
+
+### 三、小修复
+
+- 文献列表右键菜单在最底部一条时被窗口裁掉：菜单（及「添加到分组」子菜单）现在会
+  按实际尺寸收回窗口内（`clampToViewport`，有单测）。
+- 缩略图大小上限 96px → 192px。
+
+### 验证与已知缺口
+
+node + web 两套 tsc 干净、416 测试通过（27 个 DB 测试按既有约定跳过）、
+`npm run build` 成功、沙箱验证脚本 PASS。**插件在真实应用内的端到端手测（选字 →
+浮标 → 流式译文 → 取消 → 停用，需要真实 API Key）发版前未做**；`plugin:list` 与
+`settings:get` 能读到插件密钥明文（与现有知识库 Key 同样处理，插件代码本身够不到
+这两个通道）。
+
 ## 2026-08-21 — v0.1.12 发版：批量导入不再丢数据 + 存储不再占满 C 盘
 
 两批修复，都源自真实用户反馈，都属于数据完整性问题。
