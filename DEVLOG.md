@@ -1,5 +1,39 @@
 # Veridian 开发日志
 
+## 2026-09-21 — v0.2.1 紧急修复：v0.2.0 安装后主进程启动即崩
+
+**现象**：更新安装 v0.2.0 后弹出 `A JavaScript error occurred in the main process`：
+`Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@deepseek-ai/dsh-timeout' imported
+from …\app.asar\node_modules\@deepseek-ai\dsh-llm\lib\index.js`。崩在主进程模块加载阶段，
+连自动更新模块都没跑起来，所以**已装 v0.2.0 的用户无法靠自动更新自救，需要手动重装**。
+
+**根因**：`dsh-llm`、`dsh-tools` 等把一批 `@deepseek-ai/dsh-*` 声明成
+**peerDependencies**。npm 会把它们自动装进开发环境的 `node_modules`，所以开发、
+`npm run bootcheck`、`npm test` 全都正常；但 electron-builder **只沿 `dependencies`
+链打包，不跟 peerDependencies**。安装包 `app.asar` 里只有 7 个 `@deepseek-ai` 包，
+缺了 9 个（agent / attachment / brand / code-runtime / invariants / session /
+timeout / typert-protocol / user-approval）。这是 harness v2 第一次被打包发布，
+才第一次暴露。
+
+**为什么发版前没发现**：`bootcheck` 是在项目目录里启动 `out/main/index.js`。Node 解析
+模块时会一路向上找到项目根的开发 `node_modules`，把缺的包补上了——**任何在项目目录内
+运行打包产物的检查都会被这个「后门」掩盖**（连把 `dist/` 里的 asar 拿来启动也一样）。
+必须把 asar 拷到项目目录之外才能复现（复现出的报错与用户所见逐字一致）。
+
+**修复**：把这 9 个包作为直接依赖写进 `package.json` 的 `dependencies`（版本与已有的
+一致，固定 `0.1.0-rc.8`），lockfile 只多了这 9 项、去掉 9 个 `"peer": true`，无版本变动。
+
+**防再犯（两道）**：
+1. `src/main/packaging.test.ts`：检查「运行时需要的（含必需的 peer，跳过 `@types/*`）」
+   是否都在 `dependencies` 链上。修复前它失败并列出恰好这 9 个包，修复后通过；每次
+   `npm test` 都会跑。
+2. `scripts/verify-packed.cjs`（`npm run verify:packed`）：直接读**打包产物 asar 的文件
+   清单**，核对每个运行时包是否真的在里面，几秒完成、不用启动。已用坏掉的 v0.2.0 asar
+   做过负面对照：准确报出那 9 个包。
+
+**发版流程新增一步**（发布前）：`npm run package -- --publish never` →
+`npm run verify:packed` → 再 `npm run package -- --publish always`。
+
 ## 2026-09-21 — v0.2.0 发版：插件系统 + 划词翻译、主题切换、harness v2
 
 自 v0.1.12 以来的累积，一次性发布。**本版带上了 harness v2**（`harness-v2-slice`
