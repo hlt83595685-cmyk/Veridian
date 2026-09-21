@@ -48,7 +48,7 @@ export function StatusBar(): JSX.Element | null {
   return (
     <div style={{
       height: 24,
-      background: 'rgba(242,242,247,0.92)',
+      background: 'var(--glass-bar)',
       backdropFilter: 'blur(12px)',
       WebkitBackdropFilter: 'blur(12px)',
       borderTop: '1px solid var(--separator)',

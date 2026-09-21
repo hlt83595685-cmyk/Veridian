@@ -1,8 +1,8 @@
-import { app, BrowserWindow, shell, ipcMain, protocol, net, Menu, Tray } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, protocol, net, Menu, Tray, nativeTheme } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { getSetting, setSetting } from './services/SettingsService'
+import { getSetting, setSetting, getThemeMode } from './services/SettingsService'
 import { initDatabase } from './db'
 import { startLocalServer, stopLocalServer } from './server'
 import { registerIpcGateway } from './ipc/gateway'
@@ -12,6 +12,7 @@ import { initKnowledgeIndexer } from './knowledge/indexer'
 import { migrateStagedPayloads, sweepStorage } from './services/StorageGC'
 import { initAutoUpdater } from './services/UpdateService'
 import { assertReadable } from './security/pathGuard'
+import { pluginAssetResponse } from './plugin-host/pluginAssets'
 import { bootHarness } from './harness/boot'
 
 let mainWindow: BrowserWindow | null = null
@@ -148,6 +149,9 @@ if (!isPrimaryInstance) {
 // (file:// is blocked by Electron's CSP in sandboxed contexts)
 protocol.registerSchemesAsPrivileged([
   { scheme: 'veridian-file', privileges: { secure: true, supportFetchAPI: true, stream: true } },
+  // Plugin sandbox pages (see plugin-host/pluginAssets.ts). `standard` so the page's
+  // relative script URL resolves and each plugin id gets its own origin.
+  { scheme: 'veridian-plugin', privileges: { standard: true, secure: true } },
 ])
 
 app.whenReady().then(async () => {
@@ -167,6 +171,8 @@ app.whenReady().then(async () => {
       return new Response('Forbidden', { status: 403 })
     }
   })
+
+  protocol.handle('veridian-plugin', (request) => pluginAssetResponse(new URL(request.url).pathname))
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -212,6 +218,7 @@ app.whenReady().then(async () => {
   // the sidebar's bottom icon bar.
   Menu.setApplicationMenu(null)
 
+  nativeTheme.themeSource = getThemeMode()
   createWindow()
   createTray()
 

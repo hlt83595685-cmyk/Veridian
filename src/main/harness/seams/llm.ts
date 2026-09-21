@@ -15,13 +15,19 @@ export interface LlmRequest {
 export interface LlmResult {
   text: string
   toolCalls: Array<{ id: string; name: string; args: string }>
+  /** 思考过程。必须随下一轮原样回传，见 ChatMessage.reasoning_content。 */
+  reasoning: string
 }
 
 export class LlmService extends Service {
   // 服务名由 super(ctx, name) 决定。Cordis 4 没有 `static [Service.provide]`——
   // 那样写在 JS 下静默无效（键名会变成字符串 "undefined"），只有类型检查能抓到。
+  //
+  // 叫 chat 不叫 llm：`ctx.llm` 是 @deepseek-ai/dsh-llm 的名字（它随 dsh-tools
+  // 一起进来），两边都做模块增强就会在类型层撞车，而那个名字是人家的。等哪天接
+  // 了 dsh-llm，`ctx.llm` 正好空着给它。
   constructor(ctx: Context) {
-    super(ctx, 'llm')
+    super(ctx, 'chat')
   }
 
   /**
@@ -36,12 +42,13 @@ export class LlmService extends Service {
     return {
       text: r.content,
       toolCalls: r.toolCalls.map((t) => ({ id: t.id, name: t.function.name, args: t.function.arguments })),
+      reasoning: r.reasoningContent,
     }
   }
 }
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    llm: LlmService
+    chat: LlmService
   }
 }

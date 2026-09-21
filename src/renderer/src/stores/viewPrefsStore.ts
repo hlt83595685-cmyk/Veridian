@@ -5,7 +5,7 @@ import { create } from 'zustand'
 // update writes the whole object back through settings.set.
 export interface ItemListPrefs {
   titleFontSize: number   // px, clamped 14..26
-  thumbSize: number       // figure-strip thumbnail px, clamped 32..96
+  thumbSize: number       // figure-strip thumbnail px, clamped 32..192
   showJournal: boolean
   showYear: boolean
   showTags: boolean
@@ -23,7 +23,7 @@ const DEFAULTS: ItemListPrefs = {
 export const FONT_MIN = 14
 export const FONT_MAX = 26
 export const THUMB_MIN = 32
-export const THUMB_MAX = 96
+export const THUMB_MAX = 192
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, Math.round(n)))

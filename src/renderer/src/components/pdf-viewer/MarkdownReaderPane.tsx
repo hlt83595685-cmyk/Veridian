@@ -12,7 +12,7 @@ export function MarkdownReaderPane(): JSX.Element {
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '0 16px', height: 46, flexShrink: 0,
-        background: 'rgba(242,242,247,0.85)',
+        background: 'var(--glass-bar)',
         backdropFilter: 'blur(20px) saturate(180%)',
         WebkitBackdropFilter: 'blur(20px) saturate(180%)',
         borderBottom: '1px solid var(--separator)',

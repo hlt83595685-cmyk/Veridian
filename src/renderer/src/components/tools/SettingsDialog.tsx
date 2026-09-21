@@ -233,6 +233,51 @@ export function LanguageTab(): JSX.Element {
   )
 }
 
+// ── Appearance tab ────────────────────────────────────────────────────────────
+
+type ThemeMode = 'system' | 'light' | 'dark'
+
+export function AppearanceTab(): JSX.Element {
+  const { t } = useTranslation('common')
+  const [mode, setMode] = useState<ThemeMode>('system')
+
+  useEffect(() => {
+    window.veridian.settings.get('ui.theme').then((v) => {
+      setMode(v === 'light' || v === 'dark' ? v : 'system')
+    })
+  }, [])
+
+  const choose = (m: ThemeMode): void => {
+    setMode(m)
+    window.veridian.settings.set('ui.theme', m)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
+      <Section label={t('settings.appearance.label')}>
+        <div style={{ display: 'flex', gap: 10 }}>
+          {(['system', 'light', 'dark'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => choose(m)}
+              style={{
+                height: 36, padding: '0 20px', borderRadius: 10,
+                border: mode === m ? '2px solid var(--primary)' : '1px solid var(--border)',
+                background: mode === m ? 'var(--primary-light)' : 'var(--surface)',
+                color: mode === m ? 'var(--primary)' : 'var(--foreground-2)',
+                fontSize: 13, fontWeight: mode === m ? 700 : 400,
+                cursor: 'pointer',
+              }}
+            >
+              {t(`settings.appearance.${m}`)}
+            </button>
+          ))}
+        </div>
+      </Section>
+    </div>
+  )
+}
+
 // ── Shared ────────────────────────────────────────────────────────────────────
 
 function Section({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {

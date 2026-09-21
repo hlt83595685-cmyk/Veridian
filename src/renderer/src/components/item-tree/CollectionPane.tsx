@@ -516,7 +516,7 @@ export function CollectionPane(): JSX.Element {
             top: contextMenu.y,
             left: contextMenu.x,
             zIndex: 200,
-            background: 'rgba(255,255,255,0.94)',
+            background: 'var(--glass)',
             backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             borderRadius: 'var(--radius-lg)',

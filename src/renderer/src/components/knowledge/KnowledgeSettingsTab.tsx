@@ -8,19 +8,13 @@ interface Preset {
 	model: string
 }
 
-const CHAT_PRESETS: Preset[] = [
-	{ id: 'deepseek', label: 'DeepSeek', baseURL: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-	{ id: 'zhipu', label: '智谱 GLM', baseURL: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-plus' },
-	{ id: 'moonshot', label: 'Kimi (Moonshot)', baseURL: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
-	{ id: 'openai', label: 'OpenAI', baseURL: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
-	{ id: 'claude-subscription', label: 'Claude（订阅令牌）', baseURL: 'https://api.anthropic.com', model: 'claude-sonnet-5' },
-]
+// Intentionally empty: the built-in vendor presets were removed so the list
+// can be authored deliberately rather than inherited. Until entries are added
+// the Preset dropdown offers only "Custom", which is a complete way to
+// configure a provider -- a preset only ever prefilled these same fields.
+const CHAT_PRESETS: Preset[] = []
 
-const EMBEDDING_PRESETS: Preset[] = [
-	{ id: 'zhipu', label: '智谱 embedding-3', baseURL: 'https://open.bigmodel.cn/api/paas/v4', model: 'embedding-3' },
-	{ id: 'openai', label: 'OpenAI text-embedding-3-small', baseURL: 'https://api.openai.com/v1', model: 'text-embedding-3-small' },
-	{ id: 'siliconflow', label: 'SiliconFlow BGE-M3', baseURL: 'https://api.siliconflow.cn/v1', model: 'BAAI/bge-m3' },
-]
+const EMBEDDING_PRESETS: Preset[] = []
 
 interface ProviderState {
 	preset: string
@@ -182,6 +176,11 @@ export function KnowledgeSettingsTab(): JSX.Element {
 				onApiKey={(v) => { setChat((s) => ({ ...s, apiKey: v })); void saveField('knowledge.chat.apiKey', v) }}
 				onTest={() => void test('chat')}
 				testState={testState.which === 'chat' ? testState.result : null}
+				/* Keyed on a preset id CHAT_PRESETS no longer defines. It still fires for
+				   anyone whose saved setting already holds that value, and returns the
+				   moment a preset with this id is authored -- the subscription-token flow
+				   is a real integration, not preset data, so clearing the preset list
+				   deliberately left it standing. */
 				lockBaseUrl={chat.preset === 'claude-subscription'}
 				apiKeyLabel={chat.preset === 'claude-subscription' ? t('settings.knowledge.subscriptionToken') : undefined}
 				t={t}
@@ -267,12 +266,17 @@ function ProviderSection(props: {
 		<Section label={title}>
 			<div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{desc}</div>
 			<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-				<Field label={t('settings.knowledge.preset')}>
-					<select value={state.preset} onChange={(e) => onPreset(e.target.value)} style={inputStyle}>
-						<option value="">{t('settings.knowledge.presetCustom')}</option>
-						{presets.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-					</select>
-				</Field>
+				{/* With no presets authored, a dropdown whose only entry is "Custom"
+				    is a control that cannot do anything -- hide it until there are
+				    presets to pick from. */}
+				{presets.length > 0 && (
+					<Field label={t('settings.knowledge.preset')}>
+						<select value={state.preset} onChange={(e) => onPreset(e.target.value)} style={inputStyle}>
+							<option value="">{t('settings.knowledge.presetCustom')}</option>
+							{presets.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+						</select>
+					</Field>
+				)}
 				<Field label={t('settings.knowledge.baseUrl')}>
 					<input
 						value={state.baseURL}

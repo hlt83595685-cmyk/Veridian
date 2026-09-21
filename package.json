@@ -13,11 +13,16 @@
     "lint": "eslint .",
     "package": "electron-vite build && electron-builder",
     "test": "vitest run",
+    "bootcheck": "electron scripts/bootcheck.js",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "rebuild": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-scope": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.8",
     "@supabase/supabase-js": "^2.45.4",
     "adm-zip": "^0.5.18",
     "better-sqlite3": "^11.9.1",
@@ -27,6 +32,7 @@
     "i18next": "^24.2.3",
     "isomorphic-git": "^1.38.6",
     "katex": "^0.17.0",
+    "lottie-web": "^5.13.0",
     "octokit": "^4.1.0",
     "path-browserify": "^1.0.1",
     "pdf-lib": "^1.17.1",
@@ -93,6 +99,10 @@
       {
         "from": "resources/icon.ico",
         "to": "icon.ico"
+      },
+      {
+        "from": "resources/plugins",
+        "to": "plugins"
       }
     ],
     "asarUnpack": [

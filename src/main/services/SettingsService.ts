@@ -5,12 +5,20 @@ import { join } from 'path'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { app, safeStorage } from 'electron'
 import { emit } from '../core/Notifier'
+import { parseThemeMode, type ThemeMode } from '../../shared/theme'
+import { isPluginSecretKey } from '../../shared/plugin'
 
 const SECRET_KEYS = new Set([
   'tool.pdf2md.apiToken', 'controlPlane.session', 'github.oauthToken',
   'knowledge.chat.apiKey', 'knowledge.embedding.apiKey',
 ])
 const ENC_PREFIX = 'enc:'
+
+// Plugin passwords live in a key namespace, not a fixed list, so they are
+// decided by name.
+function isSecretKey(key: string): boolean {
+  return SECRET_KEYS.has(key) || isPluginSecretKey(key)
+}
 
 let _cache: Record<string, unknown> | null = null
 
@@ -51,7 +59,7 @@ function decrypt(stored: string): string {
 
 export function getSetting(key: string): unknown {
   const raw = load()[key]
-  if (SECRET_KEYS.has(key) && typeof raw === 'string') return decrypt(raw)
+  if (isSecretKey(key) && typeof raw === 'string') return decrypt(raw)
   return raw ?? null
 }
 
@@ -59,7 +67,7 @@ export function setSetting(key: string, value: unknown): void {
   const current = load()
   _cache = {
     ...current,
-    [key]: SECRET_KEYS.has(key) && typeof value === 'string' ? encrypt(value) : value,
+    [key]: isSecretKey(key) && typeof value === 'string' ? encrypt(value) : value,
   }
   persist()
   emit({ type: 'settings.changed', keys: [key] })
@@ -73,6 +81,10 @@ export function isPdf2mdEnabled(): boolean {
 
 export function getPdf2mdMode(): 'agent' | 'precision' {
   return load()['tool.pdf2md.mode'] === 'precision' ? 'precision' : 'agent'
+}
+
+export function getThemeMode(): ThemeMode {
+  return parseThemeMode(load()['ui.theme'])
 }
 
 export function getPdf2mdApiToken(): string {

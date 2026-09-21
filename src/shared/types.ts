@@ -190,11 +190,191 @@ export interface ControlPlaneStatus {
   email: string | null
 }
 
-// One agent action during a chat turn, shown in the retrieval-trace panel.
-export interface RetrievalStep {
-  tool: 'search_library' | 'read_context' | 'get_item_info' | 'load_skill'
-    | 'create_note' | 'update_note' | 'list_notes' | 'add_tags' | 'add_to_collection' | 'link_items'
-    | 'update_metadata' | 'set_star' | 'list_collections' | 'list_items' | 'list_tags' | 'read_notes' | 'read_item'
-  label: string                                          // query / itemKey:seq / itemKey / skill name
-  hits?: { key: string; title: string; chars: number }[] // search_library only: hit papers + real excerpt length
+// What a tool does to the user's data. Deliberately a small closed set while
+// tool *names* stay open: plugins register arbitrary tools, so the renderer can
+// never switch on the name without breaking the moment someone adds one. The
+// kind is also the thing the user actually needs to see at a glance -- "it read
+// something" vs "it changed my library" vs "it wrote to disk".
+export type ToolKind = 'read' | 'write-library' | 'write-fs' | 'destructive'
+
+// One tool invocation during a turn, shown as a card in the transcript.
+// `ok === undefined` means still running.
+export interface ToolCallRecord {
+  id: string
+  name: string
+  kind: ToolKind
+  args: string      // raw JSON exactly as the model emitted it
+  result?: string   // raw tool output, untouched
+  ok?: boolean
+  durationMs?: number
+}
+
+// What the model was actually handed on the final round of a turn. Answers
+// "did it still have the start of our conversation?" and "how much of my paper
+// fit?" by looking, instead of asking the model and trusting the answer.
+//
+// Token counts are an approximation (chars/4) used for budgeting decisions;
+// they are labelled as approximate wherever shown.
+export interface ContextReport {
+  contextWindow: number
+  reserveForOutput: number
+  fixedTokens: number        // system prompt + tool schemas -- never evicted
+  attachmentTokens: number
+  historyTokens: number
+  usedTokens: number
+  messageCount: number
+  droppedTurns: number       // oldest turns evicted to fit
+  truncatedAttachments: number
+}
+
+// ── Horses ──────────────────────────────────────────────────────────────────
+// A horse is an agent. What distinguishes one from another is deliberately
+// small for now: a name, an appearance, and a ceiling on what it is allowed to
+// do. Role is not a field -- a read-only horse with good retrieval *is* a
+// scout, without anyone declaring it one.
+//
+// Model configuration is still global. Giving every horse its own provider
+// would scatter API keys across rows for a case nobody has yet; when there is a
+// reason, it lands as an override rather than a duplicate.
+
+/**
+ * 注册表里的一个工具，供装配界面列出可选项。
+ *
+ * 这是**池子**——插件注册了什么就有什么，与任何一匹马无关。哪匹马能用其中哪些，
+ * 由 `Horse.tools` 决定。
+ */
+/**
+ * 执行轨迹里的一条。
+ *
+ * 展示的是**实际发生的事**——检索、读文件、工具调用、阶段说明——不是模型的内部
+ * 推理。所以叫 trace 不叫 thinking。
+ *
+ * `note` 是模型在调工具之前吐的那段话。它一直存在，只是过去被当成「中间思考」
+ * 直接丢掉了；而那恰恰是整条轨迹里最可读的部分。
+ */
+export type TraceEntry =
+	| {
+		kind: 'note'
+		text: string
+		/** 第几轮。第 0 轮说的是「打算做什么」，之后各轮说的是「发现了什么」——
+		 *  界面按这个分层级，而不是去猜文本的语气。 */
+		round: number
+	}
+	| { kind: 'tool'; call: ToolCallRecord }
+
+/** 一次回合的完整轨迹，连同耗时——重开会话时要照原样还原。 */
+export interface TurnTrace {
+	entries: TraceEntry[]
+	elapsedMs: number
+}
+
+export interface ToolInfo {
+	name: string
+	description: string
+	/** 决定它要不要审批、会不会被 ceiling 拦住。 */
+	kind: ToolKind
+}
+
+export interface Horse {
+  id: string
+  name: string
+  /** Sprite id from assets/horse-sprites, e.g. 'bay'. */
+  skin: string
+  /** The most dangerous tool kind this horse may use. Its real power is
+   *  min(this, the conversation's ceiling). */
+  ceiling: ToolKind
+  /**
+   * Names of the tools this horse is equipped with — an allow-list, not a
+   * description of what exists. Plugins decide what tools the app has at all;
+   * this decides which of them one horse can see.
+   *
+   * Whitelist by default: a tool that appears later is never ticked
+   * automatically, for any horse. Otherwise installing one plugin would
+   * quietly make every horse more capable, and equipping would stop meaning
+   * anything.
+   *
+   * Orthogonal to `ceiling`: a horse can be equipped with a tool it is not
+   * allowed to run (equipped, but capped) — the equip screen shows that as a
+   * blocked stage rather than hiding the tool.
+   */
+  tools: string[]
+  /** Exactly one horse is the default: the one that answers unless told
+   *  otherwise. Enforced by the store, not by the schema. */
+  isDefault: boolean
+  createdAt: number
+}
+
+export const HORSE_NAME_MAX = 40
+
+// ── Approval ────────────────────────────────────────────────────────────────
+// The gate every write passes through. A tool that changes the library, writes
+// a file, or deletes something never acts on the model's say-so alone; it
+// parks and asks, and what it is asking for has to be legible without reading
+// the raw arguments.
+
+export type ApprovalDecision =
+  | 'allow-once'
+  /** Allow this tool kind for the rest of this conversation. */
+  | 'allow-session'
+  | 'deny'
+
+/** One concrete change, shown as a before/after so approving is not an act of
+ *  faith. Bulk requests carry a sample rather than thousands of these. */
+export type ApprovalChange =
+  | {
+      type: 'field'
+      itemKey: string
+      title: string
+      field: string
+      before: string | null
+      after: string | null
+    }
+  | {
+      type: 'file'
+      path: string
+      op: 'create' | 'modify' | 'delete'
+      bytesBefore?: number
+      bytesAfter?: number
+    }
+
+export interface ApprovalRequest {
+  id: string
+  conversationId: number
+  /** Which tool wants to act, and how dangerous its category is. */
+  tool: string
+  kind: ToolKind
+  /** One line the user can act on without expanding anything. */
+  summary: string
+  /** How many records/files this touches. The number that decides whether an
+   *  approval is a real check or a rubber stamp. */
+  affected: number
+  /** Up to SAMPLE_LIMIT of the changes; `affected` is the true count. */
+  changes: ApprovalChange[]
+  /** Raw tool arguments, available on expand. */
+  args: string
+}
+
+/** Above this many affected records, a normal approval card would be a
+ *  rubber stamp -- twenty is about as many as anyone actually reads -- so the
+ *  request is re-framed around the count instead. */
+export const BLAST_RADIUS_LIMIT = 20
+
+export type AttachmentFailureReason =
+  | 'not_found'
+  | 'not_converted'
+  | 'permission_denied'
+  | 'unreadable'
+
+// What actually happened to one @-mentioned paper on its way into the model's
+// context. Shown on the chip in the sent message, so "did it read my paper?"
+// is answered by looking, not by asking the model and trusting the answer.
+export interface AttachmentStatus {
+  key: string     // itemKey for library items, path for files -- matches the chip's ref
+  title: string
+  ok: boolean
+  reason?: AttachmentFailureReason  // set iff !ok
+  detail?: string                   // raw error text, surfaced on hover
+  totalBytes: number                // size of the source markdown
+  shownBytes: number                // how much of it fit in the budget
+  truncated: boolean
 }

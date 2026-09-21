@@ -4,6 +4,7 @@
    Reference: 界面优化指导.txt (soft shadows, 8/12/16/20 radii, generous
    whitespace). Components consume these variables via inline styles. */
 :root {
+  color-scheme: light dark;
   /* Backgrounds */
   --bg:             #f8f9fc;
   --bg-elevated:    #ffffff;
@@ -36,6 +37,24 @@
   --accent:         #ff3b30;
   --accent-green:   #34c759;
   --accent-orange:  #ff9500;
+
+  /* Status pills (warning / failure). The tints are alpha over whatever
+     surface they sit on, but the ink has to flip with the theme -- dark ink
+     for a light ground, light ink for a dark one. */
+  --warn-fg:        #8a5a00;
+  --warn-bg:        rgba(255, 149, 0, 0.13);
+  --warn-border:    rgba(255, 149, 0, 0.42);
+  --danger-fg:      #b3261e;
+  --danger-bg:      rgba(255, 59, 48, 0.12);
+  --danger-border:  rgba(255, 59, 48, 0.40);
+
+  /* Translucent chrome (floating menus, status/reader bars) and tag purple.
+     Light-only literals used to be inlined in components. */
+  --glass:          rgba(255, 255, 255, 0.93);
+  --glass-bar:      rgba(242, 242, 247, 0.90);
+  --tag-fg:         #660874;
+  --tag-bg:         rgba(102, 8, 116, 0.07);
+  --tag-border:     rgba(102, 8, 116, 0.20);
 
   /* Shadows (soft, never heavy) */
   --shadow-xs:      0 1px 2px rgba(17, 24, 39, 0.04);
@@ -79,6 +98,17 @@
     --primary-hover:  #9d85fa;
     --primary-light:  rgba(139, 110, 249, 0.18);
     --primary-soft:   rgba(139, 110, 249, 0.10);
+    --warn-fg:        #ffb454;
+    --warn-bg:        rgba(255, 149, 0, 0.16);
+    --warn-border:    rgba(255, 149, 0, 0.40);
+    --danger-fg:      #ff8a80;
+    --danger-bg:      rgba(255, 59, 48, 0.16);
+    --danger-border:  rgba(255, 59, 48, 0.42);
+    --glass:          rgba(32, 33, 39, 0.93);
+    --glass-bar:      rgba(27, 28, 34, 0.90);
+    --tag-fg:         #d9a6ea;
+    --tag-bg:         rgba(190, 120, 220, 0.14);
+    --tag-border:     rgba(190, 120, 220, 0.32);
     --shadow-xs:      0 1px 2px rgba(0, 0, 0, 0.30);
     --shadow-sm:      0 2px 8px rgba(0, 0, 0, 0.35);
     --shadow-md:      0 4px 16px rgba(0, 0, 0, 0.40);
@@ -131,6 +161,14 @@ input, select, textarea {
 input:focus, select:focus, textarea:focus {
   border-color: #8b6ef9 !important;
   box-shadow: 0 0 0 4px rgba(139, 110, 249, 0.12) !important;
+}
+/* The rule above assumes the focused field is itself the visible box. A
+   borderless field inside a rounded container (the chat composer) instead gets
+   a square ring drawn inside the container's rounded one -- two rings, two
+   shapes. Such fields opt out and let their container own the focus state. */
+input.composer-input:focus, textarea.composer-input:focus {
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 
 /* Button base */
@@ -259,6 +297,42 @@ button:active { opacity: 0.75; transform: scale(0.97); }
 .chat-markdown p:last-child { margin-bottom: 0; }
 .chat-markdown ul, .chat-markdown ol { margin: 0 0 8px; padding-left: 20px; }
 .chat-markdown code { background: var(--muted-bg); border-radius: 4px; padding: 1px 5px; font-size: 0.92em; }
+/* 代码块。没有这几条时，围栏代码块只会命中上面那条**行内** code 的规则：
+   `code` 是 inline 元素，跨行时每一行各自绘制一次灰底圆角，看上去就是一堆
+   长短不一的灰条，而不是一个代码块。 */
+.chat-markdown pre {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--muted-bg);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+}
+.chat-markdown pre code {
+  background: none;
+  border-radius: 0;
+  padding: 0;
+  font-size: 0.88em;
+  line-height: 1.55;
+  white-space: pre;
+}
+/* 表格同理：remark-gfm 会产出 <table>，一条样式都没有时它就是一堆糊在一起的
+   文字。宽表自己横向滚动，不把气泡撑破。 */
+.chat-markdown table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 8px;
+  font-size: 0.94em;
+}
+.chat-markdown th, .chat-markdown td {
+  border: 1px solid var(--border);
+  padding: 5px 9px;
+  text-align: left;
+}
+.chat-markdown th { background: var(--muted-bg); font-weight: 600; }
 /* KaTeX code spans must not get the inline-code chip background. */
 .chat-markdown .katex code { background: none; padding: 0; }
 /* Long display equations scroll horizontally instead of widening the bubble. */

@@ -4,12 +4,33 @@ import { useItemStore } from '../../stores/itemStore'
 import { useUiStore } from '../../stores/uiStore'
 import { WorkspaceSwitcher } from '../workspace/WorkspaceSwitcher'
 import { SyncButton } from './SyncButton'
+import { HorseIcon } from '../knowledge/HorseIcon'
+import { useAssistantStore } from '../../stores/assistantStore'
 import logoUrl from '../../assets/logo.png'
+
+// Sliders rather than a gear: at 15px a gear's teeth collapse into a blur that
+// reads as a sun, and "adjust the parts" is closer to what the stable does than
+// the generic settings gear already used elsewhere in the app.
+function SlidersIcon(): JSX.Element {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 7.5h16M4 16.5h16"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <circle cx="9.5" cy="7.5" r="2.6" fill="var(--surface)" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="15" cy="16.5" r="2.6" fill="var(--surface)" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  )
+}
 
 export function Toolbar(): JSX.Element {
   const { t } = useTranslation('common')
   const { searchQuery, setSearchQuery, loadItems, activeCollection } = useItemStore()
   const setPage = useUiStore((s) => s.setPage)
+  const assistantStatus = useAssistantStore((s) => s.status)
   const searchRef = useRef<HTMLInputElement>(null)
 
   const activeColId = activeCollection.startsWith('col:')
@@ -103,28 +124,61 @@ export function Toolbar(): JSX.Element {
 
       <div style={{ flex: 1 }} />
 
-      {/* AI assistant (secondary) */}
-      <button
-        onClick={() => setPage('knowledge')}
-        className="btn-secondary"
+      {/* AI assistant -- a split control. The horse zone is the everyday entry
+          (opens the chat) and doubles as the status light; the divided gear
+          zone opens the stable, where the horse is equipped. Two
+          targets in one control keeps the assistant a single thing in the
+          toolbar rather than competing with Settings and Tools. */}
+      <div
         style={{
           height: 38,
-          padding: '0 16px',
+          display: 'flex',
+          alignItems: 'stretch',
           borderRadius: 'var(--radius-md)',
           border: '1px solid var(--border)',
           background: 'var(--surface)',
-          color: 'var(--foreground-2)',
-          fontSize: 14,
-          fontWeight: 500,
           boxShadow: 'var(--shadow-sm)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
+          overflow: 'hidden',
         }}
       >
-        <span style={{ fontSize: 14 }}>✦</span>
-        {t('toolbar.aiAssistant')}
-      </button>
+        <button
+          onClick={() => setPage('knowledge')}
+          className="btn-secondary"
+          title={t('toolbar.aiAssistant')}
+          style={{
+            padding: '0 12px',
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--foreground-2)',
+            fontSize: 14,
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <HorseIcon state={assistantStatus} height={20} />
+          {t('toolbar.aiAssistant')}
+        </button>
+        <button
+          onClick={() => setPage('stable')}
+          className="btn-secondary"
+          title={t('stable.title')}
+          aria-label={t('stable.title')}
+          style={{
+            width: 34,
+            border: 'none',
+            borderLeft: '1px solid var(--border)',
+            background: 'transparent',
+            color: 'var(--foreground-3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <SlidersIcon />
+        </button>
+      </div>
 
       {/* Import (secondary) */}
       <button

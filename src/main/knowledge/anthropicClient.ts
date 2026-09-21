@@ -170,5 +170,8 @@ export async function anthropicChatStream(
 			function: { name: b.name ?? '', arguments: b.text || '{}' },
 		}))
 
-	return { content, toolCalls, finishReason }
+	// Anthropic 的 extended thinking 是另一套形状（thinking blocks，且要回传
+	// signature），不是 OpenAI 的 reasoning_content。这里如实留空，而不是拿
+	// content 冒充——冒充会让思考文本被当成答案回传给对面。
+	return { content, toolCalls, finishReason, reasoningContent: '' }
 }

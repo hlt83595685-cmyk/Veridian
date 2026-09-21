@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useCollectionStore } from '../../stores/collectionStore'
@@ -6,6 +6,7 @@ import { useViewPrefsStore, FONT_MIN, FONT_MAX, THUMB_MIN, THUMB_MAX } from '../
 import type { Item } from '../../../../shared/types'
 import emptyRefsUrl from '../../assets/empty-refs.png'
 import { FigureStrip } from './FigureStrip'
+import { clampToViewport } from './clampToViewport'
 
 interface ContextMenu { x: number; y: number; itemId: number | null; showMove?: boolean }
 
@@ -164,9 +165,9 @@ function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu, onTogg
                 fontFamily: '"Adobe Gothic Std B", "Adobe Gothic Std", "Source Han Sans", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif',
                 fontWeight: 700,
                 letterSpacing: '0.02em',
-                background: 'rgba(102,8,116,0.07)',
-                color: '#660874',
-                border: '1px solid rgba(102,8,116,0.20)',
+                background: 'var(--tag-bg)',
+                color: 'var(--tag-fg)',
+                border: '1px solid var(--tag-border)',
                 lineHeight: 1.7,
                 whiteSpace: 'nowrap',
               }}>
@@ -175,7 +176,7 @@ function ItemRow({ item, selected, onClick, onDoubleClick, onContextMenu, onTogg
             ))}
             {item.tags.length > 6 && (
               <span style={{
-                fontSize: 12, color: '#660874', lineHeight: 1.7,
+                fontSize: 12, color: 'var(--tag-fg)', lineHeight: 1.7,
                 alignSelf: 'center', opacity: 0.6,
                 fontFamily: '"Adobe Gothic Std B", sans-serif',
               }}>
@@ -267,6 +268,16 @@ export function ItemListPane(): JSX.Element {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  // The menu opens at the cursor; measure it once laid out and pull it back
+  // inside the window so a right-click on the bottom row doesn't cut it off.
+  useLayoutEffect(() => {
+    const el = menuRef.current
+    if (!contextMenu || !el) return
+    const { width, height } = el.getBoundingClientRect()
+    el.style.left = `${clampToViewport(contextMenu.x, width, window.innerWidth)}px`
+    el.style.top = `${clampToViewport(contextMenu.y, height, window.innerHeight)}px`
+  }, [contextMenu])
 
   // View-settings popover: dismiss on outside click or Esc. Kept separate from
   // the per-item context menu so interacting inside it (slider/toggles) doesn't
@@ -555,7 +566,7 @@ export function ItemListPane(): JSX.Element {
             top: contextMenu.y,
             left: contextMenu.x,
             zIndex: 100,
-            background: 'rgba(255,255,255,0.92)',
+            background: 'var(--glass)',
             backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             borderRadius: 'var(--radius-lg)',
@@ -642,7 +653,7 @@ export function ItemListPane(): JSX.Element {
             left: Math.min(viewMenu.x, window.innerWidth - 240),
             zIndex: 100,
             width: 224,
-            background: 'rgba(255,255,255,0.92)',
+            background: 'var(--glass)',
             backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             borderRadius: 'var(--radius-lg)',
@@ -778,6 +789,23 @@ function CollectionSubMenu({ label, collections, onSelect }: {
   onSelect: (colId: number) => void
 }): JSX.Element {
   const [open, setOpen] = useState(false)
+  const flyoutRef = useRef<HTMLDivElement>(null)
+
+  // The flyout opens to the right of its row, top-aligned. Near the window's
+  // bottom/right edge that would overflow, so shift it up / flip it to the left.
+  useLayoutEffect(() => {
+    const el = flyoutRef.current
+    if (!open || !el) return
+    const r = el.getBoundingClientRect()
+    const overflowBottom = r.bottom - (window.innerHeight - 8)
+    if (overflowBottom > 0) el.style.top = `${-overflowBottom}px`
+    if (r.right > window.innerWidth - 8) {
+      el.style.left = 'auto'
+      el.style.right = '100%'
+      el.style.marginLeft = '0'
+      el.style.marginRight = '4px'
+    }
+  }, [open])
 
   return (
     <div style={{ position: 'relative', isolation: 'isolate' }}
@@ -798,13 +826,13 @@ function CollectionSubMenu({ label, collections, onSelect }: {
         <span style={{ color: 'var(--muted)', fontSize: 10 }}>▶</span>
       </button>
       {open && (
-        <div style={{
+        <div ref={flyoutRef} style={{
           position: 'absolute',
           top: 0,
           left: '100%',
           marginLeft: 4,
           zIndex: 200,
-          background: 'rgba(255,255,255,0.95)',
+          background: 'var(--glass)',
           backdropFilter: 'blur(20px) saturate(180%)',
           WebkitBackdropFilter: 'blur(20px) saturate(180%)',
           borderRadius: 'var(--radius-lg)',

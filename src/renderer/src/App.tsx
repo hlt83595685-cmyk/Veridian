@@ -7,6 +7,7 @@ import { useWorkspaceStore } from './stores/workspaceStore'
 import { useViewPrefsStore } from './stores/viewPrefsStore'
 import { useLayoutStore } from './stores/layoutStore'
 import { wireDomainEvents } from './data/queryCache'
+import { initMotion } from './stores/motionStore'
 import './i18n'
 
 interface SavedViewer {
@@ -34,6 +35,7 @@ export default function App(): JSX.Element {
     // Event-driven refresh: any item/tag/collection mutation anywhere in the
     // app (including background conversion jobs) reloads the list store; the
     // query cache handles per-item panels on its own.
+    initMotion()
     wireDomainEvents((e) => {
       if (e.type.startsWith('item.') || e.type === 'tag.changed' || e.type === 'collection.changed') {
         useItemStore.getState().loadItems()

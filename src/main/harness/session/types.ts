@@ -5,8 +5,10 @@ export type SessionEvent =
   | { kind: 'turn-end'; turnId: string; reason: 'done' | 'aborted' | 'error' }
   | { kind: 'user-message'; text: string; refs: AttachmentRef[] }
   | { kind: 'attachment-resolved'; ref: AttachmentRef; result: AttachmentResult }
-  | { kind: 'assistant-message'; text: string }
-  | { kind: 'tool-call'; id: string; name: string; args: string }
+  | { kind: 'assistant-message'; text: string; reasoning?: string }
+  // reasoning 只记在**本轮第一条** tool-call 上：它属于「这一轮模型想了什么」，
+  // 不属于某一次具体调用。投影时挂回那条 assistant 消息。
+  | { kind: 'tool-call'; id: string; name: string; args: string; reasoning?: string }
   | { kind: 'tool-result'; id: string; name: string; result: string }
 
 /**

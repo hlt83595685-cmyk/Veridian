@@ -1,7 +1,7 @@
 // Thin IPC handlers: parameter shapes are already validated by the gateway
 // against shared/ipc-contract.ts, so each entry only forwards to a Service
 // (or shows a native dialog). No business logic lives here.
-import { app, dialog, shell, BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { app, dialog, shell, BrowserWindow, IpcMainInvokeEvent, nativeTheme } from 'electron'
 import { readFileSync, writeFileSync, readdirSync, statSync, renameSync, copyFileSync, unlinkSync, existsSync } from 'fs'
 import { join, extname } from 'path'
 import * as Items from '../services/ItemService'
@@ -20,21 +20,31 @@ import * as WorkspaceFilesMod from '../services/WorkspaceFiles'
 import * as GitHub from '../services/GitHubService'
 import { startDeviceLogin, cancelDeviceLogin } from '../services/OAuthService'
 import { getAvatarPath } from '../services/AvatarService'
-import type { LocalWorkspaceKind } from '../../shared/types'
+import type { LocalWorkspaceKind, ToolKind } from '../../shared/types'
+import { parseThemeMode } from '../../shared/theme'
 import { manualConvertPdfToMd } from '../services/ConversionService'
 import { checkForUpdatesNow } from '../services/UpdateService'
 import * as Harness from '../harness/entry'
+import * as Approvals from '../harness/approvals'
+import * as Horses from '../harness/horses'
 import * as Conversations from '../harness/conversations'
 import { rebuildIndex, getIndexStatus } from '../knowledge/indexer'
 import { getChunkBySeq } from '../knowledge/search'
 import { testProvider } from '../knowledge/providers'
 import { closeKnowledgeDb, knowledgeDir } from '../knowledge/db'
 import * as Skills from '../knowledge/skills'
+import * as Catalog from '../harness/catalog'
+import * as Equipment from '../harness/tools/equipment'
 import * as Notes from '../services/NoteService'
 import { convertPdfToMarkdown } from '../mineruApi'
 import { assertReadable, assertWritable, grantAccess } from '../security/pathGuard'
 import { emit } from '../core/Notifier'
 import type { IpcChannel, KnowledgeRef } from '../../shared/ipc-contract'
+import { allowedHosts, type PluginFetchRequest } from '../../shared/plugin'
+import * as PluginHost from '../plugin-host'
+import { getPluginConfig, setPluginConfig, isPluginEnabled, setPluginEnabled } from '../plugin-host/config'
+import { readPluginSource } from '../plugin-host/discover'
+import { runRelay, abortRelay } from '../plugin-host/relay'
 
 type Handler = (event: IpcMainInvokeEvent, ...args: never[]) => unknown
 
@@ -195,12 +205,46 @@ export const handlers: Record<IpcChannel, Handler> = {
   'settings:get': (_e, key: string) =>
     RENDERER_BLOCKED_SETTINGS.has(key) ? null : Settings.getSetting(key),
   'settings:set': (_e, key: string, value: unknown) => {
+    if (key === 'ui.theme') {
+      const mode = parseThemeMode(value)
+      Settings.setSetting(key, mode)
+      nativeTheme.themeSource = mode
+      return
+    }
     if (RENDERER_WRITABLE_SETTINGS.has(key)) return Settings.setSetting(key, value)
     // storage.path may only be CLEARED from the renderer; setting a real path
     // happens via the native dialog in settings:pickStoragePath.
     if (key === 'storage.path' && value === '') return Settings.setSetting(key, value)
     throw new Error(`Setting '${key}' cannot be written from the renderer`)
   },
+  // Plugins
+  'plugin:list': () => PluginHost.listInfo(),
+  'plugin:setConfig': (_e, id: string, key: string, value: string) => {
+    setPluginConfig(PluginHost.mustFind(id).manifest, key, value)
+  },
+  'plugin:setEnabled': (_e, id: string, on: boolean) => {
+    PluginHost.mustFind(id)
+    setPluginEnabled(id, on)
+  },
+  'plugin:source': (_e, id: string) => {
+    const p = PluginHost.mustFind(id)
+    if (!isPluginEnabled(id)) throw new Error('Plugin is disabled')
+    return readPluginSource(p)
+  },
+  // The allow-list is recomputed from the plugin's own manifest + config on every call,
+  // so a plugin cannot widen it by what it sends.
+  'plugin:fetch': (e, req: PluginFetchRequest) => {
+    const p = PluginHost.mustFind(req.pluginId)
+    if (!isPluginEnabled(p.manifest.id)) throw new Error('Plugin is disabled')
+    const allowed = allowedHosts(p.manifest, getPluginConfig(p.manifest))
+    const sender = e.sender
+    void runRelay(req, allowed, (ev) => {
+      // Throwing (rather than skipping) tells runRelay the receiver is gone, so it aborts the request.
+      if (sender.isDestroyed()) throw new Error('sender gone')
+      sender.send('plugin:fetch:event', ev)
+    })
+  },
+  'plugin:fetchAbort': (_e, id: string) => abortRelay(id),
   'settings:pickStoragePath': async (e) => {
     const result = await dialog.showOpenDialog(ownerWindow(e)!, {
       title: '选择文件存储目录',
@@ -285,13 +329,28 @@ export const handlers: Record<IpcChannel, Handler> = {
   'github:listCollaborators': (_e, owner: string, repo: string) => GitHub.listCollaborators(owner, repo),
 
   // AI knowledge base
-  // scopeCollectionId / modeId 暂不接线：检索接缝与预设都还没搬过来，
-  // 收下参数但不使用，好过悄悄按一个不存在的语义处理。
-  'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[]) =>
-    Harness.ask(question, conversationId, refs),
+  // 曾有 scopeCollectionId / modeId 两个参数，随任务模式下拉与范围选择器一起
+  // 废弃。签名已收窄——留着一个谁也不读的参数，只会让下一个人以为它有用。
+  'knowledge:ask':                (_e, question: string, conversationId: number | null, refs?: KnowledgeRef[], horseId?: string) =>
+    Harness.ask(question, conversationId, refs, horseId),
+  'knowledge:resolveApproval': (_e, id: string, decision: 'allow-once' | 'allow-session' | 'deny') =>
+    Approvals.resolveApproval(id, decision),
+  'horses:list':                  () => Horses.getHorseStore().list(),
+  'agentTools:list':              () => Catalog.listTools(),
+  'horses:create':                (_e, name: string, skin: string, ceiling: ToolKind, tools?: string[]) =>
+    Horses.getHorseStore().create({ name, skin, ceiling, tools }),
+  'horses:update':                (_e, id: string, patch: { name?: string; skin?: string; ceiling?: ToolKind; tools?: string[] }) =>
+    Horses.getHorseStore().update(id, patch),
+  'horses:setDefault':            (_e, id: string) => Horses.getHorseStore().setDefault(id),
+  'horses:remove':                (_e, id: string) => {
+    Horses.getHorseStore().remove(id)
+    // 马没了，它的装配遮罩也没有存在的理由。留着不会出错，只是白占着一个
+    // scope；显式撤掉能让「删了又建同名的马」不会捡到旧遮罩。
+    Equipment.release(id)
+  },
   'knowledge:stop':               (_e, conversationId: number) => Harness.stopGeneration(conversationId),
   'knowledge:regenerate':         (_e, conversationId: number) => Harness.regenerate(conversationId),
-  'knowledge:editResend':         (_e, conversationId: number, question: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) =>
+  'knowledge:editResend':         (_e, conversationId: number, question: string, refs?: KnowledgeRef[]) =>
     Harness.editLastAndResend(conversationId, question, refs),
   'knowledge:listConversations':  () => Conversations.listConversations(),
   'knowledge:getMessages':        (_e, conversationId: number) => Conversations.getMessages(conversationId),

@@ -10,6 +10,8 @@ export interface ConversationRow {
   title: string
   created_at: number
   scope_collection_id: number | null
+  /** 这段对话归哪匹马跑。老对话是 null，解析时退回默认马。 */
+  horse_id: string | null
 }
 
 export interface MessageRow {
@@ -21,6 +23,8 @@ export interface MessageRow {
   created_at: number
   steps: string
   refs: string
+  /** JSON ContextReport；助手行才有，旧数据为 null。 */
+  context: string | null
 }
 
 function wsId(): number {
@@ -30,7 +34,7 @@ function wsId(): number {
 export function listConversations(): ConversationRow[] {
   return getKnowledgeDb()
     .prepare(
-      'SELECT id, title, created_at, scope_collection_id FROM conversations WHERE workspace_id = ? ORDER BY id DESC LIMIT 100',
+      'SELECT id, title, created_at, scope_collection_id, horse_id FROM conversations WHERE workspace_id = ? ORDER BY id DESC LIMIT 100',
     )
     .all(wsId()) as ConversationRow[]
 }

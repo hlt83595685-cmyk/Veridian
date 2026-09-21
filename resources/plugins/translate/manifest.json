@@ -1,0 +1,15 @@
+{
+  "id": "translate",
+  "name": "划词翻译 / Selection Translate",
+  "version": "0.1.0",
+  "main": "index.js",
+  "contributes": {
+    "selectionActions": [{ "id": "translate", "title": "翻译" }]
+  },
+  "config": [
+    { "key": "baseURL", "label": "API Base URL (OpenAI-compatible)", "type": "url", "required": true, "default": "https://api.openai.com/v1" },
+    { "key": "apiKey", "label": "API Key", "type": "password", "required": true },
+    { "key": "model", "label": "Model", "type": "text", "required": true },
+    { "key": "targetLang", "label": "Target language", "type": "text", "default": "中文" }
+  ]
+}

@@ -87,7 +87,8 @@ export function getKnowledgeDb(): Database.Database {
 			citations       TEXT NOT NULL DEFAULT '[]',  -- JSON [{itemKey,seq,title}]
 			created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
 			steps           TEXT NOT NULL DEFAULT '[]',
-			refs            TEXT NOT NULL DEFAULT '[]'
+			refs            TEXT NOT NULL DEFAULT '[]',
+			context         TEXT                          -- JSON ContextReport, assistant rows only
 		);
 	`)
 
@@ -98,6 +99,12 @@ export function getKnowledgeDb(): Database.Database {
 	}
 	if (!convCols.some((c) => c.name === 'mode_id')) {
 		db.exec('ALTER TABLE conversations ADD COLUMN mode_id TEXT')
+	}
+	// 这段对话归哪匹马跑。建对话时定下来就不再变——默认马以后换了，旧对话的
+	// 行为不该跟着变，否则「这个回答当时是谁给的」就无从追溯。
+	// 老对话是 NULL，解析时退回默认马。
+	if (!convCols.some((c) => c.name === 'horse_id')) {
+		db.exec('ALTER TABLE conversations ADD COLUMN horse_id TEXT')
 	}
 
 	// Additive migration: older DBs have `messages` without this column.
@@ -110,6 +117,15 @@ export function getKnowledgeDb(): Database.Database {
 	const msgRefCols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]
 	if (!msgRefCols.some((c) => c.name === 'refs')) {
 		db.exec("ALTER TABLE messages ADD COLUMN refs TEXT NOT NULL DEFAULT '[]'")
+	}
+
+	// Additive migration: older DBs have `messages` without this column.
+	// Nullable rather than defaulted: only assistant rows carry a report, and
+	// rows written before the context inspector existed genuinely have none --
+	// which is different from "the turn used zero context".
+	const msgCtxCols = db.prepare('PRAGMA table_info(messages)').all() as { name: string }[]
+	if (!msgCtxCols.some((c) => c.name === 'context')) {
+		db.exec('ALTER TABLE messages ADD COLUMN context TEXT')
 	}
 
 	return db

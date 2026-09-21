@@ -65,6 +65,14 @@ export interface ChatMessage {
 	content: string | null
 	tool_calls?: ToolCall[]
 	tool_call_id?: string
+	/**
+	 * 思考型模型（DeepSeek thinking / reasoner 系）单独返回的推理过程。
+	 *
+	 * **必须原样回传**，否则下一轮会被拒：
+	 *   400 The `reasoning_content` in the thinking mode must be passed back to the API.
+	 * 只在收到过的时候带上——不支持思考模式的供应商见到这个字段会报错。
+	 */
+	reasoning_content?: string
 }
 
 export interface ToolCall {
@@ -82,10 +90,30 @@ export interface ToolDef {
 	}
 }
 
+/**
+ * 从供应商的错误响应里取出那句人话。
+ *
+ * OpenAI 兼容的供应商都回 `{"error":{"message":"…"}}`。把整个 JSON 原样甩到聊天
+ * 窗口里，用户看到的是一行括号和引号，真正有用的那句话反而被埋住。取不出来时
+ * 才退回原文——猜不出结构总比丢掉信息好。
+ */
+export function providerError(body: string): string {
+	try {
+		const j = JSON.parse(body) as { error?: { message?: unknown }; message?: unknown }
+		const msg = j.error?.message ?? j.message
+		if (typeof msg === 'string' && msg.trim()) return msg.trim().slice(0, 300)
+	} catch {
+		// 不是 JSON，按原文处理
+	}
+	return body.trim().slice(0, 300)
+}
+
 export interface ChatResult {
 	content: string
 	toolCalls: ToolCall[]
 	finishReason: string
+	/** 思考过程。没有思考模式时是空串。 */
+	reasoningContent: string
 }
 
 /**
@@ -126,10 +154,11 @@ async function openaiChatStream(
 		signal,
 	})
 	if (!resp.ok || !resp.body) {
-		throw new Error(`chat ${resp.status}: ${(await resp.text()).slice(0, 300)}`)
+		throw new Error(`chat ${resp.status}: ${providerError(await resp.text())}`)
 	}
 
 	let content = ''
+	let reasoningContent = ''
 	let finishReason = ''
 	// tool_calls arrive as indexed fragments; assemble by index.
 	const calls = new Map<number, { id: string; name: string; args: string }>()
@@ -150,7 +179,7 @@ async function openaiChatStream(
 			if (payload === '[DONE]') continue
 			let json: {
 				choices?: {
-					delta?: { content?: string | null; tool_calls?: {
+					delta?: { content?: string | null; reasoning_content?: string | null; tool_calls?: {
 						index: number; id?: string; function?: { name?: string; arguments?: string }
 					}[] }
 					finish_reason?: string | null
@@ -166,6 +195,9 @@ async function openaiChatStream(
 				content += delta.content
 				onDelta(delta.content)
 			}
+			// 思考过程只累积、**不**经 onDelta 流给界面：它不是答案，混进气泡里
+			// 用户会以为模型在胡言乱语。但必须留着，下一轮要原样回传。
+			if (delta.reasoning_content) reasoningContent += delta.reasoning_content
 			for (const tc of delta.tool_calls ?? []) {
 				const cur = calls.get(tc.index) ?? { id: '', name: '', args: '' }
 				if (tc.id) cur.id = tc.id
@@ -180,7 +212,7 @@ async function openaiChatStream(
 		.sort((a, b) => a[0] - b[0])
 		.map(([, c]) => ({ id: c.id, type: 'function' as const, function: { name: c.name, arguments: c.args } }))
 
-	return { content, toolCalls, finishReason }
+	return { content, toolCalls, finishReason, reasoningContent }
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))

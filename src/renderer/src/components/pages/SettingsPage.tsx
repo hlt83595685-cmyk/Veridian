@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useUiStore } from '../../stores/uiStore'
-import { StorageTab, LanguageTab } from '../tools/SettingsDialog'
+import { StorageTab, LanguageTab, AppearanceTab } from '../tools/SettingsDialog'
 import { WorkspaceSettingsTab } from '../workspace/WorkspaceSettingsTab'
 import { KnowledgeSettingsTab } from '../knowledge/KnowledgeSettingsTab'
 import { SkillsSettingsTab } from '../knowledge/SkillsSettingsTab'
+import { PluginsSettingsTab } from '../plugins/PluginsSettingsTab'
 import { AboutDialog } from './AboutDialog'
 
-type Tab = 'storage' | 'language' | 'github' | 'knowledge' | 'skills'
+const TAB_IDS = ['storage', 'language', 'appearance', 'github', 'knowledge', 'skills', 'plugins'] as const
+type Tab = (typeof TAB_IDS)[number]
 
 // Full-page settings view (replaces the old native-menu-driven modal).
 // Entered via the sidebar's bottom gear icon; Esc or the back button
@@ -15,7 +17,13 @@ type Tab = 'storage' | 'language' | 'github' | 'knowledge' | 'skills'
 export function SettingsPage(): JSX.Element {
   const { t } = useTranslation('common')
   const setPage = useUiStore((s) => s.setPage)
-  const [tab, setTab] = useState<Tab>('storage')
+  const settingsTab = useUiStore((s) => s.settingsTab)
+  const setSettingsTab = useUiStore((s) => s.setSettingsTab)
+  const [tab, setTab] = useState<Tab>(
+    (TAB_IDS as readonly string[]).includes(settingsTab ?? '') ? (settingsTab as Tab) : 'storage',
+  )
+  // A tab requested from elsewhere (e.g. the reader's "open plugin settings" link) is consumed once.
+  useEffect(() => { if (settingsTab) setSettingsTab(null) }, [settingsTab, setSettingsTab])
   const [aboutOpen, setAboutOpen] = useState(false)
 
   useEffect(() => {
@@ -27,9 +35,11 @@ export function SettingsPage(): JSX.Element {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'storage',   label: t('settings.storage.title') },
     { id: 'language',  label: t('settings.language.title') },
+    { id: 'appearance', label: t('settings.appearance.title') },
     { id: 'github',    label: 'GitHub' },
     { id: 'knowledge', label: t('settings.knowledge.title') },
     { id: 'skills',    label: t('settings.skills.title') },
+    { id: 'plugins',    label: t('settings.plugins.title') },
   ]
 
   return (
@@ -107,9 +117,11 @@ export function SettingsPage(): JSX.Element {
       <div style={{ padding: '20px 22px 22px', flex: 1, overflow: 'auto' }}>
         {tab === 'storage'   && <StorageTab />}
         {tab === 'language'  && <LanguageTab />}
+        {tab === 'appearance' && <AppearanceTab />}
         {tab === 'github'    && <WorkspaceSettingsTab />}
         {tab === 'knowledge' && <KnowledgeSettingsTab />}
         {tab === 'skills'    && <SkillsSettingsTab />}
+        {tab === 'plugins'    && <PluginsSettingsTab />}
       </div>
     </div>
   )

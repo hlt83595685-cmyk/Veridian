@@ -1,7 +1,9 @@
+import type { Horse, ToolInfo, ToolKind } from '../shared/types'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { DomainEvent, JobStatus } from '../shared/events'
 import type { KnowledgeRef } from '../shared/ipc-contract'
+import type { PluginInfo, PluginFetchRequest, PluginFetchEvent } from '../shared/plugin'
 
 // Every invoke goes through the gateway envelope: { ok, data } on success,
 // { ok: false, error } on failure. Unwrapping here keeps renderer call sites
@@ -60,6 +62,13 @@ ipcRenderer.on('domain-event', (_ev, e: DomainEvent) => {
 })
 ipcRenderer.removeAllListeners('tool:pdf2md:progress')
 ipcRenderer.on('tool:pdf2md:progress', (_ev, p) => { _pdf2mdProgressCb?.(p) })
+
+// Plugin network relay: the main process pushes head/chunk/end|error events per request id.
+const _pluginFetchCbs = new Map<string, (e: PluginFetchEvent) => void>()
+ipcRenderer.on('plugin:fetch:event', (_ev, e: PluginFetchEvent) => {
+  _pluginFetchCbs.get(e.id)?.(e)
+  if (e.type === 'end' || e.type === 'error') _pluginFetchCbs.delete(e.id)
+})
 
 const veridianAPI = {
   items: {
@@ -132,6 +141,20 @@ const veridianAPI = {
     set: (key: string, value: unknown) => call('settings:set', key, value),
     pickStoragePath: () => call('settings:pickStoragePath'),
   },
+  plugins: {
+    list: () => call<PluginInfo[]>('plugin:list'),
+    setConfig: (id: string, key: string, value: string) => call('plugin:setConfig', id, key, value),
+    setEnabled: (id: string, enabled: boolean) => call('plugin:setEnabled', id, enabled),
+    source: (id: string) => call<string>('plugin:source', id),
+    fetch: (req: PluginFetchRequest, onEvent: (e: PluginFetchEvent) => void) => {
+      _pluginFetchCbs.set(req.id, onEvent)
+      return call('plugin:fetch', req).catch((err: unknown) => {
+        _pluginFetchCbs.delete(req.id)
+        throw err
+      })
+    },
+    fetchAbort: (id: string) => call('plugin:fetchAbort', id),
+  },
   session: {
     saveViewer: (viewer: { type: 'pdf' | 'markdown' | 'gallery'; path: string; filename: string } | null) =>
       call('session:saveViewer', viewer),
@@ -170,18 +193,35 @@ const veridianAPI = {
       call<{ ok: boolean; collaborators?: Array<{ login: string; avatarUrl: string; role: string }>; code?: string; detail?: string }>(
         'github:listCollaborators', owner, repo),
   },
+  /** 可装配的工具池。注意别和上面那个 `tools`（shell/PDF）混为一谈——同名会
+   *  变成一个静默覆盖的重复键，把 pdf2md 那组整个吃掉。 */
+  agentTools: {
+    list: () => call<ToolInfo[]>('agentTools:list'),
+  },
+  horses: {
+    list: () => call<Horse[]>('horses:list'),
+    create: (name: string, skin: string, ceiling: ToolKind, tools?: string[]) =>
+      call<Horse>('horses:create', name, skin, ceiling, tools),
+    update: (id: string, patch: { name?: string; skin?: string; ceiling?: ToolKind; tools?: string[] }) =>
+      call('horses:update', id, patch),
+    setDefault: (id: string) => call('horses:setDefault', id),
+    remove: (id: string) => call('horses:remove', id),
+  },
   knowledge: {
-    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) =>
-      call<number>('knowledge:ask', question, conversationId, refs, scopeCollectionId, modeId),
+    /** `horseId` 只在**新建**对话时用得上——已有对话的马是建的时候钉死的。 */
+    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[], horseId?: string) =>
+      call<number>('knowledge:ask', question, conversationId, refs, horseId),
     stop: (conversationId: number) => call('knowledge:stop', conversationId),
     regenerate: (conversationId: number) => call('knowledge:regenerate', conversationId),
-    editResend: (conversationId: number, question: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) =>
-      call('knowledge:editResend', conversationId, question, refs, scopeCollectionId, modeId),
+    editResend: (conversationId: number, question: string, refs?: KnowledgeRef[]) =>
+      call('knowledge:editResend', conversationId, question, refs),
     listConversations: () =>
       call<Array<{ id: number; title: string; created_at: number; scope_collection_id: number | null }>>('knowledge:listConversations'),
     getMessages: (conversationId: number) =>
-      call<Array<{ id: number; conversation_id: number; role: string; content: string; citations: string; created_at: number; steps: string; refs: string }>>(
+      call<Array<{ id: number; conversation_id: number; role: string; content: string; citations: string; created_at: number; steps: string; refs: string; context: string | null }>>(
         'knowledge:getMessages', conversationId),
+    resolveApproval: (id: string, decision: 'allow-once' | 'allow-session' | 'deny') =>
+      call('knowledge:resolveApproval', id, decision),
     getChunk: (itemKey: string, seq: number) =>
       call<{ headingPath: string; text: string } | null>('knowledge:getChunk', itemKey, seq),
     deleteConversation: (conversationId: number) => call('knowledge:deleteConversation', conversationId),

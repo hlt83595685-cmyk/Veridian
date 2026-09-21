@@ -3,10 +3,11 @@
 import type {
   Item, Creator, Collection, Tag, Attachment, ImportResult,
   LocalWorkspace, LocalWorkspaceKind, GitHubRepoInfo, RepoTreeNode,
-  UpdateCheckResult,
+  UpdateCheckResult, Horse, ToolInfo, ToolKind,
 } from '../../shared/types'
 import type { DomainEvent } from '../../shared/events'
 import type { KnowledgeRef } from '../../shared/ipc-contract'
+import type { PluginInfo, PluginFetchRequest, PluginFetchEvent } from '../../shared/plugin'
 
 interface VeridianAPI {
   items: {
@@ -56,6 +57,14 @@ interface VeridianAPI {
     set: (key: string, value: unknown) => Promise<void>
     pickStoragePath: () => Promise<string | null>
   }
+  plugins: {
+    list: () => Promise<PluginInfo[]>
+    setConfig: (id: string, key: string, value: string) => Promise<void>
+    setEnabled: (id: string, enabled: boolean) => Promise<void>
+    source: (id: string) => Promise<string>
+    fetch: (req: PluginFetchRequest, onEvent: (e: PluginFetchEvent) => void) => Promise<void>
+    fetchAbort: (id: string) => Promise<void>
+  }
   session: {
     saveViewer: (viewer: { type: 'pdf' | 'markdown' | 'gallery'; path: string; filename: string } | null) => Promise<void>
   }
@@ -102,16 +111,31 @@ interface VeridianAPI {
       detail?: string
     }>
   }
+  /** 可装配的工具池。与马无关——哪匹马能用其中哪些，看 Horse.tools。
+   *  和上面那个 `tools`（shell/PDF）是两回事。 */
+  agentTools: {
+    list: () => Promise<ToolInfo[]>
+  }
+  horses: {
+    list: () => Promise<Horse[]>
+    create: (name: string, skin: string, ceiling: ToolKind, tools?: string[]) => Promise<Horse>
+    update: (id: string, patch: { name?: string; skin?: string; ceiling?: ToolKind; tools?: string[] }) => Promise<void>
+    setDefault: (id: string) => Promise<void>
+    remove: (id: string) => Promise<void>
+  }
   knowledge: {
-    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) => Promise<number>
+    /** horseId 只在**新建**对话时用得上——已有对话的马是建的时候钉死的。 */
+    ask: (question: string, conversationId: number | null, refs?: KnowledgeRef[], horseId?: string) => Promise<number>
     stop: (conversationId: number) => Promise<void>
     regenerate: (conversationId: number) => Promise<void>
-    editResend: (conversationId: number, question: string, refs?: KnowledgeRef[], scopeCollectionId?: number | null, modeId?: string | null) => Promise<void>
-    listConversations: () => Promise<Array<{ id: number; title: string; created_at: number; scope_collection_id: number | null }>>
+    editResend: (conversationId: number, question: string, refs?: KnowledgeRef[]) => Promise<void>
+    listConversations: () => Promise<Array<{ id: number; title: string; created_at: number; scope_collection_id: number | null; horse_id: string | null }>>
     getMessages: (conversationId: number) => Promise<Array<{
       id: number; conversation_id: number; role: string; content: string
       citations: string; created_at: number; steps: string; refs: string
+      context: string | null
     }>>
+    resolveApproval: (id: string, decision: 'allow-once' | 'allow-session' | 'deny') => Promise<void>
     getChunk: (itemKey: string, seq: number) => Promise<{ headingPath: string; text: string } | null>
     deleteConversation: (conversationId: number) => Promise<void>
     rebuildIndex: () => Promise<void>

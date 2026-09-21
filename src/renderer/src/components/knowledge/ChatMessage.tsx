@@ -1,5 +1,6 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { closeOpenMarkdown } from './streamingMarkdown'
 import { citeUrlTransform } from './citeUrl'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -7,7 +8,8 @@ import 'katex/dist/katex.min.css'
 import { useTranslation } from 'react-i18next'
 import { useItemStore } from '../../stores/itemStore'
 import { useUiStore } from '../../stores/uiStore'
-import { Chip, PaperclipIcon } from './Chip'
+import { AttachmentChip } from './AttachmentChip'
+import type { AttachmentStatus } from '../../../../shared/types'
 
 export interface CitationInfo { itemKey: string; itemId: number | null; seq: number; title: string | null }
 
@@ -75,7 +77,7 @@ export function ChatMessageView({ role, content, citations, streaming, isLast, o
 	isLast?: boolean
 	onRegenerate?: () => void
 	onEdit?: () => void
-	refs?: { type: string; label: string }[]
+	refs?: { type: string; label: string; status?: AttachmentStatus }[]
 }): JSX.Element {
 	const { t } = useTranslation('common')
 	const setPage = useUiStore((s) => s.setPage)
@@ -93,7 +95,7 @@ export function ChatMessageView({ role, content, citations, streaming, isLast, o
 					{refs && refs.length > 0 && (
 						<div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
 							{refs.map((r, i) => (
-								<Chip key={i} icon={<PaperclipIcon size={10} />} label={r.label} size="sm" maxWidth={240} />
+								<AttachmentChip key={i} label={r.label} status={r.status} />
 							))}
 						</div>
 					)}
@@ -143,7 +145,10 @@ export function ChatMessageView({ role, content, citations, streaming, isLast, o
 							},
 						}}
 					>
-						{toMarkdownLinks(content)}
+						{/* 流式中先把半截的结构补齐再解析：未闭合的围栏会让「从这里到
+						    文末」全被当成代码块，每来一个 token 就重排一次。落库后的
+						    完整原文不走这一步——补齐会改变已经完整的语义。 */}
+						{toMarkdownLinks(streaming ? closeOpenMarkdown(content) : content)}
 					</ReactMarkdown>
 					{streaming && <span className="chat-cursor" />}
 				</div>

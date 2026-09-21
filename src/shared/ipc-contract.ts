@@ -4,8 +4,14 @@
 // from the same object. Adding a channel without declaring it here is a
 // compile-time error on both sides.
 import { z } from 'zod'
+import { PLUGIN_ID_RE } from './plugin'
 
 const id = z.number().int().positive()
+const pluginId = z.string().regex(PLUGIN_ID_RE)
+
+/** 一匹马的装配清单。工具**名字**是开集——插件可以注册任何名字——所以这里只
+ *  能限长度与条数，不能像 ceiling 那样枚举成闭集。 */
+const toolNames = z.array(z.string().min(1).max(64)).max(100)
 const optionalLibraryId = z.number().int().positive().optional()
 
 const itemPatch = z.object({
@@ -108,6 +114,22 @@ export const contract = {
   'settings:set':             z.tuple([z.string().max(128), z.unknown()]),
   'settings:pickStoragePath': z.tuple([]),
 
+  // Plugins. Config/enable/source are per plugin id; fetch streams its result back
+  // as 'plugin:fetch:event' pushes (see preload), so the invoke itself returns at once.
+  'plugin:list':       z.tuple([]),
+  'plugin:setConfig':  z.tuple([pluginId, z.string().min(1).max(32), z.string().max(4096)]),
+  'plugin:setEnabled': z.tuple([pluginId, z.boolean()]),
+  'plugin:source':     z.tuple([pluginId]),
+  'plugin:fetch':      z.tuple([z.object({
+    id: z.string().min(1).max(64),
+    pluginId,
+    url: z.string().max(4096),
+    method: z.string().max(16),
+    headers: z.record(z.string(), z.string()),
+    body: z.string().max(1_000_000).optional(),
+  })]),
+  'plugin:fetchAbort': z.tuple([z.string().min(1).max(64)]),
+
   // Session restore -- workspaceId is persisted by the main process itself
   // (WorkspaceContextService); the viewer (which file/type was open) is
   // renderer-only state, so it needs this dedicated write channel rather
@@ -159,10 +181,22 @@ export const contract = {
 
   // AI knowledge base (RAG). ask returns a conversation id immediately; the
   // streamed answer arrives via knowledge.chatDelta / chatState domain events.
-  'knowledge:ask':                z.tuple([z.string().min(1).max(4000), id.nullable(), z.array(knowledgeRef).max(5).optional(), z.number().int().positive().nullable().optional(), z.string().max(40).nullable().optional()]),
+  'knowledge:ask':                z.tuple([z.string().min(1).max(4000), id.nullable(), z.array(knowledgeRef).max(5).optional(), z.string().min(1).max(64).optional()]),
   'knowledge:stop':               z.tuple([id]),
+  // 马 = agent。ceiling 是闭集，绝不接受任意字符串——权限只能被明确写入。
+  'horses:list':                  z.tuple([]),
+  // 可装配的工具池。与马无关，读的是当前注册表。
+  // 叫 agentTools 不叫 tools：preload 里 `tools` 早就被 shell/PDF 那组占了
+  // （openExternal / pickPdf / pdf2md），同名会变成一个静默覆盖的重复键。
+  'agentTools:list':              z.tuple([]),
+  'horses:create':                z.tuple([z.string().min(1).max(40), z.string().min(1).max(60), z.enum(['read', 'write-library', 'write-fs', 'destructive']), toolNames.optional()]),
+  'horses:update':                z.tuple([z.string().min(1).max(64), z.object({ name: z.string().min(1).max(40).optional(), skin: z.string().min(1).max(60).optional(), ceiling: z.enum(['read', 'write-library', 'write-fs', 'destructive']).optional(), tools: toolNames.optional() })]),
+  'horses:setDefault':            z.tuple([z.string().min(1).max(64)]),
+  'horses:remove':                z.tuple([z.string().min(1).max(64)]),
+  // 审批决定：id 是主进程生成的 uuid，决定是三选一的闭集。
+  'knowledge:resolveApproval':    z.tuple([z.string().min(1).max(64), z.enum(['allow-once', 'allow-session', 'deny'])]),
   'knowledge:regenerate':         z.tuple([id]),
-  'knowledge:editResend':         z.tuple([id, z.string().min(1).max(4000), z.array(knowledgeRef).max(5).optional(), z.number().int().positive().nullable().optional(), z.string().max(40).nullable().optional()]),
+  'knowledge:editResend':         z.tuple([id, z.string().min(1).max(4000), z.array(knowledgeRef).max(5).optional(), z.string().min(1).max(64).optional()]),
   'knowledge:listConversations':  z.tuple([]),
   'knowledge:getMessages':        z.tuple([id]),
   'knowledge:getChunk':           z.tuple([z.string().min(1), z.number().int().nonnegative()]),

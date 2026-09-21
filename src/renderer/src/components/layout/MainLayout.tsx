@@ -10,6 +10,7 @@ import { ImageGalleryPane } from '../pdf-viewer/ImageGalleryPane'
 import { SettingsPage } from '../pages/SettingsPage'
 import { ToolsPage } from '../pages/ToolsPage'
 import { KnowledgePage } from '../knowledge/KnowledgePage'
+import { StablePage } from '../stable/StablePage'
 import { NotePage } from '../notes/NotePage'
 import { useItemStore } from '../../stores/itemStore'
 import { useUiStore } from '../../stores/uiStore'
@@ -130,6 +131,8 @@ export function MainLayout(): JSX.Element {
             ? <SettingsPage />
             : page === 'tools'
               ? <ToolsPage />
+              : page === 'stable'
+              ? <StablePage />
               : noteViewerId != null
                 ? <NotePage />
                 : viewerPath

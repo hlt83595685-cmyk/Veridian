@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useItemStore } from '../../stores/itemStore'
 import { citationPhrase, citationHeading, normalizeForMatch } from './citeLocate'
+import { SelectionActions } from './SelectionActions'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -332,6 +333,7 @@ export function MarkdownViewer({ filePath }: Props): JSX.Element {
       >
         {content}
       </ReactMarkdown>
+      <SelectionActions containerRef={containerRef} />
     </div>
   )
 }

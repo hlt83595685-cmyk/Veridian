@@ -1,4 +1,4 @@
-import type { RetrievalStep } from './types'
+import type { ApprovalDecision, ApprovalRequest, AttachmentStatus, ContextReport, ToolCallRecord } from './types'
 
 // Domain events -- the single vocabulary shared by main-process subscribers
 // (sync engine, indexers) and the renderer query cache. Every write that goes
@@ -45,7 +45,29 @@ export type DomainEvent =
       conversationId: number
       state: 'searching' | 'answering' | 'done' | 'error'
       detail?: string }
-  | { type: 'knowledge.step'; conversationId: number; step: RetrievalStep }
+  // Emitted twice per tool call: once on dispatch (ok undefined) and again on
+  // completion. The renderer upserts by `call.id`, so the card appears the
+  // moment the model asks for the tool rather than after it finishes.
+  | { type: 'knowledge.toolCall'; conversationId: number; call: ToolCallRecord }
+  /**
+   * 模型在调工具之前吐的那段话。过去它跟着 chatReset 一起被丢掉，但那是整条
+   * 轨迹里最可读的部分——「继续推进下一阶段：正在核验高校名单」这种。
+   */
+  | { type: 'knowledge.traceNote'; conversationId: number; text: string; round: number }
+  // What each @-mentioned paper resolved to, once the budget is known. Emitted
+  // after the first assembly of a turn, so `truncated` is final rather than
+  // provisional.
+  | { type: 'knowledge.attachments'; conversationId: number; attachments: AttachmentStatus[] }
+  // Emitted once per round with that round's budget accounting. Later rounds
+  // overwrite earlier ones, so what the renderer holds is the assembly that
+  // actually produced the answer.
+  | { type: 'knowledge.context'; conversationId: number; report: ContextReport }
+  // A write is parked waiting for the user. The turn does not proceed until
+  // `knowledge:resolveApproval` comes back with a decision.
+  | { type: 'knowledge.approval'; request: ApprovalRequest }
+  // The request was settled (by the user, or automatically by a standing
+  // session allowance) -- the card stops asking and shows the outcome.
+  | { type: 'knowledge.approvalResolved'; id: string; decision: ApprovalDecision }
   | { type: 'skills.changed' }
 
 export type DomainEventType = DomainEvent['type']
