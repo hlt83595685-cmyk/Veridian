@@ -1,4 +1,5 @@
 import http from 'http'
+import { net } from 'electron'
 import { createItem } from '../services/ItemService'
 import { findItemByDoi } from '../db/items'
 import { setCreatorsForItem } from '../services/CreatorService'
@@ -11,11 +12,13 @@ import { autoConvertPdfToMd } from '../services/ConversionService'
 import { emit } from '../core/Notifier'
 import { getActiveWorkspace } from '../services/WorkspaceContextService'
 import { getWorkspace } from '../services/LocalWorkspaceService'
+import { extractPdfTextFromBuffer, extractDoi as extractDoiFromPdfText, parseLocalMeta } from '../pdfImporter'
 
 // 23120, NOT 23119: 23119 is Zotero's connector port -- squatting on it makes
 // the two apps silently steal each other's browser-extension traffic.
 const PORT = 23120
 const MAX_BODY_BYTES = 1024 * 1024
+const MAX_PDF_BYTES = 50 * 1024 * 1024
 let server: http.Server | null = null
 
 // Any web page can fetch() 127.0.0.1, so the Origin header is the only thing
@@ -83,6 +86,22 @@ interface EnrichedItem {
   keywords: string[]
 }
 
+// Downloads a PDF purely to read its text (no attachment/DB write -- this may run at
+// /preview time, before the user has decided to save anything, and /save's own
+// addAttachmentFromUrl() does the real, persisted download separately). Same size cap and
+// magic-byte check as db/attachments.ts's addAttachmentFromUrl, deliberately not shared
+// since that one also owns file placement + DB rows, which don't apply here.
+async function downloadAndExtractPdfText(pdfUrl: string): Promise<string | null> {
+  const resp = await net.fetch(pdfUrl, { signal: AbortSignal.timeout(12000) })
+  if (!resp.ok) return null
+  const declared = Number(resp.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > MAX_PDF_BYTES) return null
+  const buf = Buffer.from(await resp.arrayBuffer())
+  if (buf.length < 1024 || buf.length > MAX_PDF_BYTES) return null
+  if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') return null
+  return extractPdfTextFromBuffer(buf)
+}
+
 async function enrich(input: Partial<EnrichedItem>): Promise<EnrichedItem> {
   let { type, title, abstract, year, doi, url, journal, publisher,
         volume, issue, pages, isbn, language, authors = [], pdf_url,
@@ -129,6 +148,32 @@ async function enrich(input: Partial<EnrichedItem>): Promise<EnrichedItem> {
       apply(await searchCrossRefByTitle(title))
     }
   } catch { /* non-fatal */ }
+
+  // The extension found neither a DOI nor a title on the page -- typical when the browser
+  // tab is a raw PDF URL rather than an HTML landing page (Chrome's built-in viewer exposes
+  // no <meta>/<a> markup to scrape; see DEVLOG 2026-09-29). Fall back to the PDF's own
+  // content, the same way a locally-imported PDF is handled in pdfImporter.ts's importPDF().
+  if (!title && pdf_url) {
+    const text = await downloadAndExtractPdfText(pdf_url).catch(() => null)
+    if (text) {
+      const pdfDoi = extractDoiFromPdfText(text)
+      if (pdfDoi && !doi) {
+        try { apply(await fetchCrossRefByDoi(pdfDoi)) } catch { /* non-fatal */ }
+      }
+      if (!title) {
+        const local = parseLocalMeta(text, pdf_url)
+        if (!doi && local.title) {
+          try { apply(await searchCrossRefByTitle(local.title)) } catch { /* non-fatal */ }
+        }
+        // Still nothing from CrossRef (preprint, no match, or the lookup itself failed) --
+        // the heuristic title/abstract/year straight from the PDF beats no title at all.
+        title    = title    || local.title
+        abstract = abstract || local.abstract
+        year     = year     || local.year
+      }
+      if (pdfDoi && !doi) doi = pdfDoi
+    }
+  }
 
   return {
     type:      type      ?? 'journalArticle',

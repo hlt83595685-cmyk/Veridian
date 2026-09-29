@@ -61,6 +61,52 @@ service worker 的开发者工具看 Network 面板里的 `/preview` 请求，�
 版本号 0.3.2 → 0.3.3（纯加日志，没有改动任何行为逻辑）。仍未拿真实浏览器验证——需要
 用户按操作说明重新加载并回传 Console 输出。
 
+**追更三（同日）：日志揭晓了真正的根因，问题不在浏览器插件这边。** 用户回传的日志：
+
+```
+{doi: null, title: null, pdf_url: 'https://arxiv.org/pdf/2105.01601', authors: [], page_url: 'https://arxiv.org/pdf/2105.01601'}
+{type: 'journalArticle', title: null, ... pdf_url: 'https://arxiv.org/pdf/2105.01601', ... }
+```
+
+两个好消息坏消息一起来：`pdf_url` 已经正确，**0.3.2 的 HEAD 兜底确认生效**，PDF 检测
+这条线可以结案了。但 `title` 是 `null`，不是追更一里看到的"PDF Document"——两次结果不
+一致，说明那是个时序问题：手动在控制台查询时页面早就渲染完了，但插件点击时立即注入
+脚本抓取，Chrome 查看器自己那套异步 JS 这时候多半还没来得及设置标题。不过这条时序
+问题不值得修：就算修好稳定拿到"PDF Document"，存进库里的也只是一条标题为占位字符串
+的垃圾记录，比现在直接报错更糟——**这一类页面的 DOM 里本来就没有真正的论文标题，
+无论什么时候抓都一样**。
+
+真正对的做法：`pdf_url` 已经确认可靠，那就该像桌面应用导入本地 PDF 时（
+`pdfImporter.ts` 的 `importPDF()`）已经在做的一样，直接从 PDF 文件本身解析标题/DOI，
+而不是死磕网页 DOM。动手前先用这篇论文的真实网址（`https://arxiv.org/pdf/2105.01601`）
+跑了一遍验证脚本：下载 PDF、用项目里已有的 `pdf-parse-new` 解析、拿现成的
+`extractDoi()`/`parseLocalMeta()` 正则去跑，结果第一行文本正好是
+`"MLP-Mixer: An all-MLP Architecture for Vision"`——这篇论文的真实标题，验证了思路。
+
+**改动**（首次涉及浏览器插件以外的桌面应用代码）：
+- `src/main/pdfImporter.ts`：把 `extractPdfText(filePath)` 拆成
+  `extractPdfTextFromBuffer(buf)` + 一层薄封装，这样已经在内存里的下载结果不用先落地
+  成临时文件才能复用同一套解析逻辑。
+- `src/main/server/index.ts`：`enrich()`（`/preview`、`/save` 共用）新增兜底：CrossRef
+  查询之后如果仍然没有 `title` 且有 `pdf_url`，下载这份 PDF（复用
+  `db/attachments.ts` 里已经验证过的大小上限 50MB + `%PDF-` 魔数校验，但不落盘、不建
+  DB 记录——这里只是读文本，真正的附件持久化仍由 `/save` 里原有的
+  `addAttachmentFromUrl` 负责，等于会重复下载一次，接受这个代价，换取实现简单），跑
+  `extractDoi()` 找 DOI 去查 CrossRef，查不到再退到 `parseLocalMeta()` 的启发式标题，
+  启发式标题本身也会拿去试一次 CrossRef 按标题搜索。整条链路直接复用 `enrich()` 里
+  原有的 `apply()` 合并逻辑，没有另起一套。
+- `browser-extension/background.js`：`apiPost` 的超时从 15s 提到 25s，因为
+  `/preview`/`/save` 现在可能要多花时间下载解析 PDF。
+
+版本号：桌面应用没有单独发版（用户还在本地调试，等确认真的修好了再说）；浏览器扩展
+0.3.3 → 0.3.4（只有 background.js 那行超时改动）。
+
+**验证**：`npm run typecheck` 干净；`npx vitest run` 417 项全过；改动的两个 TS 文件
+`eslint` 零新增报错（server/index.ts 报的 4 条都在我没碰过的原有代码行上）；用真实
+arXiv PDF 独立跑通了下载 → 解析 → 标题提取这条链路，产出了正确的论文标题。**没有跑
+通完整的插件到桌面应用的真实端到端流程**——桌面应用这部分改动需要重启（不是重新加载
+插件，是重启 Veridian 本体，因为改的是主进程代码），需要用户重启后实测确认。
+
 ## 2026-09-21 — v0.2.1 紧急修复：v0.2.0 安装后主进程启动即崩
 
 **现象**：更新安装 v0.2.0 后弹出 `A JavaScript error occurred in the main process`：

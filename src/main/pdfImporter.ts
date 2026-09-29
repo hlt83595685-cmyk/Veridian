@@ -28,7 +28,10 @@ function mergeIntoExisting(existingId: number, filePath: string): void {
 
 // ── PDF text extraction via pdf-parse ───────────────────────────────────────
 
-export async function extractPdfText(filePath: string): Promise<string> {
+// Shared by both the local-file import path (extractPdfText) and the browser-extension
+// path (server/index.ts enrich(), which already has the PDF as a downloaded Buffer and
+// would otherwise have to round-trip it through a temp file just to call this).
+export async function extractPdfTextFromBuffer(buf: Buffer): Promise<string> {
   // pdf-parse-new is a CJS-only Node library, safe to require() in Electron main
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pdfParse = require('pdf-parse-new') as (
@@ -36,9 +39,12 @@ export async function extractPdfText(filePath: string): Promise<string> {
     opts?: { max?: number }
   ) => Promise<{ text: string }>
 
-  const buf = readFileSync(filePath)
   const result = await pdfParse(buf, { max: 8 })
   return result.text
+}
+
+export async function extractPdfText(filePath: string): Promise<string> {
+  return extractPdfTextFromBuffer(readFileSync(filePath))
 }
 
 // ── DOI extraction ──────────────────────────────────────────────────────────

@@ -19,7 +19,9 @@ async function apiPost(path, body) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15000),
+    // /preview and /save can now download + parse the PDF itself when the page had no
+    // DOI/title to work with (see DEVLOG 2026-09-29); 15s was too tight a ceiling for that.
+    signal: AbortSignal.timeout(25000),
   })
   if (!r.ok) {
     const txt = await r.text().catch(() => '')
