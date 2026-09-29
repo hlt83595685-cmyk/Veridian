@@ -241,6 +241,7 @@ export function startLocalServer(): void {
       // POST /save — enrich + persist
       if (req.method === 'POST' && url === '/save') {
         const body = JSON.parse(await readBody(req))
+        console.log(`[server] POST /save: doi=${body.doi} title=${JSON.stringify(body.title)} pdf_url=${body.pdf_url}`)
         const { collectionId, ...rest } = body
         const item = await enrich(rest)
 
@@ -250,6 +251,7 @@ export function startLocalServer(): void {
         if (item.doi) {
           const existing = findItemByDoi(item.doi)
           if (existing) {
+            console.log(`[server] /save: duplicate DOI ${item.doi} -> reusing item ${existing.id} (no PDF attach attempted here)`)
             if (collectionId) {
               try { addItemToCollection(Number(collectionId), existing.id) } catch { /* ok */ }
             }
@@ -293,6 +295,7 @@ export function startLocalServer(): void {
           setTagsForItem(saved.id, item.keywords)
         }
 
+        console.log(`[server] /save: created item ${saved.id}, pdf_url=${item.pdf_url}`)
         if (item.pdf_url) {
           // Fire-and-forget: the item is already saved, so a failed PDF download must not
           // fail the save response. It must still be LOGGED, though -- addAttachmentFromUrl
