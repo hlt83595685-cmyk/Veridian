@@ -294,9 +294,16 @@ export function startLocalServer(): void {
         }
 
         if (item.pdf_url) {
+          // Fire-and-forget: the item is already saved, so a failed PDF download must not
+          // fail the save response. It must still be LOGGED, though -- addAttachmentFromUrl
+          // itself now logs why (see db/attachments.ts), but nothing here said this even
+          // happened, so "item saved, no PDF" was indistinguishable from "nobody tried".
           addAttachmentFromUrl(saved.id, item.pdf_url).then((att) => {
             if (att?.path) autoConvertPdfToMd(saved.id, att.path)
-          }).catch(() => {})
+            else console.warn(`[server] /save: no PDF attached for item ${saved.id} (${item.pdf_url})`)
+          }).catch((err) => {
+            console.error(`[server] /save: PDF attach threw for item ${saved.id} (${item.pdf_url}):`, err)
+          })
         }
 
         return json(res, 201, { success: true, item: saved }, cors)

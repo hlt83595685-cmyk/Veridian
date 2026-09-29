@@ -133,16 +133,37 @@ const MAX_PDF_BYTES = 50 * 1024 * 1024
 export async function addAttachmentFromUrl(itemId: number, url: string): Promise<Attachment | null> {
   try {
     const resp = await net.fetch(url)
-    if (!resp.ok) return null
+    if (!resp.ok) {
+      // Every early return below used to be silent, which made "item saved but no PDF"
+      // look identical whether the URL was wrong, the file too big, or (the common case
+      // for paywalled publishers) this request -- made by the app's own network stack,
+      // carrying none of the browser's login/institutional-proxy session -- got refused
+      // where the browser itself would have been let through.
+      console.warn(`[attachments] addAttachmentFromUrl: HTTP ${resp.status} ${resp.statusText} for ${url}`)
+      return null
+    }
     // Reject oversized downloads before buffering when the server declares a
     // length; the post-buffer check below covers chunked responses.
     const declared = Number(resp.headers.get('content-length'))
-    if (Number.isFinite(declared) && declared > MAX_PDF_BYTES) return null
+    if (Number.isFinite(declared) && declared > MAX_PDF_BYTES) {
+      console.warn(`[attachments] addAttachmentFromUrl: declared size ${declared} exceeds ${MAX_PDF_BYTES} for ${url}`)
+      return null
+    }
     const buf = Buffer.from(await resp.arrayBuffer())
-    if (buf.length < 1024 || buf.length > MAX_PDF_BYTES) return null
-    // Anything without the PDF magic bytes (e.g. an HTML error page served
-    // with status 200) must not be stored as a .pdf attachment.
-    if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') return null
+    if (buf.length < 1024 || buf.length > MAX_PDF_BYTES) {
+      console.warn(`[attachments] addAttachmentFromUrl: downloaded size ${buf.length} out of bounds for ${url}`)
+      return null
+    }
+    // Anything without the PDF magic bytes (e.g. an HTML error/login page served with
+    // status 200 -- the usual shape of a paywall or session-required redirect) must not
+    // be stored as a .pdf attachment. Log enough of the body to tell which it was.
+    if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      const preview = buf.subarray(0, 120).toString('latin1').replace(/[^\x20-\x7e]/g, '.')
+      console.warn(
+        `[attachments] addAttachmentFromUrl: not a PDF (content-type=${resp.headers.get('content-type')}) for ${url}\n  first bytes: ${preview}`
+      )
+      return null
+    }
 
     const dir = attachmentsDir()
     const destName = `${randomUUID()}.pdf`
