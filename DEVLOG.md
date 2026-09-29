@@ -1,5 +1,23 @@
 # Veridian 开发日志
 
+## 2026-09-29 — 浏览器扩展 v0.3.1：直接打开的 PDF 页面抓不到 PDF
+
+**现象**：用户反馈在一个"PDF 打开页"上点插件，识别不到 PDF。
+
+**根因**：`content.js` 的 `extractPdfUrl()` 只认两种情况——`<meta name="citation_pdf_url">`
+或者一个 `href` 以 `.pdf` 结尾的 `<a>` 标签。用户说的场景是**直接在地址栏打开了一个 .pdf
+链接**，这时 Chrome 用内置查看器渲染，页面是一个空壳文档，压根没有 `<head>`、`<meta>`、
+`<a>`，两条规则必然全部落空。这个空壳文档唯一可靠的信号是 `document.contentType ===
+'application/pdf'`，但代码里完全没用它兜底成"当前网址本身就是 PDF"。
+
+**修复**：`extractPdfUrl()` 先判断 `document.contentType`，命中就直接用 `location.href`；
+另外把 `.pdf` 后带查询参数的链接（如 `xxx.pdf?download=1`）也纳入匹配，这是另一类常见漏检。
+未验证的已知局限：PDF 若是内嵌在文章页某个 `<iframe>`/`<embed>` 里展示（而不是整页导航），
+这次没有处理，因为 content script 默认只跑在顶层 frame。
+
+**验证**：`node --check` 语法通过；没有连上浏览器环境做真实页面验证，需要用户重新加载
+扩展后自行确认。
+
 ## 2026-09-21 — v0.2.1 紧急修复：v0.2.0 安装后主进程启动即崩
 
 **现象**：更新安装 v0.2.0 后弹出 `A JavaScript error occurred in the main process`：

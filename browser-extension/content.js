@@ -55,9 +55,17 @@
 
   // ── PDF URL ─────────────────────────────────────────────────────────────────
   function extractPdfUrl() {
+    // The tab navigated straight to a .pdf resource -- Chrome's built-in viewer renders
+    // it with no <head>/<meta>/<a> markup at all (the "page" is just the PDF plugin's
+    // shell), so the two lookups below always miss. document.contentType is the one
+    // reliable signal that DOM exposes for this case; the PDF is simply the tab's own URL.
+    if (document.contentType === 'application/pdf') return location.href
+
     return (
       document.querySelector('meta[name="citation_pdf_url"]')?.content
       || document.querySelector('a[href$=".pdf"]')?.href
+      // Same idea, but the link carries a query string after ".pdf" (e.g. "?download=1").
+      || document.querySelector('a[href*=".pdf?"]')?.href
       || null
     )
   }
