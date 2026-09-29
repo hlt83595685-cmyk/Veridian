@@ -18,6 +18,28 @@
 **验证**：`node --check` 语法通过；没有连上浏览器环境做真实页面验证，需要用户重新加载
 扩展后自行确认。
 
+**追更（同日）：上面这版没解决问题。** 用户反馈重新加载后依旧不行，让在
+`https://arxiv.org/pdf/2105.01601` 页面的控制台跑诊断，结果是
+`{"contentType":"text/html","anchorCount":0,"bodyChildTags":["div","div","div","script",
+"script","script","script","script","script"],"hasPdfEmbed":false,"hasPdfViewerEl":false}`。
+
+**上一版判断的前提是错的**：`document.contentType` 实际是 `text/html`，不是
+`application/pdf`，我加的那个分支从未生效；`<embed>`、`<pdf-viewer>` 也都查不到——Chrome
+内置查看器现在应该是异步用 JS 生成、装在 Shadow DOM 里的（`querySelector` 穿不透
+Shadow DOM），已经不是能稳定 sniff 的 DOM 标记了，而且这套实现很可能随 Chrome 版本变。
+继续猜第三个 DOM 特征风险很高，所以换了策略：不再猜页面里"长得像不像 PDF"，改成在
+`background.js` 里对页面自身网址发一次 `HEAD` 请求，直接读服务器返回的真实
+`Content-Type`。`extractFromTab()` 里，只要 `content.js` 没抓到 `pdf_url`，就用这条兜底。
+这个做法不依赖任何 DOM 结构，天然也覆盖了 arXiv 这种网址本身不带 `.pdf` 后缀
+（`/pdf/<id>`）的情况——用后缀名匹配的老办法本来就抓不到这类链接。
+
+`content.js` 里那条 `document.contentType === 'application/pdf'` 的判断保留未删：验证
+下来它在这个场景里不生效，但作为一个免费的前置短路分支，留着无害，说不定在别的路径
+（比如本地 `file:///foo.pdf`）里能用上。
+
+版本号 0.3.1 → 0.3.2。**这次也还没有拿真实浏览器验证过**（同样是没连上自动化浏览器
+环境），需要用户重新加载扩展后实测确认。
+
 ## 2026-09-21 — v0.2.1 紧急修复：v0.2.0 安装后主进程启动即崩
 
 **现象**：更新安装 v0.2.0 后弹出 `A JavaScript error occurred in the main process`：
