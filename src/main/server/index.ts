@@ -5,7 +5,7 @@ import { findItemByDoi } from '../db/items'
 import { setCreatorsForItem } from '../services/CreatorService'
 import { getAllCollections } from '../db/collections'
 import { addItemToCollection } from '../services/CollectionService'
-import { addAttachmentFromUrl } from '../services/AttachmentService'
+import { addAttachmentFromUrl, listByItem } from '../services/AttachmentService'
 import { fetchCrossRefByDoi, searchCrossRefByTitle, CROSSREF_TYPE_MAP } from '../crossref'
 import { setTagsForItem } from '../services/TagService'
 import { autoConvertPdfToMd } from '../services/ConversionService'
@@ -251,9 +251,21 @@ export function startLocalServer(): void {
         if (item.doi) {
           const existing = findItemByDoi(item.doi)
           if (existing) {
-            console.log(`[server] /save: duplicate DOI ${item.doi} -> reusing item ${existing.id} (no PDF attach attempted here)`)
+            console.log(`[server] /save: duplicate DOI ${item.doi} -> reusing item ${existing.id}`)
             if (collectionId) {
               try { addItemToCollection(Number(collectionId), existing.id) } catch { /* ok */ }
+            }
+            // Same rule as pdfImporter.ts's mergeIntoExisting(): a DOI hit on an item that
+            // still has no PDF attaches this one instead of doing nothing forever. Without
+            // this, an item saved once (e.g. before the PDF was reachable) could never pick
+            // one up on a later save, even from a page that now has it.
+            if (item.pdf_url && !listByItem(existing.id).some((a) => a.type === 'pdf')) {
+              addAttachmentFromUrl(existing.id, item.pdf_url).then((att) => {
+                if (att?.path) autoConvertPdfToMd(existing.id, att.path)
+                else console.warn(`[server] /save: duplicate-merge PDF attach failed for item ${existing.id} (${item.pdf_url})`)
+              }).catch((err) => {
+                console.error(`[server] /save: duplicate-merge PDF attach threw for item ${existing.id} (${item.pdf_url}):`, err)
+              })
             }
             return json(res, 200, { success: true, duplicated: true, item: existing }, cors)
           }
