@@ -129,6 +129,48 @@ export function getAttachmentPath(id: number): string | null {
 
 const MAX_PDF_BYTES = 50 * 1024 * 1024
 
+// Validate + write + register a PDF already held as a Buffer, whatever fetched it. Shared by
+// addAttachmentFromUrl (fetches the bytes itself, from this process's own network stack) and
+// server/index.ts's POST /attach-pdf (the browser extension already fetched the bytes, inside
+// the tab's own authenticated session -- see content.js's FETCH_AND_ATTACH_PDF -- because a
+// paywalled/institutional-access publisher rejects this process's own cookie-less fetch even
+// when the user has full access in that tab).
+export function saveAttachmentBuffer(itemId: number, buf: Buffer, sourceUrl: string): Attachment | null {
+  if (buf.length < 1024 || buf.length > MAX_PDF_BYTES) {
+    console.warn(`[attachments] saveAttachmentBuffer: size ${buf.length} out of bounds for ${sourceUrl}`)
+    return null
+  }
+  // Anything without the PDF magic bytes (e.g. an HTML error/login page) must not be stored
+  // as a .pdf attachment. Log enough of the body to tell what it actually was.
+  if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') {
+    const preview = buf.subarray(0, 120).toString('latin1').replace(/[^\x20-\x7e]/g, '.')
+    console.warn(`[attachments] saveAttachmentBuffer: not a PDF for ${sourceUrl}\n  first bytes: ${preview}`)
+    return null
+  }
+
+  const dir = attachmentsDir()
+  const destName = `${randomUUID()}.pdf`
+  const destPath = join(dir, destName)
+  writeFileSync(destPath, buf)
+
+  // guess filename from URL
+  const urlFilename = sourceUrl.split('/').pop()?.split('?')[0] ?? 'document.pdf'
+  const filename = urlFilename.endsWith('.pdf') ? urlFilename : urlFilename + '.pdf'
+
+  const db = getDb()
+  db.prepare(`
+    INSERT INTO attachments (item_id, type, filename, path, mime_type, size, md5)
+    VALUES (@item_id, @type, @filename, @path, @mime_type, @size, @md5)
+  `).run({
+    item_id: itemId, type: 'pdf', filename, path: destPath,
+    mime_type: 'application/pdf', size: buf.length,
+    md5: createHash('md5').update(buf).digest('hex'),
+  })
+
+  const id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id
+  return db.prepare('SELECT * FROM attachments WHERE id = ?').get(id) as Attachment
+}
+
 // Download a PDF from a URL and save as attachment for itemId
 export async function addAttachmentFromUrl(itemId: number, url: string): Promise<Attachment | null> {
   try {
@@ -143,49 +185,14 @@ export async function addAttachmentFromUrl(itemId: number, url: string): Promise
       return null
     }
     // Reject oversized downloads before buffering when the server declares a
-    // length; the post-buffer check below covers chunked responses.
+    // length; saveAttachmentBuffer's own size check covers chunked responses.
     const declared = Number(resp.headers.get('content-length'))
     if (Number.isFinite(declared) && declared > MAX_PDF_BYTES) {
       console.warn(`[attachments] addAttachmentFromUrl: declared size ${declared} exceeds ${MAX_PDF_BYTES} for ${url}`)
       return null
     }
     const buf = Buffer.from(await resp.arrayBuffer())
-    if (buf.length < 1024 || buf.length > MAX_PDF_BYTES) {
-      console.warn(`[attachments] addAttachmentFromUrl: downloaded size ${buf.length} out of bounds for ${url}`)
-      return null
-    }
-    // Anything without the PDF magic bytes (e.g. an HTML error/login page served with
-    // status 200 -- the usual shape of a paywall or session-required redirect) must not
-    // be stored as a .pdf attachment. Log enough of the body to tell which it was.
-    if (buf.subarray(0, 5).toString('latin1') !== '%PDF-') {
-      const preview = buf.subarray(0, 120).toString('latin1').replace(/[^\x20-\x7e]/g, '.')
-      console.warn(
-        `[attachments] addAttachmentFromUrl: not a PDF (content-type=${resp.headers.get('content-type')}) for ${url}\n  first bytes: ${preview}`
-      )
-      return null
-    }
-
-    const dir = attachmentsDir()
-    const destName = `${randomUUID()}.pdf`
-    const destPath = join(dir, destName)
-    writeFileSync(destPath, buf)
-
-    // guess filename from URL
-    const urlFilename = url.split('/').pop()?.split('?')[0] ?? 'document.pdf'
-    const filename = urlFilename.endsWith('.pdf') ? urlFilename : urlFilename + '.pdf'
-
-    const db = getDb()
-    db.prepare(`
-      INSERT INTO attachments (item_id, type, filename, path, mime_type, size, md5)
-      VALUES (@item_id, @type, @filename, @path, @mime_type, @size, @md5)
-    `).run({
-      item_id: itemId, type: 'pdf', filename, path: destPath,
-      mime_type: 'application/pdf', size: buf.length,
-      md5: createHash('md5').update(buf).digest('hex'),
-    })
-
-    const id = (db.prepare('SELECT last_insert_rowid() as id').get() as { id: number }).id
-    return db.prepare('SELECT * FROM attachments WHERE id = ?').get(id) as Attachment
+    return saveAttachmentBuffer(itemId, buf, url)
   } catch (err) {
     console.error('[attachments] addAttachmentFromUrl failed:', err)
     return null

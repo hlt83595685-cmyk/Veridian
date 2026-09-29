@@ -3,6 +3,7 @@ import {
   registerAttachment as repoRegister, registerAttachmentDir as repoRegisterDir,
   removeAttachment as repoRemove, getAttachmentPath,
   addAttachmentFromUrl as repoAddFromUrl,
+  saveAttachmentBuffer as repoSaveBuffer,
   type Attachment,
 } from '../db/attachments'
 import { statSync } from 'fs'
@@ -93,6 +94,18 @@ export async function addAttachmentFromUrl(itemId: number, url: string): Promise
   if (att) {
     if (att.path) grantAccess(att.path)
     appendOp('attachment', att.id, 'create', { itemId, url })
+    emit({ type: 'attachment.changed', itemIds: [itemId] })
+  }
+  return att
+}
+
+// Same side effects as addAttachmentFromUrl, but for bytes the CALLER already has -- the
+// browser extension's direct PDF upload (see server/index.ts POST /attach-pdf).
+export function addAttachmentFromBuffer(itemId: number, buf: Buffer, sourceUrl: string): Attachment | null {
+  const att = repoSaveBuffer(itemId, buf, sourceUrl)
+  if (att) {
+    if (att.path) grantAccess(att.path)
+    appendOp('attachment', att.id, 'create', { itemId, url: sourceUrl })
     emit({ type: 'attachment.changed', itemIds: [itemId] })
   }
   return att

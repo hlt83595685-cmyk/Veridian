@@ -107,6 +107,66 @@ arXiv PDF 独立跑通了下载 → 解析 → 标题提取这条链路，产出
 通完整的插件到桌面应用的真实端到端流程**——桌面应用这部分改动需要重启（不是重新加载
 插件，是重启 Veridian 本体，因为改的是主进程代码），需要用户重启后实测确认。
 
+**追更四：arXiv 那篇好了，但爱思唯尔（ScienceDirect）的论文点保存后只建了条目，没有
+PDF。** 用户确认"有权限以及pdf资源"（机构访问/登录态在浏览器里生效）。这一次先加日志、
+不猜——`addAttachmentFromUrl` 的每条早退路径原来完全静默，`/save` 里那个 fire-and-forget
+的 `.catch(() => {})` 也把异常吞了，"条目建了但没 PDF"这句话背后可能是完全不同的原因，
+必须先看到具体是哪一种。
+
+第一轮日志加上后，用户重试同一篇论文，**终端毫无输出**——这本身就是证据：说明加了日志
+的那段代码压根没跑到。往回看 `/save` 有个查重逻辑：命中同一个 DOI 会直接复用已有条目
+并提前返回，从不检查这个已有条目是不是缺 PDF，也完全不摸 `pdf_url`。这解释了"终端
+毫无输出"，也解释了"条目建了但没 PDF"——这篇论文是**上一次**尝试建的，这次只是命中了
+查重。先补上这个真实、确定无疑的 bug：查重命中时，如果已有条目还没有 PDF，也去补一次
+（同 `pdfImporter.ts` 的 `mergeIntoExisting()` 早就在做的事）。
+
+补上后用户用同一篇论文重试，这次终端终于跑到了下载那步，日志是
+`[attachments] addAttachmentFromUrl: HTTP 403 for https://www.sciencedirect.com/.../pdfft?...`
+——印证了最初的猜测：**下载 PDF 的请求是桌面应用自己的网络栈发出的（Electron 的
+`net.fetch`），完全不带用户浏览器里的登录/机构代理会话**，爱思唯尔把这个请求当无权限
+处理，返回 403；而用户在浏览器里，因为那个会话确实生效，能正常看到 PDF。
+
+**真正的修复**（这次涉及浏览器插件 + 桌面应用两边，是本轮最大的一次改动）：
+- 思路：既然只有浏览器（具体说是那个标签页）才有这份登录态，就该让**插件自己**用这个
+  标签页的身份去下载 PDF，再把下载到的内容转发给桌面应用，而不是让桌面应用自己单独
+  去请求。这对任何用 cookie/机构代理做权限校验的网站都通用，不是爱思唯尔专属的补丁。
+- **中途纠正了一个没验证的设计**：一开始想让 `content.js`（跑在网页里）下载完 PDF 后
+  直接 POST 给本地服务器（`127.0.0.1:23120`）。但 `content.js` 发出的请求 `Origin` 头
+  到底是插件自己的来源，还是它所在网页的来源（比如 `https://www.sciencedirect.com`），
+  这一点没有把握，而服务器的 CORS 校验只放行插件的来源——猜错的话就是又一轮排查。改成
+  更稳妥的路径：`content.js` 只负责下载 PDF 字节（带 `credentials: 'include'` 拿到页面
+  自己的 cookie）、校验 `%PDF-` 魔数，然后把字节通过 `chrome.runtime` 消息通道传回
+  `background.js`；真正请求本地服务器的还是 `background.js`——这条路径和现有的
+  `/save`、`/preview` 请求完全一样，来源肯定没问题，不用赌。
+- **改动清单**：
+  - `src/main/db/attachments.ts`：把"给一段 Buffer，校验 + 落盘 + 建 DB 记录"这部分从
+    `addAttachmentFromUrl` 里拆成 `saveAttachmentBuffer(itemId, buf, sourceUrl)`，供
+    URL 下载和直接上传两条路径共用。
+  - `src/main/services/AttachmentService.ts`：新增 `addAttachmentFromBuffer`，包一层
+    跟 `addAttachmentFromUrl` 一样的 `grantAccess`/`appendOp`/`emit` 副作用（同步、
+    权限白名单都要靠这些，不能漏）。
+  - `src/main/server/index.ts`：新增 `POST /attach-pdf?itemId=`，走原始二进制请求体
+    （原来的 `readBody()` 是给 JSON 用的，1MB 上限对 PDF 太小，另写了
+    `readBinaryBody`，上限按 `MAX_PDF_BYTES` 走）；写入前检查这个条目是不是已经有
+    PDF 了，避免跟服务器自己那条下载路径撞车重复写入。
+  - `browser-extension/content.js`：新增 `FETCH_PDF_BYTES` 消息处理，`fetch(pdfUrl,
+    {credentials:'include'})` 拿字节、校验大小和魔数，通过消息回传。
+  - `browser-extension/background.js`：`/save` 成功后，新增 `attachPdfViaTab()`：
+    向当前标签页要 PDF 字节，拿到后自己发 `POST /attach-pdf`，全程 fire-and-forget，
+    失败只打日志，不影响弹窗已经显示的"已保存"。
+- **没删的部分**：`/save` 里服务器自己发起下载那两处（新条目、查重合并）都保留不动
+  ——对不需要登录态的 PDF（比如 arXiv）它更快、零额外开销，两条路径靠"是否已有 PDF"
+  的检查天然不会重复写入。
+
+版本号：浏览器扩展 0.3.4 → 0.3.5；桌面应用仍未单独发版。
+
+**验证**：`npm run typecheck` 干净、`npx vitest run` 417 项全过、改动的三个 TS 文件
+`eslint` 零新增报错、两个扩展文件 `node --check` 语法通过。**完整的端到端流程（爱思
+唯尔页面 → 插件带 cookie 下载 → 转发给桌面应用 → PDF 挂载成功）还没有实测**——这次
+改动面最大，需要用户重启桌面应用 + 重新加载插件后，用同一篇论文再测一次，把 3287d3c/
+3d86672 两次加的所有日志（这次应该会多出 `[Veridian] FETCH_PDF_BYTES`/`/attach-pdf
+response` 这类插件侧日志）一并发回来确认。
+
 ## 2026-09-21 — v0.2.1 紧急修复：v0.2.0 安装后主进程启动即崩
 
 **现象**：更新安装 v0.2.0 后弹出 `A JavaScript error occurred in the main process`：

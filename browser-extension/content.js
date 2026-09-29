@@ -90,9 +90,47 @@
     }
   }
 
+  // ── Authenticated PDF fetch ─────────────────────────────────────────────────
+  // Some publishers (Elsevier/ScienceDirect and others) gate the PDF behind the
+  // reader's own login/institutional-proxy session. The desktop app's own download
+  // (background.js's apiPost -> server/index.ts) runs from a separate network stack
+  // with none of that, so it gets a 403/login page even when this exact tab, right
+  // now, can see the PDF fine. This tab's own fetch() carries the same cookies the
+  // page itself uses, so it succeeds where the app's own request can't.
+  //
+  // The bytes are handed back to background.js rather than POSTed to the desktop app
+  // directly from here: a content script's fetch() is attributed to the PAGE's own
+  // origin (https://www.sciencedirect.com, not chrome-extension://...), and the
+  // server's CORS check only allows the extension's origin -- background.js's own
+  // fetch calls are unambiguously extension-origin, exactly like every other call it
+  // already makes to this same server.
+  const MAX_PDF_BYTES = 50 * 1024 * 1024
+
+  async function fetchPdfBytes(pdfUrl) {
+    const pdfResp = await fetch(pdfUrl, { credentials: 'include' })
+    if (!pdfResp.ok) return { ok: false, error: `PDF fetch failed: HTTP ${pdfResp.status}` }
+    const buf = await pdfResp.arrayBuffer()
+    if (buf.byteLength < 1024 || buf.byteLength > MAX_PDF_BYTES) {
+      return { ok: false, error: `downloaded size ${buf.byteLength} out of bounds` }
+    }
+    const head = new Uint8Array(buf, 0, 5)
+    if (String.fromCharCode(...head) !== '%PDF-') {
+      // The usual shape of a paywall: a 200 OK with a login/error HTML page instead of the PDF.
+      return { ok: false, error: 'downloaded content is not a PDF (likely a login/paywall page)' }
+    }
+    return { ok: true, buf }
+  }
+
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === 'EXTRACT') {
       sendResponse({ ok: true, data: extract() })
+      return true
+    }
+    if (msg.type === 'FETCH_PDF_BYTES') {
+      fetchPdfBytes(msg.pdfUrl)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ ok: false, error: err && err.message ? err.message : String(err) }))
+      return true // keep the message channel open for the async response
     }
     return true
   })

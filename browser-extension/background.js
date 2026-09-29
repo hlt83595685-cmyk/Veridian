@@ -61,6 +61,31 @@ async function extractFromTab(tabId) {
   return raw
 }
 
+// Asks the active tab's already-injected content script to fetch the PDF itself (with the
+// page's own cookies -- see content.js's FETCH_PDF_BYTES) and, if that produced real PDF
+// bytes, uploads them to the desktop app. Entirely fire-and-forget: failures are only logged,
+// never surfaced to the popup, which has already shown "saved" by the time this runs.
+async function attachPdfViaTab(itemId, pdfUrl) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (!tab?.id) { console.log('[Veridian] attachPdfViaTab: no active tab'); return }
+  chrome.tabs.sendMessage(tab.id, { type: 'FETCH_PDF_BYTES', pdfUrl }, (resp) => {
+    // chrome.runtime.lastError fires if content.js isn't there to answer (e.g. the tab
+    // navigated away) -- reading it here is required, or Chrome logs "Unchecked
+    // runtime.lastError" on every ordinary success too.
+    const lastError = chrome.runtime.lastError?.message
+    if (lastError) { console.log('[Veridian] FETCH_PDF_BYTES messaging error:', lastError); return }
+    if (!resp?.ok) { console.log('[Veridian] FETCH_PDF_BYTES failed:', resp?.error); return }
+    fetch(`${API}/attach-pdf?itemId=${encodeURIComponent(itemId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: resp.buf,
+      signal: AbortSignal.timeout(15000),
+    })
+      .then((r) => console.log('[Veridian] /attach-pdf response:', r.status))
+      .catch((err) => console.log('[Veridian] /attach-pdf request failed:', err.message))
+  })
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   console.log('[Veridian] onMessage:', msg.type)
   ;(async () => {
@@ -110,6 +135,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case 'SAVE': {
           const result = await apiPost('/save', msg.payload)
           sendResponse({ ok: true, item: result.item })
+          // Fire-and-forget, same as the app's own PDF download: the save itself already
+          // succeeded, so this must not hold up (or be able to fail) the response to the
+          // popup. The desktop app's own attempt, made from inside this same /save call,
+          // has already run by now and simply had no cookies to use against a paywalled
+          // publisher -- so this is a genuinely separate attempt, not a duplicate of that
+          // one, and only the extension can supply the tab's own session for it.
+          if (result.item?.id && msg.payload.pdf_url) attachPdfViaTab(result.item.id, msg.payload.pdf_url)
           break
         }
 

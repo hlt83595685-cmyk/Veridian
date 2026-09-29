@@ -5,7 +5,7 @@ import { findItemByDoi } from '../db/items'
 import { setCreatorsForItem } from '../services/CreatorService'
 import { getAllCollections } from '../db/collections'
 import { addItemToCollection } from '../services/CollectionService'
-import { addAttachmentFromUrl, listByItem } from '../services/AttachmentService'
+import { addAttachmentFromUrl, addAttachmentFromBuffer, listByItem } from '../services/AttachmentService'
 import { fetchCrossRefByDoi, searchCrossRefByTitle, CROSSREF_TYPE_MAP } from '../crossref'
 import { setTagsForItem } from '../services/TagService'
 import { autoConvertPdfToMd } from '../services/ConversionService'
@@ -61,6 +61,26 @@ function readBody(req: http.IncomingMessage): Promise<string> {
       }
     })
     req.on('end', () => resolve(body))
+    req.on('error', reject)
+  })
+}
+
+// Binary counterpart of readBody, for POST /attach-pdf: readBody's MAX_BODY_BYTES (1MB) is a
+// JSON-request-sized cap, far too small for a PDF; this one is capped at MAX_PDF_BYTES instead.
+function readBinaryBody(req: http.IncomingMessage, maxBytes: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let total = 0
+    req.on('data', (chunk: Buffer) => {
+      total += chunk.length
+      if (total > maxBytes) {
+        req.destroy()
+        reject(new Error('body_too_large'))
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => resolve(Buffer.concat(chunks)))
     req.on('error', reject)
   })
 }
@@ -212,7 +232,8 @@ export function startLocalServer(): void {
       return
     }
 
-    const url = (req.url ?? '/').split('?')[0]
+    const reqUrl = new URL(req.url ?? '/', 'http://localhost')
+    const url = reqUrl.pathname
 
     try {
       // GET /ping -- also reports which library the extension is about to
@@ -322,6 +343,36 @@ export function startLocalServer(): void {
         }
 
         return json(res, 201, { success: true, item: saved }, cors)
+      }
+
+      // POST /attach-pdf?itemId=123 — raw PDF bytes, not JSON (readBody's 1MB cap is far too
+      // small for a PDF). The browser extension fetched these itself, inside the tab's own
+      // session (content.js's FETCH_AND_ATTACH_PDF): the two addAttachmentFromUrl calls above
+      // fetch with this PROCESS's own network stack, which carries none of the browser's
+      // login/institutional-proxy cookies, so a paywalled publisher's PDF 403s there even when
+      // the user has full access in that tab. This endpoint is the fix -- the browser is the
+      // one place that session actually lives.
+      if (req.method === 'POST' && url === '/attach-pdf') {
+        const itemId = Number(reqUrl.searchParams.get('itemId'))
+        if (!Number.isInteger(itemId) || itemId <= 0) {
+          return json(res, 400, { error: 'invalid itemId' }, cors)
+        }
+        const buf = await readBinaryBody(req, MAX_PDF_BYTES).catch(() => null)
+        if (!buf) return json(res, 413, { error: 'body too large' }, cors)
+        // Guards against the same item being attached twice by an unrelated concurrent
+        // attempt (e.g. this same upload racing a /save-triggered addAttachmentFromUrl that
+        // happened to succeed on a non-gated PDF) -- not a real race in the single-user,
+        // single-process case, but cheap and correct to check anyway.
+        if (listByItem(itemId).some((a) => a.type === 'pdf')) {
+          return json(res, 200, { success: true, alreadyAttached: true }, cors)
+        }
+        const att = addAttachmentFromBuffer(itemId, buf, `extension-upload-${itemId}.pdf`)
+        if (!att) {
+          console.warn(`[server] /attach-pdf: rejected upload for item ${itemId} (see saveAttachmentBuffer log above)`)
+          return json(res, 422, { error: 'not a valid PDF' }, cors)
+        }
+        if (att.path) autoConvertPdfToMd(itemId, att.path)
+        return json(res, 200, { success: true }, cors)
       }
 
       json(res, 404, { error: 'not found', url }, cors)
