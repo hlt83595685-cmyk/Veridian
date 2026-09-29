@@ -1,6 +1,11 @@
 // Veridian Connector — service worker
 'use strict'
 
+// Fires once each time this service worker (re)starts -- confirms in the console that the
+// worker actually reloaded this file (and which version), since MV3 workers restart silently
+// and stale-cached code is a common source of "I reloaded but nothing changed" confusion.
+console.log('[Veridian] background.js starting, version', chrome.runtime.getManifest().version)
+
 const API = 'http://127.0.0.1:23120'
 
 async function apiGet(path) {
@@ -55,6 +60,7 @@ async function extractFromTab(tabId) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  console.log('[Veridian] onMessage:', msg.type)
   ;(async () => {
     try {
       switch (msg.type) {
@@ -77,16 +83,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           if (!tab?.id) { sendResponse({ ok: false, error: 'no tab' }); break }
 
           const raw = await extractFromTab(tab.id)
+          console.log('[Veridian] extracted from page:', raw)
           if (!raw) { sendResponse({ ok: false, error: 'extraction failed' }); break }
 
           // 2. ask server to enrich via CrossRef and return preview (don't save yet)
-          const preview = await apiPost('/preview', {
-            doi:     raw.doi,
-            title:   raw.title,
-            pdf_url: raw.pdf_url,
-            authors: raw.authors,
-            url:     raw.page_url,
-          })
+          let preview
+          try {
+            preview = await apiPost('/preview', {
+              doi:     raw.doi,
+              title:   raw.title,
+              pdf_url: raw.pdf_url,
+              authors: raw.authors,
+              url:     raw.page_url,
+            })
+          } catch (err) {
+            console.log('[Veridian] /preview request failed:', err.message)
+            throw err
+          }
+          console.log('[Veridian] /preview responded:', preview)
           sendResponse({ ok: true, data: preview, raw })
           break
         }
