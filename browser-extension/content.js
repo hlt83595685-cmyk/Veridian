@@ -116,7 +116,15 @@
     const head = new Uint8Array(buf, 0, 5)
     if (String.fromCharCode(...head) !== '%PDF-') {
       // The usual shape of a paywall: a 200 OK with a login/error HTML page instead of the PDF.
-      return { ok: false, error: 'downloaded content is not a PDF (likely a login/paywall page)' }
+      // Echo enough to actually tell which -- status/content-type plus a text preview of the
+      // body -- rather than just "not a PDF", so the next failure is diagnosable from one log.
+      const contentType = pdfResp.headers.get('content-type')
+      const preview = new TextDecoder('utf-8', { fatal: false }).decode(buf.slice(0, 300))
+      return {
+        ok: false,
+        error: `downloaded content is not a PDF: HTTP ${pdfResp.status}, content-type=${contentType}, ` +
+          `redirected=${pdfResp.redirected}, finalUrl=${pdfResp.url}, first bytes: ${JSON.stringify(preview)}`,
+      }
     }
     return { ok: true, buf }
   }

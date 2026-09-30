@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Veridian Connector",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Save academic references to Veridian with one click",
   "permissions": [
     "activeTab",
