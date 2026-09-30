@@ -122,6 +122,10 @@
       const preview = new TextDecoder('utf-8', { fatal: false }).decode(buf.slice(0, 300))
       return {
         ok: false,
+        // 'not_a_pdf' lets background.js show a "download it yourself" notification for
+        // exactly this case (a publisher's verification/paywall page) without guessing at
+        // it from the free-text message, which is for the log only.
+        reason: 'not_a_pdf',
         error: `downloaded content is not a PDF: HTTP ${pdfResp.status}, content-type=${contentType}, ` +
           `redirected=${pdfResp.redirected}, finalUrl=${pdfResp.url}, first bytes: ${JSON.stringify(preview)}`,
       }

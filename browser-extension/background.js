@@ -74,11 +74,36 @@ async function extractFromTab(tabId) {
   return raw
 }
 
+// Extension-local translations for the one notification below -- same storage key popup.js
+// uses for its own language toggle (chrome.storage.local, 'veridian_lang'), so the two stay
+// in sync without background.js needing popup.js's whole STRINGS table.
+const NOTIFY_STRINGS = {
+  en: (title) =>
+    `"${title || 'This paper'}"'s PDF is protected by the publisher's verification check and can't be ` +
+    'downloaded automatically. Download it yourself in the browser, then drag the file into Veridian.',
+  zh: (title) =>
+    `《${title || '这篇文献'}》的 PDF 受出版商的验证拦截保护，无法自动下载。请在浏览器里手动下载后，` +
+    '把文件拖入 Veridian 即可。',
+}
+
+async function notifyManualDownloadNeeded(title) {
+  const stored = await chrome.storage.local.get('veridian_lang')
+  const lang = stored.veridian_lang === 'zh' ? 'zh' : 'en'
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: 'Veridian',
+    message: NOTIFY_STRINGS[lang](title),
+  })
+}
+
 // Asks the active tab's already-injected content script to fetch the PDF itself (with the
 // page's own cookies -- see content.js's FETCH_PDF_BYTES) and, if that produced real PDF
-// bytes, uploads them to the desktop app. Entirely fire-and-forget: failures are only logged,
-// never surfaced to the popup, which has already shown "saved" by the time this runs.
-async function attachPdfViaTab(itemId, pdfUrl) {
+// bytes, uploads them to the desktop app. Entirely fire-and-forget: failures are only logged
+// (and, for the one case with a clear next step, shown as a notification -- see
+// notifyManualDownloadNeeded), never surfaced to the popup, which has already shown "saved"
+// by the time this runs.
+async function attachPdfViaTab(itemId, pdfUrl, title) {
   logToApp(`attachPdfViaTab: starting for item ${itemId}, ${pdfUrl}`)
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab?.id) { logToApp('attachPdfViaTab: no active tab'); return }
@@ -88,7 +113,13 @@ async function attachPdfViaTab(itemId, pdfUrl) {
     // runtime.lastError" on every ordinary success too.
     const lastError = chrome.runtime.lastError?.message
     if (lastError) { logToApp(`FETCH_PDF_BYTES messaging error: ${lastError}`); return }
-    if (!resp?.ok) { logToApp(`FETCH_PDF_BYTES failed: ${resp?.error}`); return }
+    if (!resp?.ok) {
+      logToApp(`FETCH_PDF_BYTES failed: ${resp?.error}`)
+      // Only this one reason has a real "go do X" answer -- a plain network hiccup or a
+      // closed tab isn't something telling the user to download manually would help with.
+      if (resp?.reason === 'not_a_pdf') notifyManualDownloadNeeded(title)
+      return
+    }
     logToApp(`FETCH_PDF_BYTES ok, ${resp.buf.byteLength} bytes -- uploading`)
     fetch(`${API}/attach-pdf?itemId=${encodeURIComponent(itemId)}`, {
       method: 'POST',
@@ -157,7 +188,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // publisher -- so this is a genuinely separate attempt, not a duplicate of that
           // one, and only the extension can supply the tab's own session for it.
           logToApp(`SAVE done, item.id=${result.item?.id}, pdf_url=${msg.payload.pdf_url}`)
-          if (result.item?.id && msg.payload.pdf_url) attachPdfViaTab(result.item.id, msg.payload.pdf_url)
+          if (result.item?.id && msg.payload.pdf_url) {
+            attachPdfViaTab(result.item.id, msg.payload.pdf_url, msg.payload.title)
+          }
           break
         }
 
