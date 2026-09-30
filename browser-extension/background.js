@@ -1,12 +1,25 @@
 // Veridian Connector — service worker
 'use strict'
 
-// Fires once each time this service worker (re)starts -- confirms in the console that the
-// worker actually reloaded this file (and which version), since MV3 workers restart silently
-// and stale-cached code is a common source of "I reloaded but nothing changed" confusion.
-console.log('[Veridian] background.js starting, version', chrome.runtime.getManifest().version)
-
 const API = 'http://127.0.0.1:23120'
+
+// Mirrors a message into the desktop app's own terminal via POST /debug-log, in addition to
+// this service worker's own console -- that console is a separate window (chrome://extensions
+// -> "service worker" -> Console) that's easy to miss, so this keeps the whole round trip
+// visible from the one terminal the app already prints to.
+function logToApp(msg) {
+  console.log('[Veridian]', msg)
+  fetch(`${API}/debug-log`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ msg }),
+  }).catch(() => {}) // best-effort; never let this be the thing that throws
+}
+
+// Fires once each time this service worker (re)starts -- confirms (in BOTH consoles) that the
+// worker actually reloaded this file, and which version, since MV3 workers restart silently
+// and stale-cached code is a common source of "I reloaded but nothing changed" confusion.
+logToApp(`background.js starting, version ${chrome.runtime.getManifest().version}`)
 
 async function apiGet(path) {
   const r = await fetch(`${API}${path}`, { signal: AbortSignal.timeout(3000) })
@@ -66,23 +79,25 @@ async function extractFromTab(tabId) {
 // bytes, uploads them to the desktop app. Entirely fire-and-forget: failures are only logged,
 // never surfaced to the popup, which has already shown "saved" by the time this runs.
 async function attachPdfViaTab(itemId, pdfUrl) {
+  logToApp(`attachPdfViaTab: starting for item ${itemId}, ${pdfUrl}`)
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  if (!tab?.id) { console.log('[Veridian] attachPdfViaTab: no active tab'); return }
+  if (!tab?.id) { logToApp('attachPdfViaTab: no active tab'); return }
   chrome.tabs.sendMessage(tab.id, { type: 'FETCH_PDF_BYTES', pdfUrl }, (resp) => {
     // chrome.runtime.lastError fires if content.js isn't there to answer (e.g. the tab
     // navigated away) -- reading it here is required, or Chrome logs "Unchecked
     // runtime.lastError" on every ordinary success too.
     const lastError = chrome.runtime.lastError?.message
-    if (lastError) { console.log('[Veridian] FETCH_PDF_BYTES messaging error:', lastError); return }
-    if (!resp?.ok) { console.log('[Veridian] FETCH_PDF_BYTES failed:', resp?.error); return }
+    if (lastError) { logToApp(`FETCH_PDF_BYTES messaging error: ${lastError}`); return }
+    if (!resp?.ok) { logToApp(`FETCH_PDF_BYTES failed: ${resp?.error}`); return }
+    logToApp(`FETCH_PDF_BYTES ok, ${resp.buf.byteLength} bytes -- uploading`)
     fetch(`${API}/attach-pdf?itemId=${encodeURIComponent(itemId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/pdf' },
       body: resp.buf,
       signal: AbortSignal.timeout(15000),
     })
-      .then((r) => console.log('[Veridian] /attach-pdf response:', r.status))
-      .catch((err) => console.log('[Veridian] /attach-pdf request failed:', err.message))
+      .then((r) => logToApp(`/attach-pdf response: ${r.status}`))
+      .catch((err) => logToApp(`/attach-pdf request failed: ${err.message}`))
   })
 }
 
@@ -141,6 +156,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           // has already run by now and simply had no cookies to use against a paywalled
           // publisher -- so this is a genuinely separate attempt, not a duplicate of that
           // one, and only the extension can supply the tab's own session for it.
+          logToApp(`SAVE done, item.id=${result.item?.id}, pdf_url=${msg.payload.pdf_url}`)
           if (result.item?.id && msg.payload.pdf_url) attachPdfViaTab(result.item.id, msg.payload.pdf_url)
           break
         }

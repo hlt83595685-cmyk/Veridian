@@ -252,6 +252,16 @@ export function startLocalServer(): void {
         return json(res, 200, { collections: getAllCollections() }, cors)
       }
 
+      // POST /debug-log — lets the extension's service worker (its own console is
+      // inconvenient to reach -- chrome://extensions -> "service worker" -> Console, a step
+      // that's been easy to miss) echo what it's doing into this same terminal instead, so
+      // one paste covers the whole round trip.
+      if (req.method === 'POST' && url === '/debug-log') {
+        const body = JSON.parse(await readBody(req).catch(() => '{}'))
+        console.log(`[extension] ${body.msg}`)
+        return json(res, 200, { ok: true }, cors)
+      }
+
       // POST /preview — CrossRef lookup, return enriched metadata (no save)
       if (req.method === 'POST' && url === '/preview') {
         const body = JSON.parse(await readBody(req))
