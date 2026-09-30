@@ -346,19 +346,21 @@ export function startLocalServer(): void {
       }
 
       // POST /attach-pdf?itemId=123 — raw PDF bytes, not JSON (readBody's 1MB cap is far too
-      // small for a PDF). The browser extension fetched these itself, inside the tab's own
-      // session (content.js's FETCH_AND_ATTACH_PDF): the two addAttachmentFromUrl calls above
-      // fetch with this PROCESS's own network stack, which carries none of the browser's
-      // login/institutional-proxy cookies, so a paywalled publisher's PDF 403s there even when
-      // the user has full access in that tab. This endpoint is the fix -- the browser is the
-      // one place that session actually lives.
+      // small for a PDF). content.js fetches these itself, inside the tab's own session
+      // (FETCH_PDF_BYTES), and background.js uploads them here: the two addAttachmentFromUrl
+      // calls above fetch with this PROCESS's own network stack, which carries none of the
+      // browser's login/institutional-proxy cookies, so a paywalled publisher's PDF 403s there
+      // even when the user has full access in that tab. This endpoint is the fix -- the
+      // browser is the one place that session actually lives.
       if (req.method === 'POST' && url === '/attach-pdf') {
         const itemId = Number(reqUrl.searchParams.get('itemId'))
+        console.log(`[server] POST /attach-pdf: itemId=${itemId}`)
         if (!Number.isInteger(itemId) || itemId <= 0) {
           return json(res, 400, { error: 'invalid itemId' }, cors)
         }
         const buf = await readBinaryBody(req, MAX_PDF_BYTES).catch(() => null)
         if (!buf) return json(res, 413, { error: 'body too large' }, cors)
+        console.log(`[server] /attach-pdf: received ${buf.length} bytes for item ${itemId}`)
         // Guards against the same item being attached twice by an unrelated concurrent
         // attempt (e.g. this same upload racing a /save-triggered addAttachmentFromUrl that
         // happened to succeed on a non-gated PDF) -- not a real race in the single-user,
@@ -371,6 +373,7 @@ export function startLocalServer(): void {
           console.warn(`[server] /attach-pdf: rejected upload for item ${itemId} (see saveAttachmentBuffer log above)`)
           return json(res, 422, { error: 'not a valid PDF' }, cors)
         }
+        console.log(`[server] /attach-pdf: attached, item ${itemId}, path=${att.path}`)
         if (att.path) autoConvertPdfToMd(itemId, att.path)
         return json(res, 200, { success: true }, cors)
       }
